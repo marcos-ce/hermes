@@ -75,7 +75,8 @@ module.exports = {
     }
 
     if (!canManageGroup) {
-      return reply(t('common.no_permission_owner'));
+      console.log(`[AUTH] Permissão negada no grupo ${from}. Remetente: ${sender}, Dono configurado: ${settings.ownerNumber}`);
+      return reply(`${t('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``);
     }
 
     // ==========================================

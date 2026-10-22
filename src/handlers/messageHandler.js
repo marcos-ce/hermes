@@ -1,6 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
-const { cleanJid, extractSender, checkAdminStatus } = require('../utils/jidResolver');
+const { cleanJid, extractSender, resolveSender, checkAdminStatus } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');
@@ -52,14 +52,15 @@ async function handleMessage(sock, m) {
   if (msgTime < (bootTimestamp - 10)) return;
 
   const from = msg.key.remoteJid || '';
-  const sender = extractSender(msg);
+  const rawSender = extractSender(msg);
+  const sender = await resolveSender(sock, msg);
   const isGroup = from.endsWith('@g.us');
   const text = extractText(msg.message).trim();
 
   // ========================================================
   // 1. Trava Anti-Ban de Privado (DM)
   // ========================================================
-  const isSenderOwner = settings.isOwner(sender, sock);
+  const isSenderOwner = settings.isOwner(sender, sock) || settings.isOwner(rawSender, sock);
 
   if (!isGroup) {
     // O Dono sempre tem permissão no privado
@@ -220,7 +221,8 @@ async function handleMessage(sock, m) {
 
   // Comando exclusivo do Dono
   if (plugin.ownerOnly && !isSenderOwner) {
-    await reply(translate('common.no_permission_owner'));
+    console.log(`[AUTH] Comando exclusivo de dono negado para ${sender} (raw: ${rawSender}). Dono: ${settings.ownerNumber}`);
+    await reply(`${translate('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``);
     return;
   }
 

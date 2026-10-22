@@ -1,6 +1,10 @@
 const { groupCache } = require('./cache');
 const settings = require('../config/settings');
 
+// Mapas bidirecionais em memória para resolução instantânea de @lid <-> @s.whatsapp.net
+const lidToPhoneMap = new Map();
+const phoneToLidMap = new Map();
+
 /**
  * Normaliza um JID removendo sufixos de dispositivo (:1@s.whatsapp.net -> @s.whatsapp.net)
  * e limpando formatação.
@@ -16,7 +20,65 @@ function cleanJid(jid) {
 }
 
 /**
- * Extrai o remetente real de uma mensagem de forma segura
+ * Registra o mapeamento de um participante (LID <-> Phone)
+ * @param {object} p 
+ */
+function registerParticipantLid(p) {
+  if (!p) return;
+  const pId = cleanJid(p.id);
+  const pJid = p.jid ? cleanJid(p.jid) : (pId.endsWith('@s.whatsapp.net') ? pId : null);
+  const pLid = p.lid ? cleanJid(p.lid) : (pId.endsWith('@lid') ? pId : null);
+
+  if (pJid && pLid) {
+    lidToPhoneMap.set(pLid, pJid);
+    phoneToLidMap.set(pJid, pLid);
+  }
+}
+
+/**
+ * Resolve o remetente real convertendo @lid em número de telefone (@s.whatsapp.net)
+ * consultando os metadados do grupo se necessário.
+ * @param {object} sock 
+ * @param {object} msg 
+ * @returns {Promise<string>}
+ */
+async function resolveSender(sock, msg) {
+  if (!msg || !msg.key) return '';
+  const from = msg.key.remoteJid || '';
+  let rawSender = msg.key.participant || msg.participant || from || '';
+  rawSender = cleanJid(rawSender);
+
+  // Se já for @s.whatsapp.net, retorna direto
+  if (rawSender.endsWith('@s.whatsapp.net')) {
+    return rawSender;
+  }
+
+  // Se for @lid, checa o mapa em RAM
+  if (rawSender.endsWith('@lid')) {
+    if (lidToPhoneMap.has(rawSender)) {
+      return lidToPhoneMap.get(rawSender);
+    }
+
+    // Se a mensagem veio de um grupo, carrega metadados para mapear os LIDs
+    if (from.endsWith('@g.us') && sock) {
+      const metadata = await getGroupMetadata(sock, from);
+      if (metadata && Array.isArray(metadata.participants)) {
+        for (const p of metadata.participants) {
+          registerParticipantLid(p);
+        }
+      }
+
+      if (lidToPhoneMap.has(rawSender)) {
+        return lidToPhoneMap.get(rawSender);
+      }
+    }
+  }
+
+  return rawSender;
+}
+
+/**
+ * Extrai o remetente imediato (sem aguardar async)
  * @param {object} msg 
  * @returns {string}
  */
@@ -26,10 +88,12 @@ function extractSender(msg) {
   
   if (from.endsWith('@g.us')) {
     const participant = msg.key.participant || msg.participant || '';
-    return cleanJid(participant);
+    const clean = cleanJid(participant);
+    return lidToPhoneMap.get(clean) || clean;
   }
   
-  return cleanJid(from);
+  const clean = cleanJid(from);
+  return lidToPhoneMap.get(clean) || clean;
 }
 
 /**
@@ -108,12 +172,24 @@ async function getGroupMetadata(sock, groupJid) {
   if (!groupJid || !groupJid.endsWith('@g.us')) return null;
 
   const cached = groupCache.get(groupJid);
-  if (cached) return cached;
+  if (cached) {
+    if (Array.isArray(cached.participants)) {
+      for (const p of cached.participants) {
+        registerParticipantLid(p);
+      }
+    }
+    return cached;
+  }
 
   try {
     const metadata = await sock.groupMetadata(groupJid);
     if (metadata) {
       groupCache.set(groupJid, metadata);
+      if (Array.isArray(metadata.participants)) {
+        for (const p of metadata.participants) {
+          registerParticipantLid(p);
+        }
+      }
     }
     return metadata;
   } catch (err) {
@@ -224,6 +300,7 @@ function formatNumber(jid) {
 module.exports = {
   cleanJid,
   extractSender,
+  resolveSender,
   extractTarget,
   extractAllTargets,
   getGroupMetadata,
