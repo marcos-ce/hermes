@@ -267,84 +267,98 @@ class WizardEngine {
 
     let finalValue = null;
 
-    // Atalho: Manter atual ou assumir padrão com barra (/) ou ponto (.)
-    const isDefaultShortcut = ['/', '.', 'padrao', 'padrão', 'default', 'todos', 'manter', 'pular'].includes(text.toLowerCase());
-
-    if (isDefaultShortcut) {
-      const savedVal = session.existingConfig[currentField.name];
-      finalValue = savedVal !== undefined ? savedVal : currentField.default;
-    } else {
-      // Validação por tipo de campo
-      switch (currentField.type) {
-        case 'choice': {
-          const choiceIndex = parseInt(text, 10);
-          if (!isNaN(choiceIndex) && choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
-            finalValue = currentField.choices[choiceIndex - 1].value;
-          } else {
-            // Tenta match direto por string do valor
-            const found = currentField.choices.find(c => String(c.value).toLowerCase() === text.toLowerCase());
-            if (found) finalValue = found.value;
-          }
-          break;
+    // Validação por tipo de campo (sem atalho de ponto)
+    switch (currentField.type) {
+      case 'choice': {
+        const choiceIndex = parseInt(text, 10);
+        if (!isNaN(choiceIndex) && choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
+          finalValue = currentField.choices[choiceIndex - 1].value;
+        } else {
+          // Tenta match direto por string do valor
+          const found = currentField.choices.find(c => String(c.value).toLowerCase() === text.toLowerCase());
+          if (found) finalValue = found.value;
         }
-
-        case 'boolean': {
-          const num = parseInt(text, 10);
-          if (num === 1 || ['sim', 's', 'yes', 'y', 'true', 'on'].includes(text.toLowerCase())) {
-            finalValue = true;
-          } else if (num === 2 || ['nao', 'não', 'n', 'no', 'false', 'off'].includes(text.toLowerCase())) {
-            finalValue = false;
-          }
-          break;
-        }
-
-        case 'number': {
-          const parsed = parseInt(text, 10);
-          if (!isNaN(parsed)) {
-            const min = currentField.min !== undefined ? currentField.min : -Infinity;
-            const max = currentField.max !== undefined ? currentField.max : Infinity;
-            if (parsed >= min && parsed <= max) {
-              finalValue = parsed;
-            }
-          }
-          break;
-        }
-
-        case 'string': {
-          if (text.length > 0) {
-            finalValue = text;
-          }
-          break;
-        }
-
-        case 'domain_list': {
-          if (text === '.' || text.toLowerCase() === 'todos') {
-            finalValue = [];
-          } else {
-            finalValue = text.split(/[\s,;]+/)
-              .map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim())
-              .filter(d => d.length > 0);
-          }
-          break;
-        }
-
-        case 'string_list': {
-          finalValue = text.split(/[\s,;]+/)
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
-          break;
-        }
-
-        default:
-          finalValue = text;
-          break;
+        break;
       }
+
+      case 'boolean': {
+        const lower = text.toLowerCase().trim();
+        if (['sim', 's', 'yes', 'y', 'true', 'on', 'ativo', 'ativar', '1'].includes(lower)) {
+          finalValue = true;
+        } else if (['não', 'nao', 'n', 'no', 'false', 'off', 'inativo', 'desativar', '2'].includes(lower)) {
+          finalValue = false;
+        }
+        break;
+      }
+
+      case 'number': {
+        // Aceita formatos: "10m", "2h", "180" ou número bare
+        let parsed = NaN;
+        const lower = text.toLowerCase().trim();
+        if (/^\d+h$/i.test(lower)) {
+          parsed = parseInt(lower) * 60; // horas → minutos
+        } else if (/^\d+m$/i.test(lower)) {
+          parsed = parseInt(lower);
+        } else {
+          parsed = parseInt(text, 10);
+        }
+        if (!isNaN(parsed)) {
+          const min = currentField.min !== undefined ? currentField.min : -Infinity;
+          const max = currentField.max !== undefined ? currentField.max : Infinity;
+          if (parsed >= min && parsed <= max) {
+            finalValue = parsed;
+          } else {
+            // Fora do range — informa e permanece no passo
+            const rangeInfo = (currentField.min !== undefined || currentField.max !== undefined)
+              ? ` (mínimo: ${currentField.min || 0}, máximo: ${currentField.max || '∞'})`
+              : '';
+            await sendSafeMessage(sock, from, {
+              text: `⚠️ Valor fora do intervalo permitido${rangeInfo}. Tente novamente.`
+            }, { quoted: msg });
+            return true;
+          }
+        }
+        break;
+      }
+
+      case 'string': {
+        if (text.length > 0) {
+          finalValue = text;
+        }
+        break;
+      }
+
+      case 'domain_list': {
+        // "nenhum", "todos", "bloquear" ou "bloqueartodos" → lista vazia (bloqueia tudo)
+        if (['nenhum', 'todos', 'bloquear', 'bloqueartodos', 'none', 'all'].includes(text.toLowerCase().trim())) {
+          finalValue = [];
+        } else {
+          finalValue = text.split(/[\s,;]+/)
+            .map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim())
+            .filter(d => d.length > 0 && d.includes('.'));
+          if (finalValue.length === 0) {
+            finalValue = null; // Entrada inválida
+          }
+        }
+        break;
+      }
+
+      case 'string_list': {
+        finalValue = text.split(/[\s,;]+/)
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        break;
+      }
+
+      default:
+        finalValue = text;
+        break;
     }
 
     // Se a entrada foi inválida
     if (finalValue === null || finalValue === undefined) {
       await sendSafeMessage(sock, from, { 
-        text: `${t(lang, 'wizard.invalid_input')}\n${t(lang, 'wizard.default_hint')}` 
+        text: t(lang, 'wizard.invalid_input')
       }, { quoted: msg });
       return true;
     }
@@ -377,6 +391,7 @@ class WizardEngine {
   }
 
   async _sendStepPrompt(sock, msg, from, sender, session, lang) {
+    const sessionKey = `${session.groupJid}:${session.sender}`;
     const field = session.schema.fields[session.stepIndex];
     const stepNum = session.stepIndex + 1;
     const totalSteps = session.schema.fields.length;
@@ -398,14 +413,13 @@ class WizardEngine {
 
     const currentVal = session.existingConfig[field.name];
     if (currentVal !== undefined) {
-      const displayVal = Array.isArray(currentVal) ? (currentVal.join(', ') || 'Nenhum') : currentVal;
+      const displayVal = Array.isArray(currentVal) ? (currentVal.join(', ') || 'Nenhum') : String(currentVal);
       prompt += `${t(lang, 'wizard.current_val', { current: displayVal })}\n`;
     } else if (field.default !== undefined) {
-      const displayDef = Array.isArray(field.default) ? (field.default.join(', ') || 'Nenhum') : field.default;
+      const displayDef = Array.isArray(field.default) ? (field.default.join(', ') || 'Nenhum') : String(field.default);
       prompt += `📌 *Valor padrão:* \`${displayDef}\`\n`;
     }
 
-    prompt += `${t(lang, 'wizard.default_hint')}\n`;
     prompt += `❌ Envie *X* a qualquer momento para cancelar.`;
 
     const sentPrompt = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });

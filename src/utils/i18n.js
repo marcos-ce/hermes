@@ -77,6 +77,8 @@ const dictionaries = {
     // AntiFlood
     'antiflood.flood_detected': '⚠️ @{user}, não envie mensagens repetidas tão rápido!',
     'antiflood.trava_detected': '⚠️ @{user}, mensagens excessivamente longas (anti-trava) são proibidas!',
+    'antiflood.banned_flood': '🚫 @{user} foi banido por envio excessivo de mensagens (flood).',
+    'antiflood.banned_trava': '🚫 @{user} foi banido por enviar mensagem excessivamente longa (trava).',
     'antiflood.status': '🌊 *AntiFlood:* {status}\n⚡ *Máx Msgs:* {msgs}/5s | *Máx Caracteres:* {chars}\n⚡ *Ação:* {action}',
 
     // AntiFake
@@ -143,11 +145,10 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURAÇÃO: {plugin}* (Passo {step}/{total})',
     'wizard.current_val': '📌 *Valor atual:* `{current}`',
-    'wizard.default_hint': '💡 *Dica:* Envie `.` (ponto) para manter o valor atual.',
     'wizard.invalid_input': '⚠️ Resposta inválida. Por favor, leia a pergunta e tente novamente.',
     'wizard.finished': '🎉 *Configuração de {plugin} concluída com sucesso!*',
     'wizard.choice_prompt': 'Escolha uma das opções abaixo:\n{choices}',
-    'wizard.boolean_prompt': '[1] Sim (Ativado)\n[2] Não (Desativado)'
+    'wizard.boolean_prompt': 'Responda com *Sim* ou *Não*.'
   },
 
   es: {
@@ -222,6 +223,8 @@ const dictionaries = {
     // AntiFlood
     'antiflood.flood_detected': '⚠️ @{user}, ¡no envíes mensajes tan rápido!',
     'antiflood.trava_detected': '⚠️ @{user}, ¡los mensajes excesivamente largos están prohibidos!',
+    'antiflood.banned_flood': '🚫 @{user} fue expulsado por enviar demasiados mensajes en poco tiempo.',
+    'antiflood.banned_trava': '🚫 @{user} fue expulsado por enviar un mensaje excesivamente largo.',
     'antiflood.status': '🌊 *AntiFlood:* {status}\n⚡ *Máx Msgs:* {msgs}/5s | *Máx Caracteres:* {chars}\n⚡ *Acción:* {action}',
 
     // AntiFake
@@ -288,7 +291,6 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURACIÓN: {plugin}* (Paso {step}/{total})',
     'wizard.current_val': '📌 *Valor actual:* `{current}`',
-    'wizard.default_hint': '💡 *Pista:* Envía `.` (punto) para mantener el valor actual.',
     'wizard.invalid_input': '⚠️ Respuesta inválida. Por favor, lee la pregunta e inténtalo de nuevo.',
     'wizard.finished': '🎉 *¡Configuración de {plugin} finalizada con éxito!*',
     'wizard.choice_prompt': 'Elige una de las siguientes opciones:\n{choices}',
@@ -367,6 +369,8 @@ const dictionaries = {
     // AntiFlood
     'antiflood.flood_detected': '⚠️ @{user}, please do not send repeated messages so quickly!',
     'antiflood.trava_detected': '⚠️ @{user}, excessively long messages are prohibited!',
+    'antiflood.banned_flood': '🚫 @{user} was banned for sending too many messages too quickly (flood).',
+    'antiflood.banned_trava': '🚫 @{user} was banned for sending an excessively long message.',
     'antiflood.status': '🌊 *AntiFlood:* {status}\n⚡ *Max Msgs:* {msgs}/5s | *Max Chars:* {chars}\n⚡ *Action:* {action}',
 
     // AntiFake
@@ -433,7 +437,6 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURATION: {plugin}* (Step {step}/{total})',
     'wizard.current_val': '📌 *Current value:* `{current}`',
-    'wizard.default_hint': '💡 *Tip:* Send `.` (period) to keep the current value.',
     'wizard.invalid_input': '⚠️ Invalid response. Please read the prompt and try again.',
     'wizard.finished': '🎉 *Configuration for {plugin} completed successfully!*',
     'wizard.choice_prompt': 'Choose one of the options below:\n{choices}',

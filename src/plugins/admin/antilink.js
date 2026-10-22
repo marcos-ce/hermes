@@ -2,9 +2,117 @@ const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
 const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
+const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
 
-const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live)[^\s]*)/gi;
+const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live|tv|co|info|biz|club|shop|store|games?|news|blog|media)[^\s]*)/gi;
+
+/**
+ * Aliases canônicos: mapeamento de domínios "alternativos" para o domínio principal.
+ * Ex: youtu.be → youtube.com, t.me → telegram.org
+ */
+const DOMAIN_ALIASES = {
+  'youtu.be': 'youtube.com',
+  'm.youtube.com': 'youtube.com',
+  't.me': 'telegram.org',
+  'wa.me': 'whatsapp.com',
+  'chat.whatsapp.com': 'whatsapp.com',
+  'fb.me': 'facebook.com',
+  'm.facebook.com': 'facebook.com',
+  'fb.com': 'facebook.com',
+  'instagr.am': 'instagram.com',
+  'twitter.com': 'x.com',
+  'x.com': 'x.com',
+  't.co': 'x.com',
+  'pin.it': 'pinterest.com',
+  'tiktok.com': 'tiktok.com',
+  'vm.tiktok.com': 'tiktok.com',
+  'linktr.ee': 'linktr.ee',
+};
+
+/**
+ * Extrai o domínio base de uma URL, aplicando alias canônicos e removendo subdomínios comuns.
+ * @param {string} url
+ * @returns {string|null}
+ */
+function extractBaseDomain(url) {
+  try {
+    let href = url.trim();
+    if (!/^https?:\/\//i.test(href)) href = 'https://' + href;
+    const hostname = new URL(href).hostname.toLowerCase();
+    // Remove www. e subdomínios simples (www, m, mobile)
+    const noWww = hostname.replace(/^(www\.|m\.|mobile\.)/, '');
+    // Verifica alias canônico para subdomínio completo
+    if (DOMAIN_ALIASES[hostname]) return DOMAIN_ALIASES[hostname];
+    if (DOMAIN_ALIASES[noWww]) return DOMAIN_ALIASES[noWww];
+    return noWww;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verifica se um domínio extraído está na whitelist.
+ * Compara: exacto, sem subdomínios e com alias canônicos.
+ * @param {string} urlOrDomain
+ * @param {string[]} allowedList
+ * @returns {boolean}
+ */
+function isDomainAllowed(urlOrDomain, allowedList) {
+  if (!allowedList || allowedList.length === 0) return false;
+  const base = extractBaseDomain(urlOrDomain);
+  if (!base) return false;
+
+  const normalizedAllowed = allowedList.map(d => {
+    const cleaned = d.replace(/^(https?:\/\/)?(www\.|m\.|mobile\.)?/, '').toLowerCase().trim();
+    return DOMAIN_ALIASES[cleaned] || cleaned;
+  });
+
+  // Verifica match exato ou se o domínio extraído termina com o domínio permitido (ex: sub.youtube.com → youtube.com)
+  return normalizedAllowed.some(allowed =>
+    base === allowed || base.endsWith('.' + allowed)
+  );
+}
+
+/**
+ * Extrai todos os textos relevantes de uma mensagem Baileys para detecção de links,
+ * incluindo link previews (extendedTextMessage), legendas de mídia e texto normal.
+ * @param {object} message msg.message do Baileys
+ * @returns {string}
+ */
+function extractAllTextForLinks(message) {
+  if (!message) return '';
+
+  // Desencapsula efêmeras/viewOnce
+  const real = message.ephemeralMessage?.message ||
+               message.viewOnceMessage?.message ||
+               message.viewOnceMessageV2?.message ||
+               message.documentWithCaptionMessage?.message ||
+               message;
+
+  const parts = [];
+
+  // Texto normal
+  if (real.conversation) parts.push(real.conversation);
+
+  // Mensagem com texto estendido (link preview)
+  if (real.extendedTextMessage) {
+    const ext = real.extendedTextMessage;
+    if (ext.text) parts.push(ext.text);
+    // matchedText e canonicalUrl são os campos que contêm o link REAL do preview
+    if (ext.matchedText) parts.push(ext.matchedText);
+    if (ext.canonicalUrl) parts.push(ext.canonicalUrl);
+  }
+
+  // Legendas de mídia
+  if (real.imageMessage?.caption) parts.push(real.imageMessage.caption);
+  if (real.videoMessage?.caption) parts.push(real.videoMessage.caption);
+  if (real.documentMessage?.caption) parts.push(real.documentMessage.caption);
+  if (real.audioMessage?.caption) parts.push(real.audioMessage.caption);
+  if (real.stickerMessage?.caption) parts.push(real.stickerMessage.caption);
+
+  return parts.join(' ');
+}
 
 module.exports = {
   name: 'antilink',
@@ -30,9 +138,9 @@ module.exports = {
         name: 'allowedDomains',
         type: 'domain_list',
         question: {
-          pt: 'Digite os domínios PERMITIDOS separados por espaço (Ex: youtube.com instagram.com) ou envie . para bloquear todos os links:',
-          es: 'Escribe los dominios PERMITIDOS separados por espacio (Ej: youtube.com instagram.com) o envía . para bloquear todos:',
-          en: 'Enter ALLOWED domains separated by space (e.g. youtube.com instagram.com) or send . to block all links:'
+          pt: 'Digite os domínios PERMITIDOS separados por espaço (Ex: youtube.com instagram.com)\nou escreva "nenhum" para bloquear absolutamente todos os links:',
+          es: 'Escribe los dominios PERMITIDOS separados por espacio (Ej: youtube.com instagram.com)\no escribe "ninguno" para bloquear todos los enlaces:',
+          en: 'Enter ALLOWED domains separated by space (e.g. youtube.com instagram.com)\nor type "none" to block all links:'
         },
         default: []
       },
@@ -119,7 +227,13 @@ module.exports = {
    */
   async onMessage({ sock, msg, from, sender, text, lang }) {
     if (!configManager.isPluginEnabled(from, 'antilink')) return false;
-    if (!text || !URL_REGEX.test(text)) return false;
+
+    // Extrai TODOS os textos relevantes (incluindo link previews e legendas de mídia)
+    const fullText = extractAllTextForLinks(msg.message);
+    if (!fullText || !URL_REGEX.test(fullText)) return false;
+
+    // Reseta o lastIndex pois URL_REGEX tem flag /g
+    URL_REGEX.lastIndex = 0;
 
     // Ignora se quem enviou for Dono ou Administrador
     if (settings.isOwner(sender, sock)) return false;
@@ -129,22 +243,25 @@ module.exports = {
     const cfg = configManager.getPluginConfig(from, 'antilink') || {};
     const allowed = Array.isArray(cfg.allowedDomains) ? cfg.allowedDomains : [];
 
-    // Checa se o link enviado contém algum dos domínios permitidos
-    const matches = text.match(URL_REGEX) || [];
-    let isAllAllowed = true;
+    // Extrai todos os links encontrados no texto completo
+    URL_REGEX.lastIndex = 0;
+    const matches = fullText.match(URL_REGEX) || [];
 
-    for (const match of matches) {
-      const cleanMatch = match.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
-      const isDomainWhitelisted = allowed.some(d => cleanMatch.startsWith(d) || cleanMatch.includes(d));
-      if (!isDomainWhitelisted) {
-        isAllAllowed = false;
-        break;
+    // Se não achou nenhum link real, não faz nada
+    if (matches.length === 0) return false;
+
+    // Verifica se TODOS os links estão na whitelist
+    let isAllAllowed = allowed.length > 0; // Só "todos permitidos" se whitelist não for vazia
+    if (isAllAllowed) {
+      for (const match of matches) {
+        if (!isDomainAllowed(match, allowed)) {
+          isAllAllowed = false;
+          break;
+        }
       }
     }
 
-    if (isAllAllowed && matches.length > 0 && allowed.length > 0) {
-      return false; // Link permitido na whitelist
-    }
+    if (isAllAllowed) return false; // Todos os links estão na whitelist
 
     // Ação de Emergência (Zero Delay): Apagar mensagem do infrator
     await safeDelete(sock, from, msg.key);

@@ -25,9 +25,9 @@ module.exports = {
         name: 'message',
         type: 'string',
         question: {
-          pt: 'Digite o texto de boas-vindas (use {user} para marcar, {group} para nome e {desc} para descrição) ou . para padrão:',
-          es: 'Escribe el texto de bienvenida (usa {user} para mencionar, {group} para nombre y {desc} para descripción) o . para predeterminado:',
-          en: 'Enter welcome text (use {user} for mention, {group} for name and {desc} for description) or . for default:'
+          pt: 'Digite o texto de boas-vindas (use {user} para marcar, {group} para nome e {desc} para descrição).\nOu responda "padrão" para usar a mensagem padrão:',
+          es: 'Escribe el texto de bienvenida (usa {user} para mencionar, {group} para nombre y {desc} para descripción).\nO responde "predeterminado" para usar el mensaje predeterminado:',
+          en: 'Enter welcome text (use {user} for mention, {group} for name and {desc} for description).\nOr reply "default" to use the default message:'
         },
         default: '👋 Olá {user}, seja bem-vindo(a) ao grupo {group}!\n\n📋 Regras/Descrição: {desc}'
       },
@@ -35,9 +35,9 @@ module.exports = {
         name: 'autoDeleteSeconds',
         type: 'number',
         question: {
-          pt: 'Após quantos segundos a mensagem deve ser apagada automaticamente? (Digite 0 ou . para não apagar):',
-          es: '¿Después de cuántos segundos debe borrarse automáticamente el mensaje? (Escribe 0 o . para no borrar):',
-          en: 'After how many seconds should the message be auto-deleted? (Enter 0 or . to not delete):'
+          pt: 'Após quantos segundos a mensagem deve ser apagada automaticamente? (Digite 0 para não apagar):',
+          es: '¿Después de cuántos segundos debe borrarse automáticamente el mensaje? (Escribe 0 para no borrar):',
+          en: 'After how many seconds should the message be auto-deleted? (Enter 0 to not delete):'
         },
         default: 0,
         min: 0,

@@ -187,8 +187,9 @@ module.exports = {
 
     if (action === 'ban') {
       await safeKick(sock, from, targetGroup);
+      const banKey = violationType === 'trava' ? 'antiflood.banned_trava' : 'antiflood.banned_flood';
       await sendSafeMessage(sock, from, {
-        text: t(lang, 'antiflood.banned', { user: resolvedUserNum }),
+        text: t(lang, banKey, { user: resolvedUserNum }),
         mentions: [targetGroup, targetPhone]
       });
     } else {
