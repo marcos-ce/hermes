@@ -168,8 +168,10 @@ class ConfigManager {
 
   addGlobalBlacklist(jid) {
     if (!jid) return false;
-    if (!this.global.blacklist.includes(jid)) {
-      this.global.blacklist.push(jid);
+    const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');
+    const exists = this.global.blacklist.some(item => item.replace(/@.*$/, '').replace(/\D/g, '') === clean);
+    if (!exists) {
+      this.global.blacklist.push(`${clean}@s.whatsapp.net`);
       this.scheduleSave();
       return true;
     }
@@ -178,7 +180,8 @@ class ConfigManager {
 
   removeGlobalBlacklist(jid) {
     if (!jid) return false;
-    const index = this.global.blacklist.indexOf(jid);
+    const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');
+    const index = this.global.blacklist.findIndex(item => item.replace(/@.*$/, '').replace(/\D/g, '') === clean);
     if (index !== -1) {
       this.global.blacklist.splice(index, 1);
       this.scheduleSave();
@@ -189,7 +192,8 @@ class ConfigManager {
 
   isGlobalBlacklisted(jid) {
     if (!jid) return false;
-    return this.global.blacklist.includes(jid);
+    const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');
+    return this.global.blacklist.some(item => item.replace(/@.*$/, '').replace(/\D/g, '') === clean);
   }
 
   // ==========================================
@@ -321,8 +325,10 @@ class ConfigManager {
 
   addGroupBlacklist(groupJid, jid) {
     const group = this.getOrCreateGroup(groupJid);
-    if (!group.blacklist.includes(jid)) {
-      group.blacklist.push(jid);
+    const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');
+    const exists = group.blacklist.some(item => item.replace(/@.*$/, '').replace(/\D/g, '') === clean);
+    if (!exists) {
+      group.blacklist.push(`${clean}@s.whatsapp.net`);
       this.scheduleSave();
       return true;
     }
@@ -332,7 +338,8 @@ class ConfigManager {
   removeGroupBlacklist(groupJid, jid) {
     const group = this.groups.get(groupJid);
     if (!group) return false;
-    const index = group.blacklist.indexOf(jid);
+    const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');
+    const index = group.blacklist.findIndex(item => item.replace(/@.*$/, '').replace(/\D/g, '') === clean);
     if (index !== -1) {
       group.blacklist.splice(index, 1);
       this.scheduleSave();
@@ -344,7 +351,8 @@ class ConfigManager {
   isGroupBlacklisted(groupJid, jid) {
     const group = this.groups.get(groupJid);
     if (!group) return false;
-    return group.blacklist.includes(jid);
+    const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');
+    return group.blacklist.some(item => item.replace(/@.*$/, '').replace(/\D/g, '') === clean);
   }
 
   getWarns(groupJid, userJid) {

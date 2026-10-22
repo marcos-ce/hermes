@@ -39,7 +39,7 @@ module.exports = {
     ]
   },
 
-  async execute({ sock, msg, from, sender, args, text, reply, t, isGroup }) {
+  async execute({ sock, msg, from, sender, args, text, command, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
     const trigger = (args[0] || '').toLowerCase();
@@ -52,7 +52,7 @@ module.exports = {
     }
 
     // Listagem de membros advertidos (!warns ou !warn list)
-    if (trigger === 'list' || trigger === 'lista' || ['warns', 'advertencias'].includes(msg.bodyTrigger)) {
+    if (trigger === 'list' || trigger === 'lista' || ['warns', 'advertencias'].includes(command)) {
       const allWarns = configManager.getAllWarns(from);
       const entries = Object.entries(allWarns).filter(([_, data]) => data.count > 0);
 
@@ -73,7 +73,7 @@ module.exports = {
 
     // Remover advertência (!unwarn @user ou !warn del @user)
     const isUnwarn = trigger === 'del' || trigger === 'remove' || trigger === 'perdoar' || 
-                     ['unwarn', 'perdoar', 'perdonar'].includes(msg.bodyTrigger);
+                     ['unwarn', 'perdoar', 'perdonar'].includes(command);
 
     if (isUnwarn) {
       const targetText = trigger === 'del' || trigger === 'remove' ? args.slice(1).join(' ') : text;

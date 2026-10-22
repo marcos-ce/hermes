@@ -1,4 +1,5 @@
 const configManager = require('./configManager');
+const settings = require('../config/settings');
 const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
 const { t } = require('../utils/i18n');
 const logger = require('../utils/logger');
@@ -44,10 +45,24 @@ class Scheduler {
 
     try {
       const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const currentHHMM = `${hours}:${minutes}`;
-      const currentDateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      // Formatação no fuso horário configurado (ex: America/Sao_Paulo)
+      let currentHHMM = '';
+      let currentDateKey = '';
+      try {
+        const timeParts = now.toLocaleTimeString('pt-BR', {
+          timeZone: settings.timezone || 'America/Sao_Paulo',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).split(':');
+        currentHHMM = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
+        currentDateKey = now.toLocaleDateString('pt-BR', { timeZone: settings.timezone || 'America/Sao_Paulo' });
+      } catch (_) {
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        currentHHMM = `${hours}:${minutes}`;
+        currentDateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      }
 
       const allGroups = configManager.getAllGroups();
       const executionQueue = [];

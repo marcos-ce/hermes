@@ -175,12 +175,32 @@ class WizardEngine {
       return true;
     }
 
-    // Seleção de módulo por número
-    const selectedNum = parseInt(text, 10);
+    // Seleção de módulo por número (suporta "1", "1 on", "1 off")
+    const parts = text.split(/\s+/);
+    const selectedNum = parseInt(parts[0], 10);
     if (!isNaN(selectedNum) && selectedNum >= 1 && selectedNum <= session.modules.length) {
       const mod = session.modules[selectedNum - 1];
-      wizardCache.del(sessionKey);
+      const subAction = (parts[1] || '').toLowerCase();
 
+      if (subAction === 'on' || subAction === 'ativar' || subAction === 'activar') {
+        configManager.setPluginEnabled(from, mod.name, true);
+        wizardCache.del(sessionKey);
+        await sendSafeMessage(sock, from, { 
+          text: `🟢 *${mod.name.toUpperCase()}* foi *ATIVADO* no grupo.` 
+        }, { quoted: msg });
+        return true;
+      }
+
+      if (subAction === 'off' || subAction === 'desativar') {
+        configManager.setPluginEnabled(from, mod.name, false);
+        wizardCache.del(sessionKey);
+        await sendSafeMessage(sock, from, { 
+          text: `🔴 *${mod.name.toUpperCase()}* foi *DESATIVADO* no grupo.` 
+        }, { quoted: msg });
+        return true;
+      }
+
+      wizardCache.del(sessionKey);
       // Inicia o Wizard de configuração do módulo escolhido
       await this.startWizard(sock, msg, from, sender, mod.name);
       return true;

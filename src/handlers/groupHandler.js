@@ -27,9 +27,17 @@ async function handleParticipantsUpdate(sock, update) {
   const lang = configManager.getGroupLang(groupJid);
 
   if (action === 'add' && Array.isArray(participants)) {
+    const botJid = cleanJid(sock?.user?.id || '');
+    const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
     for (const rawParticipant of participants) {
       const participant = cleanJid(rawParticipant);
       const participantNumber = participant.replace(/@.*$/, '').replace(/\D/g, '');
+
+      // Não aplica boas-vindas nem punições ao próprio bot ao entrar no grupo
+      if (!participantNumber || participantNumber === botNumber) {
+        continue;
+      }
 
       // ==========================================
       // 1. Verificação de Blacklist (Global e Grupo)

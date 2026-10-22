@@ -6,18 +6,16 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: true,
 
-  async execute({ sock, msg, from, args, reply, t, isGroup }) {
+  async execute({ sock, msg, from, args, command, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
-    // Detecta qual gatilho de comando foi digitado
-    const fullText = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
-    const commandTrigger = fullText.split(/\s+/)[0].replace(/^[^\w]+/, '').toLowerCase();
+    const cmd = (command || '').toLowerCase();
     const arg = (args[0] || '').toLowerCase();
 
-    const isCloseAction = ['fechar', 'cerrar', 'lock'].includes(commandTrigger) || 
+    const isCloseAction = ['fechar', 'cerrar', 'lock'].includes(cmd) || 
                           arg === 'on' || arg === 'fechar' || arg === 'cerrar' || arg === '1';
 
-    const isOpenAction = ['abrir', 'unlock', 'unmute'].includes(commandTrigger) || 
+    const isOpenAction = ['abrir', 'unlock', 'unmute'].includes(cmd) || 
                          arg === 'off' || arg === 'abrir' || arg === '2';
 
     if (isCloseAction) {

@@ -9,7 +9,17 @@ module.exports = {
   botAdminRequired: true,
 
   async execute({ sock, msg, from, reply, t }) {
-    const contextInfo = msg?.message?.extendedTextMessage?.contextInfo;
+    const realMsg = msg?.message?.ephemeralMessage?.message ||
+                    msg?.message?.viewOnceMessage?.message ||
+                    msg?.message?.viewOnceMessageV2?.message ||
+                    msg?.message;
+
+    const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                        realMsg?.imageMessage?.contextInfo ||
+                        realMsg?.videoMessage?.contextInfo ||
+                        realMsg?.documentMessage?.contextInfo ||
+                        msg?.message?.extendedTextMessage?.contextInfo;
+
     const quotedStanzaId = contextInfo?.stanzaId;
     const quotedParticipant = contextInfo?.participant;
 
@@ -18,9 +28,14 @@ module.exports = {
     }
 
     try {
+      const botJid = sock?.user?.id?.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      const participantNum = quotedParticipant?.replace(/@.*$/, '').replace(/\D/g, '');
+      const isFromMe = participantNum === botNum;
+
       // Apaga a mensagem respondida
       await safeDelete(sock, from, {
         remoteJid: from,
+        fromMe: isFromMe,
         id: quotedStanzaId,
         participant: quotedParticipant
       });

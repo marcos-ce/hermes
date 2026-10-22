@@ -123,13 +123,20 @@ module.exports = {
       violationType = 'trava';
     }
 
-    // 2. Checagem de Anti-Flood (Mensagens em 5 segundos)
+    // 2. Checagem de Anti-Flood (Mensagens em 5 segundos com janela temporal real)
     if (!isViolation) {
       const cacheKey = `${from}:${sender}`;
-      const count = (floodCache.get(cacheKey) || 0) + 1;
-      floodCache.set(cacheKey, count, 5); // 5 segundos de janela
+      const now = Date.now();
+      let record = floodCache.get(cacheKey);
 
-      if (count > maxMessages) {
+      if (!record || (now - record.startTime) > 5000) {
+        record = { count: 1, startTime: now };
+      } else {
+        record.count += 1;
+      }
+      floodCache.set(cacheKey, record, 10);
+
+      if (record.count > maxMessages) {
         isViolation = true;
         violationType = 'flood';
         floodCache.del(cacheKey); // Reseta após flagrar

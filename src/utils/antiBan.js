@@ -41,8 +41,13 @@ async function randomDelay(min = 300, max = 700) {
 async function sendSafeMessage(sock, jid, content, options = {}) {
   if (!sock || !jid) return null;
 
-  const payload = typeof content === 'string' ? { text: content } : content;
+  const payload = typeof content === 'string' ? { text: content } : { ...content };
   const rawText = payload.text || payload.caption || '';
+
+  // Garante que menções passadas em options sejam incluídas no payload do Baileys
+  if (options.mentions && !payload.mentions) {
+    payload.mentions = options.mentions;
+  }
 
   // 1. Atraso inicial de leitura humana (300ms a 700ms)
   await randomDelay(300, 700);

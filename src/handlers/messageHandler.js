@@ -86,11 +86,14 @@ async function handleMessage(sock, m) {
   // ========================================================
   if (isGroup) {
     const isEnabled = configManager.isGroupEnabled(from);
+    const cmdBody = text.slice(groupPrefix.length).trim().toLowerCase();
     const isActivatingCmd = text.startsWith(groupPrefix) && (
-      text.slice(groupPrefix.length).trim().startsWith('bot') ||
-      text.slice(groupPrefix.length).trim().startsWith('ativar') ||
-      text.slice(groupPrefix.length).trim().startsWith('activar') ||
-      text.slice(groupPrefix.length).trim().startsWith('activate')
+      cmdBody.startsWith('bot') ||
+      cmdBody.startsWith('ativar') ||
+      cmdBody.startsWith('activar') ||
+      cmdBody.startsWith('activate') ||
+      cmdBody.startsWith('licenca') ||
+      cmdBody.startsWith('licencia')
     );
 
     if (!isEnabled && !isActivatingCmd) {
@@ -219,6 +222,7 @@ async function handleMessage(sock, m) {
       sender,
       args,
       text: commandArgsText,
+      command: commandTrigger.toLowerCase(),
       reply,
       t: translate,
       lang: groupLang,

@@ -4,7 +4,7 @@ const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan')
 const { checkAdminStatus } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
-const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live|chat|whatsapp\.com)[^\s]*)/gi;
+const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live)[^\s]*)/gi;
 
 module.exports = {
   name: 'antilink',
