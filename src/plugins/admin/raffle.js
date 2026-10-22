@@ -1,4 +1,4 @@
-const { getGroupMetadata } = require('../../utils/jidResolver');
+const { getGroupMetadata, cleanJid } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
 module.exports = {
@@ -17,13 +17,19 @@ module.exports = {
       return reply(t('common.error'));
     }
 
-    // Identifica o bot para exclusão automática
-    const botNum = sock?.user?.id?.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    // Identifica o bot para exclusão automática (tanto por Phone quanto por LID)
+    const botJid = sock?.user?.id ? cleanJid(sock.user.id) : '';
+    const botLid = sock?.user?.lid ? cleanJid(sock.user.lid) : '';
+    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
     // Filtra apenas membros comuns (exclui bot e admins por padrão para sorteios justos)
     const eligibleMembers = metadata.participants.filter(p => {
-      const pNum = p.id.replace(/@.*$/, '').replace(/\D/g, '');
-      if (pNum === botNum) return false;
+      const pId = cleanJid(p.id);
+      const pLid = p.lid ? cleanJid(p.lid) : '';
+      const pJid = p.jid ? cleanJid(p.jid) : '';
+      const pNum = pJid.replace(/@.*$/, '').replace(/\D/g, '') || pId.replace(/@.*$/, '').replace(/\D/g, '');
+
+      if (pId === botJid || pLid === botLid || (botNum && pNum === botNum)) return false;
       if (p.admin === 'admin' || p.admin === 'superadmin') return false;
       return true;
     });
@@ -56,18 +62,24 @@ module.exports = {
     }
 
     const winners = shuffled.slice(0, count);
-    const mentions = winners.map(w => w.id);
-
+    const mentionsSet = new Set();
     let winnersText = '';
+
     winners.forEach((w, idx) => {
-      const num = w.id.replace(/@.*$/, '').replace(/\D/g, '');
-      winnersText += `🏅 *${idx + 1}º Lugar:* @${num}\n`;
+      if (w.id) mentionsSet.add(w.id);
+      if (w.jid) mentionsSet.add(w.jid);
+      if (w.lid) mentionsSet.add(w.lid);
+
+      const realPhone = w.jid || (w.id?.endsWith('@s.whatsapp.net') ? w.id : null);
+      const displayNum = realPhone ? realPhone.replace(/@.*$/, '').replace(/\D/g, '') : w.id.replace(/@.*$/, '');
+
+      winnersText += `🏅 *${idx + 1}º Lugar:* @${displayNum}\n`;
     });
 
     let result = `${t('raffle.title')}\n\n`;
     result += `${t('raffle.prize', { prize })}\n\n`;
     result += `${t('raffle.winners', { winners: winnersText })}`;
 
-    return reply(result, { mentions });
+    return reply(result, { mentions: Array.from(mentionsSet) });
   }
 };

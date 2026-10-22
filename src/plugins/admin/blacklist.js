@@ -1,5 +1,5 @@
 const configManager = require('../../core/configManager');
-const { extractTarget, getGroupMetadata } = require('../../utils/jidResolver');
+const { extractTarget, resolveTarget, getGroupMetadata } = require('../../utils/jidResolver');
 const { safeKick } = require('../../utils/antiBan');
 const settings = require('../../config/settings');
 
@@ -56,19 +56,18 @@ module.exports = {
       }
 
       const targetText = args.slice(1).join(' ');
-      const target = extractTarget(msg, targetText);
-      if (!target) {
+      const targetData = await resolveTarget(sock, msg, from, targetText);
+      if (!targetData) {
         return reply(t('common.not_found_target'));
       }
 
-      configManager.addGlobalBlacklist(target);
-      const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
+      configManager.addGlobalBlacklist(targetData.phoneJid);
 
-      // Se o usuário estiver no grupo atual, já remove
-      await safeKick(sock, from, target);
+      // Se o usuário estiver no grupo atual, já remove usando o JID de grupo
+      await safeKick(sock, from, targetData.groupJid);
 
-      return reply(t('blacklist.added_global', { user: targetNum }), {
-        mentions: [target]
+      return reply(t('blacklist.added_global', { user: targetData.displayNum }), {
+        mentions: [targetData.groupJid, targetData.phoneJid]
       });
     }
 
@@ -77,23 +76,22 @@ module.exports = {
     // ==========================================
     if (sub === 'add' || sub === 'adicionar') {
       const targetText = args.slice(1).join(' ');
-      const target = extractTarget(msg, targetText);
-      if (!target) {
+      const targetData = await resolveTarget(sock, msg, from, targetText);
+      if (!targetData) {
         return reply(t('common.not_found_target'));
       }
 
-      if (settings.isOwner(target, sock)) {
+      if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
         return reply('⚠️ Não é permitido adicionar o dono à lista negra.');
       }
 
-      configManager.addGroupBlacklist(from, target);
-      const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
+      configManager.addGroupBlacklist(from, targetData.phoneJid);
 
       // Remove imediatamente se estiver presente
-      await safeKick(sock, from, target);
+      await safeKick(sock, from, targetData.groupJid);
 
-      return reply(t('blacklist.added', { user: targetNum }), {
-        mentions: [target]
+      return reply(t('blacklist.added', { user: targetData.displayNum }), {
+        mentions: [targetData.groupJid, targetData.phoneJid]
       });
     }
 
@@ -102,28 +100,30 @@ module.exports = {
     // ==========================================
     if (sub === 'del' || sub === 'remover' || sub === 'rm') {
       const targetText = args.slice(1).join(' ');
-      const target = extractTarget(msg, targetText);
-      if (!target) {
+      const targetData = await resolveTarget(sock, msg, from, targetText);
+      if (!targetData) {
         return reply(t('common.not_found_target'));
       }
 
-      const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
-      const removedGroup = configManager.removeGroupBlacklist(from, target);
+      const targetNum = targetData.displayNum;
+      const removedGroup = configManager.removeGroupBlacklist(from, targetData.phoneJid) || 
+                           configManager.removeGroupBlacklist(from, targetData.groupJid);
       let removedGlobal = false;
 
       if (isOwner) {
-        removedGlobal = configManager.removeGlobalBlacklist(target);
+        removedGlobal = configManager.removeGlobalBlacklist(targetData.phoneJid) || 
+                        configManager.removeGlobalBlacklist(targetData.groupJid);
       }
 
       if (removedGlobal) {
         return reply(t('blacklist.removed_global', { user: targetNum }), {
-          mentions: [target]
+          mentions: [targetData.groupJid, targetData.phoneJid]
         });
       }
 
       if (removedGroup) {
         return reply(t('blacklist.removed', { user: targetNum }), {
-          mentions: [target]
+          mentions: [targetData.groupJid, targetData.phoneJid]
         });
       }
 

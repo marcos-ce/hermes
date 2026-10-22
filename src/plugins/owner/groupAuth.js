@@ -76,7 +76,12 @@ module.exports = {
 
     if (!canManageGroup) {
       console.log(`[AUTH] Permissão negada no grupo ${from}. Remetente: ${sender}, Dono configurado: ${settings.ownerNumber}`);
-      return reply(`${t('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``);
+      let help = `${t('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``;
+      if (sender.endsWith('@lid')) {
+        const lidNum = sender.replace(/@.*$/, '').replace(/\D/g, '');
+        help += `\n\n💡 *Dica:* Seu WhatsApp está enviando mensagens com identificador @lid neste grupo. Adicione \`OWNER_LID=${lidNum}\` no seu arquivo \`.env\` para autorização direta instantânea!`;
+      }
+      return reply(help);
     }
 
     // ==========================================

@@ -1,7 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
-const { extractTarget, checkAdminStatus } = require('../../utils/jidResolver');
+const { extractTarget, resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
 module.exports = {
@@ -77,31 +77,34 @@ module.exports = {
 
     if (isUnwarn) {
       const targetText = trigger === 'del' || trigger === 'remove' ? args.slice(1).join(' ') : text;
-      const target = extractTarget(msg, targetText);
+      const targetData = await resolveTarget(sock, msg, from, targetText);
 
-      if (!target) {
+      if (!targetData) {
         return reply(t('common.not_found_target'));
       }
 
-      const newCount = configManager.removeWarn(from, target);
-      const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
-      return reply(t('warn.removed', { user: targetNum, warns: newCount, max: maxWarns }), {
-        mentions: [target]
+      const newCount = configManager.removeWarn(from, targetData.phoneJid);
+      return reply(t('warn.removed', { user: targetData.displayNum, warns: newCount, max: maxWarns }), {
+        mentions: [targetData.groupJid, targetData.phoneJid]
       });
     }
 
     // Adicionar Advertência (!warn @user [motivo])
-    const target = extractTarget(msg, text);
-    if (!target) {
+    const targetData = await resolveTarget(sock, msg, from, text);
+    if (!targetData) {
       return reply(t('common.not_found_target'));
     }
 
+    const targetPhone = targetData.phoneJid;
+    const targetGroup = targetData.groupJid;
+    const targetNum = targetData.displayNum;
+
     // Não permite advertir admins ou o dono
-    if (settings.isOwner(target, sock)) {
+    if (settings.isOwner(targetPhone, sock) || settings.isOwner(targetGroup, sock)) {
       return reply(t('warn.cannot_warn_admin'));
     }
 
-    const adminCheck = await checkAdminStatus(sock, from, target);
+    const adminCheck = await checkAdminStatus(sock, from, targetPhone);
     if (adminCheck.isAdmin) {
       return reply(t('warn.cannot_warn_admin'));
     }
@@ -110,20 +113,19 @@ module.exports = {
     const reasonParts = text.replace(/@?\d{8,15}/, '').trim();
     const reason = reasonParts || 'Comportamento inadequado';
 
-    const count = configManager.addWarn(from, target, reason);
-    const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
+    const count = configManager.addWarn(from, targetPhone, reason);
 
     if (count >= maxWarns) {
-      // Atingiu limite: Ban imediato e zera warns
-      await safeKick(sock, from, target);
-      configManager.resetWarns(from, target);
+      // Atingiu limite: Ban imediato usando o JID de grupo exato e zera warns
+      await safeKick(sock, from, targetGroup);
+      configManager.resetWarns(from, targetPhone);
       return reply(t('warn.max_reached', { user: targetNum, max: maxWarns }), {
-        mentions: [target]
+        mentions: [targetGroup, targetPhone]
       });
     }
 
     return reply(t('warn.added', { user: targetNum, reason, warns: count, max: maxWarns }), {
-      mentions: [target]
+      mentions: [targetGroup, targetPhone]
     });
   }
 };

@@ -60,7 +60,10 @@ async function handleMessage(sock, m) {
   // ========================================================
   // 1. Trava Anti-Ban de Privado (DM)
   // ========================================================
-  const isSenderOwner = settings.isOwner(sender, sock) || settings.isOwner(rawSender, sock);
+  const directPn = msg.key?.participantPn || msg.key?.senderPn || msg?.participantPn || msg?.senderPn;
+  const isSenderOwner = settings.isOwner(sender, sock) || 
+                        settings.isOwner(rawSender, sock) ||
+                        (directPn && settings.isOwner(directPn, sock));
 
   if (!isGroup) {
     // O Dono sempre tem permissão no privado
@@ -164,7 +167,7 @@ async function handleMessage(sock, m) {
   // 4. Interceptador do Wizard Exclusivo do Admin (${from}:${sender})
   // ========================================================
   const wizardKey = `${from}:${sender}`;
-  const activeSession = wizardCache.get(wizardKey);
+  const activeSession = wizardCache.get(wizardKey) || (rawSender ? wizardCache.get(`${from}:${rawSender}`) : null);
 
   // Se existe sessão do Wizard ativa e o texto NÃO é um comando com prefixo
   if (activeSession && (!text.startsWith(groupPrefix) || text.length <= 3)) {
@@ -222,7 +225,13 @@ async function handleMessage(sock, m) {
   // Comando exclusivo do Dono
   if (plugin.ownerOnly && !isSenderOwner) {
     console.log(`[AUTH] Comando exclusivo de dono negado para ${sender} (raw: ${rawSender}). Dono: ${settings.ownerNumber}`);
-    await reply(`${translate('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``);
+    let help = `${translate('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``;
+    const lidToCheck = sender.endsWith('@lid') ? sender : (rawSender.endsWith('@lid') ? rawSender : '');
+    if (lidToCheck) {
+      const lidNum = lidToCheck.replace(/@.*$/, '').replace(/\D/g, '');
+      help += `\n\n💡 *Dica:* Seu WhatsApp está enviando mensagens com identificador @lid neste grupo. Adicione \`OWNER_LID=${lidNum}\` no seu arquivo \`.env\` para autorização direta instantânea!`;
+    }
+    await reply(help);
     return;
   }
 

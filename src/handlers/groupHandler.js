@@ -1,6 +1,6 @@
 const { groupCache } = require('../utils/cache');
 const { sendSafeMessage, safeKick, safeDelete } = require('../utils/antiBan');
-const { cleanJid, getGroupMetadata } = require('../utils/jidResolver');
+const { cleanJid, getGroupMetadata, resolveParticipant } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const configManager = require('../core/configManager');
 const pluginLoader = require('../core/pluginLoader');
@@ -28,29 +28,32 @@ async function handleParticipantsUpdate(sock, update) {
 
   if (action === 'add' && Array.isArray(participants)) {
     const botJid = cleanJid(sock?.user?.id || '');
+    const botLid = cleanJid(sock?.user?.lid || '');
     const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
     for (const rawParticipant of participants) {
-      const participant = cleanJid(rawParticipant);
-      const participantNumber = participant.replace(/@.*$/, '').replace(/\D/g, '');
+      const resolved = await resolveParticipant(sock, groupJid, rawParticipant);
+      const targetPhoneJid = resolved?.phoneJid || cleanJid(rawParticipant);
+      const targetGroupJid = resolved?.groupJid || cleanJid(rawParticipant);
+      const participantNumber = resolved?.displayNum || targetPhoneJid.replace(/@.*$/, '').replace(/\D/g, '');
 
       // Não aplica boas-vindas nem punições ao próprio bot ao entrar no grupo
-      if (!participantNumber || participantNumber === botNumber) {
+      if (!participantNumber || participantNumber === botNumber || targetGroupJid === botLid) {
         continue;
       }
 
       // ==========================================
       // 1. Verificação de Blacklist (Global e Grupo)
       // ==========================================
-      const isGlobalBL = configManager.isGlobalBlacklisted(participant);
-      const isGroupBL = configManager.isGroupBlacklisted(groupJid, participant);
+      const isGlobalBL = configManager.isGlobalBlacklisted(targetPhoneJid) || configManager.isGlobalBlacklisted(targetGroupJid);
+      const isGroupBL = configManager.isGroupBlacklisted(groupJid, targetPhoneJid) || configManager.isGroupBlacklisted(groupJid, targetGroupJid);
 
       if (isGlobalBL || isGroupBL) {
-        // Remoção de Emergência (Zero Delay)
-        await safeKick(sock, groupJid, participant);
+        // Remoção de Emergência (Zero Delay) usando o JID exato do grupo
+        await safeKick(sock, groupJid, targetGroupJid);
         await sendSafeMessage(sock, groupJid, {
           text: t(lang, 'blacklist.banned_entry', { user: participantNumber }),
-          mentions: [participant]
+          mentions: [targetGroupJid, targetPhoneJid]
         });
         continue; // Não executa boas-vindas nem antifake
       }
@@ -67,10 +70,10 @@ async function handleParticipantsUpdate(sock, update) {
         const hasValidDdi = allowedDdis.some(ddi => participantNumber.startsWith(ddi.replace(/\D/g, '')));
         if (!hasValidDdi) {
           // Número estrangeiro não permitido -> Ban imediato
-          await safeKick(sock, groupJid, participant);
+          await safeKick(sock, groupJid, targetGroupJid);
           await sendSafeMessage(sock, groupJid, {
             text: t(lang, 'antifake.detected', { user: participantNumber }),
-            mentions: [participant]
+            mentions: [targetGroupJid, targetPhoneJid]
           });
           continue; // Não envia boas-vindas
         }
@@ -94,7 +97,7 @@ async function handleParticipantsUpdate(sock, update) {
 
           const sentMsg = await sendSafeMessage(sock, groupJid, {
             text: welcomeText,
-            mentions: [participant]
+            mentions: [targetGroupJid, targetPhoneJid]
           });
 
           // Auto-delete configurável em segundos

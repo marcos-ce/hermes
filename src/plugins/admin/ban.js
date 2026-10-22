@@ -1,5 +1,5 @@
 const { safeKick, safeDelete } = require('../../utils/antiBan');
-const { extractTarget, checkAdminStatus } = require('../../utils/jidResolver');
+const { extractTarget, resolveTarget, checkAdminStatus, cleanJid } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
@@ -44,25 +44,31 @@ module.exports = {
       return await wizardEngine.startWizard(sock, msg, from, sender, 'ban');
     }
 
-    const target = extractTarget(msg, text);
-    if (!target) {
+    const targetData = await resolveTarget(sock, msg, from, text);
+    if (!targetData) {
       return reply(t('common.not_found_target'));
     }
 
+    const targetPhone = targetData.phoneJid;
+    const targetGroup = targetData.groupJid;
+    const targetNum = targetData.displayNum;
+
     // Proteção: Não banir o próprio bot
-    const botJid = sock?.user?.id?.replace(/@.*$/, '').split(':')[0];
-    const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
-    if (botJid && targetNum === botJid) {
+    const botJid = cleanJid(sock?.user?.id || '');
+    const botLid = cleanJid(sock?.user?.lid || '');
+    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+    if (targetGroup === botJid || targetGroup === botLid || (botNum && targetNum === botNum)) {
       return reply(t('ban.cannot_ban_bot'));
     }
 
     // Proteção: Não banir o Dono
-    if (settings.isOwner(target, sock)) {
+    if (settings.isOwner(targetPhone, sock) || settings.isOwner(targetGroup, sock)) {
       return reply(t('ban.cannot_ban_owner'));
     }
 
     // Proteção: Não banir administradores
-    const adminCheck = await checkAdminStatus(sock, from, target);
+    const adminCheck = await checkAdminStatus(sock, from, targetPhone);
     if (adminCheck.isAdmin) {
       return reply(t('ban.cannot_ban_admin'));
     }
@@ -70,10 +76,17 @@ module.exports = {
     // Se houver mensagem respondida e o plugin ban estiver configurado para deletar
     const banCfg = configManager.getPluginConfig(from, 'ban') || {};
     if (banCfg.deleteMessage !== false) {
-      const quotedMsg = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      const quotedStanzaId = msg?.message?.extendedTextMessage?.contextInfo?.stanzaId;
-      const quotedParticipant = msg?.message?.extendedTextMessage?.contextInfo?.participant;
-      if (quotedMsg && quotedStanzaId) {
+      const realMsg = msg?.message?.ephemeralMessage?.message ||
+                      msg?.message?.viewOnceMessage?.message ||
+                      msg?.message;
+
+      const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                          realMsg?.imageMessage?.contextInfo ||
+                          msg?.message?.extendedTextMessage?.contextInfo;
+
+      const quotedStanzaId = contextInfo?.stanzaId;
+      const quotedParticipant = contextInfo?.participant;
+      if (quotedStanzaId) {
         await safeDelete(sock, from, {
           remoteJid: from,
           id: quotedStanzaId,
@@ -82,10 +95,10 @@ module.exports = {
       }
     }
 
-    // Remoção Imediata
-    await safeKick(sock, from, target);
+    // Remoção Imediata usando o JID exato que o WhatsApp espera no grupo
+    await safeKick(sock, from, targetGroup);
     return reply(t('ban.success', { user: targetNum }), {
-      mentions: [target]
+      mentions: [targetGroup, targetPhone]
     });
   }
 };

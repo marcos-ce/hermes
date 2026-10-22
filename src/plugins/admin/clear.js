@@ -1,4 +1,5 @@
 const { safeDelete } = require('../../utils/antiBan');
+const { cleanJid } = require('../../utils/jidResolver');
 
 module.exports = {
   name: 'del',
@@ -28,11 +29,18 @@ module.exports = {
     }
 
     try {
-      const botJid = sock?.user?.id?.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      const participantNum = quotedParticipant?.replace(/@.*$/, '').replace(/\D/g, '');
-      const isFromMe = participantNum === botNum;
+      const botJid = cleanJid(sock?.user?.id || '');
+      const botLid = cleanJid(sock?.user?.lid || '');
+      const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
-      // Apaga a mensagem respondida
+      const cleanParticipant = cleanJid(quotedParticipant || '');
+      const participantNum = cleanParticipant.replace(/@.*$/, '').replace(/\D/g, '');
+
+      const isFromMe = (cleanParticipant === botJid) ||
+                       (cleanParticipant === botLid) ||
+                       (botNum && participantNum === botNum);
+
+      // Apaga a mensagem respondida usando a chave original exata
       await safeDelete(sock, from, {
         remoteJid: from,
         fromMe: isFromMe,

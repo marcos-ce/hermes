@@ -27,12 +27,17 @@ module.exports = {
       return reply(t('common.error'));
     }
 
-    const allMembers = metadata.participants.map(p => p.id);
+    const allMembers = new Set();
+    metadata.participants.forEach(p => {
+      if (p.id) allMembers.add(p.id);
+      if (p.jid) allMembers.add(p.jid);
+      if (p.lid) allMembers.add(p.lid);
+    });
 
     // Envia a mensagem com todas as menções invisíveis
     await sendSafeMessage(sock, from, {
       text: messageToSend,
-      mentions: allMembers
+      mentions: Array.from(allMembers)
     });
   }
 };

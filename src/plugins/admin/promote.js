@@ -1,5 +1,5 @@
 const { groupCache } = require('../../utils/cache');
-const { extractTarget, checkAdminStatus } = require('../../utils/jidResolver');
+const { resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
 
 module.exports = {
   name: 'promote',
@@ -12,23 +12,22 @@ module.exports = {
   async execute({ sock, msg, from, text, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
-    const target = extractTarget(msg, text);
-    if (!target) {
+    const targetData = await resolveTarget(sock, msg, from, text);
+    if (!targetData) {
       return reply(t('common.not_found_target'));
     }
 
-    const adminCheck = await checkAdminStatus(sock, from, target);
+    const adminCheck = await checkAdminStatus(sock, from, targetData.phoneJid);
     if (adminCheck.isAdmin) {
       return reply(t('promote.already_admin'));
     }
 
     try {
-      await sock.groupParticipantsUpdate(from, [target], 'promote');
+      await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
       groupCache.del(from); // Invalida o cache
 
-      const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
-      return reply(t('promote.success', { user: targetNum }), {
-        mentions: [target]
+      return reply(t('promote.success', { user: targetData.displayNum }), {
+        mentions: [targetData.groupJid, targetData.phoneJid]
       });
     } catch (err) {
       return reply(t('common.error'));

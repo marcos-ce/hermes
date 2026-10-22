@@ -9,6 +9,7 @@ const qrcode = require('qrcode-terminal');
 const settings = require('../config/settings');
 const logger = require('../utils/logger');
 const { groupCache } = require('../utils/cache');
+const { registerParticipantLid } = require('../utils/jidResolver');
 const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
@@ -105,13 +106,32 @@ async function connectBot(options = {}) {
       console.log('\n====================================================');
       console.log('🚀 BOT CONECTADO COM SUCESSO AO WHATSAPP!');
       console.log(`🏷️  ID: ${sock.user?.id || 'Desconhecido'}`);
+      if (sock.user?.lid) {
+        console.log(`🔒 LID: ${sock.user.lid}`);
+      }
       console.log(`🛡️  Modo Furtivo Anti-Ban: ATIVO (Presença Desconectada/Invisível)`);
       console.log('====================================================\n');
+
+      // Registra identidade do bot no mapa LID <-> Telefone
+      if (sock.user) {
+        registerParticipantLid({
+          id: sock.user.id,
+          jid: sock.user.id,
+          lid: sock.user.lid
+        });
+      }
 
       // Garante presença invisível/unavailable ao conectar
       try {
         await sock.sendPresenceUpdate('unavailable');
       } catch (_) {}
+    }
+  });
+
+  // Mapeamento automático de compartilhamento de número e LID
+  sock.ev.on('chats.phoneNumberShare', ({ lid, jid }) => {
+    if (lid && jid) {
+      registerParticipantLid({ id: lid, jid, lid });
     }
   });
 

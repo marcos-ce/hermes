@@ -1,7 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
-const { checkAdminStatus } = require('../../utils/jidResolver');
+const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
 const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live)[^\s]*)/gi;
@@ -120,38 +120,41 @@ module.exports = {
     // Ação de Emergência (Zero Delay): Apagar mensagem do infrator
     await safeDelete(sock, from, msg.key);
 
-    const userNum = sender.replace(/@.*$/, '').replace(/\D/g, '');
+    const targetData = await resolveParticipant(sock, from, sender);
+    const targetPhone = targetData?.phoneJid || sender;
+    const targetGroup = targetData?.groupJid || sender;
+    const userNum = targetData?.displayNum || sender.replace(/@.*$/, '').replace(/\D/g, '');
     const action = cfg.action || 'delete';
 
     if (action === 'ban') {
-      await safeKick(sock, from, sender);
+      await safeKick(sock, from, targetGroup);
       await sendSafeMessage(sock, from, {
         text: t(lang, 'antilink.banned', { user: userNum }),
-        mentions: [sender]
+        mentions: [targetGroup, targetPhone]
       });
     } else if (action === 'warn') {
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const maxWarns = warnCfg.maxWarns || 3;
-      const count = configManager.addWarn(from, sender, 'Envio de link não autorizado');
+      const count = configManager.addWarn(from, targetPhone, 'Envio de link não autorizado');
 
       if (count >= maxWarns) {
-        await safeKick(sock, from, sender);
-        configManager.resetWarns(from, sender);
+        await safeKick(sock, from, targetGroup);
+        configManager.resetWarns(from, targetPhone);
         await sendSafeMessage(sock, from, {
           text: t(lang, 'warn.max_reached', { user: userNum, max: maxWarns }),
-          mentions: [sender]
+          mentions: [targetGroup, targetPhone]
         });
       } else {
         await sendSafeMessage(sock, from, {
           text: t(lang, 'antilink.warned', { user: userNum, warns: count, max: maxWarns }),
-          mentions: [sender]
+          mentions: [targetGroup, targetPhone]
         });
       }
     } else {
       // Apenas apagar
       await sendSafeMessage(sock, from, {
         text: t(lang, 'antilink.detected', { user: userNum }),
-        mentions: [sender]
+        mentions: [targetGroup, targetPhone]
       });
     }
 

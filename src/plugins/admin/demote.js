@@ -1,5 +1,5 @@
 const { groupCache } = require('../../utils/cache');
-const { extractTarget, checkAdminStatus } = require('../../utils/jidResolver');
+const { resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
 module.exports = {
@@ -13,27 +13,26 @@ module.exports = {
   async execute({ sock, msg, from, text, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
-    const target = extractTarget(msg, text);
-    if (!target) {
+    const targetData = await resolveTarget(sock, msg, from, text);
+    if (!targetData) {
       return reply(t('common.not_found_target'));
     }
 
-    if (settings.isOwner(target, sock)) {
+    if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
       return reply(t('demote.cannot_demote_owner'));
     }
 
-    const adminCheck = await checkAdminStatus(sock, from, target);
+    const adminCheck = await checkAdminStatus(sock, from, targetData.phoneJid);
     if (!adminCheck.isAdmin) {
       return reply(t('demote.already_member'));
     }
 
     try {
-      await sock.groupParticipantsUpdate(from, [target], 'demote');
+      await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'demote');
       groupCache.del(from); // Invalida o cache
 
-      const targetNum = target.replace(/@.*$/, '').replace(/\D/g, '');
-      return reply(t('demote.success', { user: targetNum }), {
-        mentions: [target]
+      return reply(t('demote.success', { user: targetData.displayNum }), {
+        mentions: [targetData.groupJid, targetData.phoneJid]
       });
     } catch (err) {
       return reply(t('common.error'));

@@ -67,9 +67,10 @@ class Settings {
     }
 
     // Opcionalmente checa se é o próprio bot logado
-    if (sock && sock.user && sock.user.id) {
-      const botNum = sock.user.id.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      if (cleanNumber === botNum) {
+    if (sock && sock.user) {
+      const botNum = (sock.user.id || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      const botLidNum = (sock.user.lid || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      if (cleanNumber === botNum || (botLidNum && cleanNumber === botLidNum)) {
         return true;
       }
     }

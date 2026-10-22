@@ -25,9 +25,22 @@ function cleanJid(jid) {
  */
 function registerParticipantLid(p) {
   if (!p) return;
-  const pId = cleanJid(p.id);
-  const pJid = p.jid ? cleanJid(p.jid) : (pId.endsWith('@s.whatsapp.net') ? pId : null);
+  const pId = cleanJid(p.id || '');
+  let pJid = p.jid ? cleanJid(p.jid) : null;
   const pLid = p.lid ? cleanJid(p.lid) : (pId.endsWith('@lid') ? pId : null);
+
+  // Trata variações em que o telefone vem em atributos alternativos
+  if (!pJid && p.phoneNumber) {
+    const digits = String(p.phoneNumber).replace(/\D/g, '');
+    if (digits.length >= 8) pJid = `${digits}@s.whatsapp.net`;
+  }
+  if (!pJid && p.phone_number) {
+    const digits = String(p.phone_number).replace(/\D/g, '');
+    if (digits.length >= 8) pJid = `${digits}@s.whatsapp.net`;
+  }
+  if (!pJid && pId.endsWith('@s.whatsapp.net')) {
+    pJid = pId;
+  }
 
   if (pJid && pLid) {
     lidToPhoneMap.set(pLid, pJid);
@@ -37,7 +50,7 @@ function registerParticipantLid(p) {
 
 /**
  * Resolve o remetente real convertendo @lid em número de telefone (@s.whatsapp.net)
- * consultando os metadados do grupo se necessário.
+ * consultando os atributos do Baileys e metadados do grupo.
  * @param {object} sock 
  * @param {object} msg 
  * @returns {Promise<string>}
@@ -47,6 +60,28 @@ async function resolveSender(sock, msg) {
   const from = msg.key.remoteJid || '';
   let rawSender = msg.key.participant || msg.participant || from || '';
   rawSender = cleanJid(rawSender);
+
+  // 1. Extração direta dos metadados de mensagem decodificada pelo Baileys
+  // (Baileys v6 decodifica participant_pn e sender_pn diretamente na chave da mensagem)
+  const directPn = msg.key?.participantPn || msg.key?.senderPn || msg?.participantPn || msg?.senderPn;
+  const directLid = msg.key?.participantLid || msg.key?.senderLid || (rawSender.endsWith('@lid') ? rawSender : null);
+
+  if (directPn && directLid) {
+    const cleanPn = cleanJid(directPn);
+    const cleanL = cleanJid(directLid);
+    lidToPhoneMap.set(cleanL, cleanPn);
+    phoneToLidMap.set(cleanPn, cleanL);
+    if (rawSender === cleanL) {
+      return cleanPn;
+    }
+  }
+
+  if (directPn && rawSender.endsWith('@lid')) {
+    const cleanPn = cleanJid(directPn);
+    lidToPhoneMap.set(rawSender, cleanPn);
+    phoneToLidMap.set(cleanPn, rawSender);
+    return cleanPn;
+  }
 
   // Se já for @s.whatsapp.net, retorna direto
   if (rawSender.endsWith('@s.whatsapp.net')) {
@@ -85,6 +120,11 @@ async function resolveSender(sock, msg) {
 function extractSender(msg) {
   if (!msg || !msg.key) return '';
   const from = msg.key.remoteJid || '';
+
+  const directPn = msg.key?.participantPn || msg.key?.senderPn || msg?.participantPn || msg?.senderPn;
+  if (directPn) {
+    return cleanJid(directPn);
+  }
   
   if (from.endsWith('@g.us')) {
     const participant = msg.key.participant || msg.participant || '';
@@ -105,25 +145,46 @@ function extractSender(msg) {
  * @param {string} textArgs 
  * @returns {string|null}
  */
+/**
+ * Extrai o JID alvo da mensagem através de:
+ * 1. Mensagem respondida (Quoted participant)
+ * 2. Menção direta (@5511...)
+ * 3. Número digitado no texto do comando
+ * @param {object} msg 
+ * @param {string} textArgs 
+ * @returns {string|null}
+ */
 function extractTarget(msg, textArgs = '') {
+  const realMsg = msg?.message?.ephemeralMessage?.message ||
+                  msg?.message?.viewOnceMessage?.message ||
+                  msg?.message?.viewOnceMessageV2?.message ||
+                  msg?.message;
+
+  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                      realMsg?.imageMessage?.contextInfo ||
+                      realMsg?.videoMessage?.contextInfo ||
+                      realMsg?.documentMessage?.contextInfo ||
+                      msg?.message?.extendedTextMessage?.contextInfo;
+
   // 1. Mensagem respondida
   const quotedParticipant = 
-    msg?.message?.extendedTextMessage?.contextInfo?.participant ||
-    msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.participant;
+    contextInfo?.participant ||
+    contextInfo?.quotedMessage?.participant;
   
   if (quotedParticipant) {
-    return cleanJid(quotedParticipant);
+    const clean = cleanJid(quotedParticipant);
+    return lidToPhoneMap.get(clean) || clean;
   }
 
   // 2. Menção na mensagem
-  const mentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  const mentions = contextInfo?.mentionedJid || [];
   if (Array.isArray(mentions) && mentions.length > 0) {
-    return cleanJid(mentions[0]);
+    const clean = cleanJid(mentions[0]);
+    return lidToPhoneMap.get(clean) || clean;
   }
 
   // 3. Extração por número de telefone digitado no texto
   if (textArgs && typeof textArgs === 'string') {
-    // Procura por menção em texto @5511... ou números com pelo menos 8 dígitos
     const match = textArgs.match(/@?(\d{8,15})/);
     if (match && match[1]) {
       return `${match[1]}@s.whatsapp.net`;
@@ -131,6 +192,64 @@ function extractTarget(msg, textArgs = '') {
   }
 
   return null;
+}
+
+/**
+ * Resolve o participante de forma assíncrona com suporte completo a @lid
+ * @param {object} sock 
+ * @param {string} groupJid 
+ * @param {string} targetJid 
+ * @returns {Promise<{ phoneJid: string, groupJid: string, displayNum: string }|null>}
+ */
+async function resolveParticipant(sock, groupJid, targetJid) {
+  if (!targetJid) return null;
+  const cleanTarget = cleanJid(targetJid);
+
+  let phoneJid = cleanTarget.endsWith('@s.whatsapp.net') ? cleanTarget : (lidToPhoneMap.get(cleanTarget) || null);
+  let groupParticipantJid = cleanTarget;
+
+  if (groupJid && groupJid.endsWith('@g.us') && sock) {
+    const meta = await getGroupMetadata(sock, groupJid);
+    if (meta && Array.isArray(meta.participants)) {
+      for (const p of meta.participants) {
+        registerParticipantLid(p);
+
+        const pId = cleanJid(p.id);
+        const pJid = p.jid ? cleanJid(p.jid) : (pId.endsWith('@s.whatsapp.net') ? pId : null);
+        const pLid = p.lid ? cleanJid(p.lid) : (pId.endsWith('@lid') ? pId : null);
+
+        const isMatch = (pId === cleanTarget) || (pJid === cleanTarget) || (pLid === cleanTarget);
+        if (isMatch) {
+          groupParticipantJid = pId; // O JID exato que o grupo espera nas ações do Baileys
+          if (pJid) phoneJid = pJid;
+          break;
+        }
+      }
+    }
+  }
+
+  const finalPhoneJid = phoneJid || cleanTarget;
+  const displayNum = finalPhoneJid.replace(/@.*$/, '').replace(/\D/g, '') || cleanTarget.replace(/@.*$/, '');
+
+  return {
+    phoneJid: finalPhoneJid,
+    groupJid: groupParticipantJid,
+    displayNum
+  };
+}
+
+/**
+ * Extrai e resolve o alvo da mensagem (Quote, Menção ou Número) convertendo @lid se necessário
+ * @param {object} sock 
+ * @param {object} msg 
+ * @param {string} groupJid 
+ * @param {string} textArgs 
+ * @returns {Promise<{ phoneJid: string, groupJid: string, displayNum: string }|null>}
+ */
+async function resolveTarget(sock, msg, groupJid, textArgs = '') {
+  const rawTarget = extractTarget(msg, textArgs);
+  if (!rawTarget) return null;
+  return await resolveParticipant(sock, groupJid, rawTarget);
 }
 
 /**
@@ -230,6 +349,7 @@ async function checkAdminStatus(sock, groupJid, userJid) {
 
   const cleanUser = cleanJid(userJid);
   const botJid = cleanJid(sock?.user?.id || '');
+  const botLid = cleanJid(sock?.user?.lid || '');
   const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
   const userNumber = cleanUser.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
@@ -248,20 +368,25 @@ async function checkAdminStatus(sock, groupJid, userJid) {
   const botBr = getBr(botNumber);
 
   for (const p of metadata.participants) {
-    const pClean = cleanJid(p.id);
-    const pNumber = pClean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const pLid = p.lid ? cleanJid(p.lid) : '';
+    registerParticipantLid(p);
+
+    const pId = cleanJid(p.id);
+    const pLid = p.lid ? cleanJid(p.lid) : (pId.endsWith('@lid') ? pId : '');
+    const pJid = p.jid ? cleanJid(p.jid) : (pId.endsWith('@s.whatsapp.net') ? pId : (lidToPhoneMap.get(pLid) || ''));
+    const pNumber = (pJid || pId).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
     const pBr = getBr(pNumber);
 
-    const isMatchUser = (pClean === cleanUser) || 
+    const isMatchUser = (pId === cleanUser) || 
+                        (pLid && pLid === cleanUser) ||
+                        (pJid && pJid === cleanUser) ||
                         (userNumber && pNumber === userNumber) || 
-                        (userBr.ddd && pBr.ddd && userBr.ddd === pBr.ddd && userBr.last8 === pBr.last8) ||
-                        (pLid && pLid === cleanUser);
+                        (userBr.ddd && pBr.ddd && userBr.ddd === pBr.ddd && userBr.last8 === pBr.last8);
 
-    const isMatchBot = (pClean === botJid) || 
+    const isMatchBot = (pId === botJid) || 
+                       (botLid && (pId === botLid || pLid === botLid)) ||
+                       (pJid && pJid === botJid) ||
                        (botNumber && pNumber === botNumber) || 
-                       (botBr.ddd && pBr.ddd && botBr.ddd === pBr.ddd && botBr.last8 === pBr.last8) ||
-                       (pLid && pLid === botJid);
+                       (botBr.ddd && pBr.ddd && botBr.ddd === pBr.ddd && botBr.last8 === pBr.last8);
 
     if (isMatchUser) {
       if (p.admin === 'admin') result.isAdmin = true;
@@ -302,8 +427,13 @@ module.exports = {
   extractSender,
   resolveSender,
   extractTarget,
+  resolveTarget,
+  resolveParticipant,
   extractAllTargets,
   getGroupMetadata,
   checkAdminStatus,
-  formatNumber
+  formatNumber,
+  registerParticipantLid,
+  lidToPhoneMap,
+  phoneToLidMap
 };

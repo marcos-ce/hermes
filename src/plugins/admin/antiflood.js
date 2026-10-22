@@ -2,7 +2,7 @@ const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { floodCache } = require('../../utils/cache');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
-const { checkAdminStatus } = require('../../utils/jidResolver');
+const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
 module.exports = {
@@ -148,31 +148,36 @@ module.exports = {
     // Ação de Emergência (Zero Delay): Apagar mensagem
     await safeDelete(sock, from, msg.key);
 
+    const targetData = await resolveParticipant(sock, from, sender);
+    const targetPhone = targetData?.phoneJid || sender;
+    const targetGroup = targetData?.groupJid || sender;
+    const resolvedUserNum = targetData?.displayNum || userNum;
+
     if (action === 'ban') {
-      await safeKick(sock, from, sender);
+      await safeKick(sock, from, targetGroup);
       await sendSafeMessage(sock, from, {
-        text: t(lang, 'antiflood.banned', { user: userNum }),
-        mentions: [sender]
+        text: t(lang, 'antiflood.banned', { user: resolvedUserNum }),
+        mentions: [targetGroup, targetPhone]
       });
     } else {
       // Advertir
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const maxWarns = warnCfg.maxWarns || 3;
       const reason = violationType === 'trava' ? 'Envio de mensagem excessivamente longa (Trava)' : 'Envio de mensagens rápidas (Flood)';
-      const count = configManager.addWarn(from, sender, reason);
+      const count = configManager.addWarn(from, targetPhone, reason);
 
       if (count >= maxWarns) {
-        await safeKick(sock, from, sender);
-        configManager.resetWarns(from, sender);
+        await safeKick(sock, from, targetGroup);
+        configManager.resetWarns(from, targetPhone);
         await sendSafeMessage(sock, from, {
-          text: t(lang, 'warn.max_reached', { user: userNum, max: maxWarns }),
-          mentions: [sender]
+          text: t(lang, 'warn.max_reached', { user: resolvedUserNum, max: maxWarns }),
+          mentions: [targetGroup, targetPhone]
         });
       } else {
         const alertKey = violationType === 'trava' ? 'antiflood.trava_detected' : 'antiflood.flood_detected';
         await sendSafeMessage(sock, from, {
-          text: `${t(lang, alertKey, { user: userNum })}\n${t(lang, 'warn.added', { user: userNum, reason, warns: count, max: maxWarns })}`,
-          mentions: [sender]
+          text: `${t(lang, alertKey, { user: resolvedUserNum })}\n${t(lang, 'warn.added', { user: resolvedUserNum, reason, warns: count, max: maxWarns })}`,
+          mentions: [targetGroup, targetPhone]
         });
       }
     }
