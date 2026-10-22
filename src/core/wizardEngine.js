@@ -66,14 +66,50 @@ class WizardEngine {
       });
     }
 
+    const localizedModuleNames = {
+      pt: {
+        antifake: 'ANTIFAKE',
+        antiflood: 'ANTIFLOOD',
+        antilink: 'ANTILINK',
+        automsg: 'AUTOMSG',
+        ban: 'BAN',
+        schedule: 'HORÁRIOS',
+        warn: 'ADVERTÊNCIAS',
+        welcome: 'BOAS-VINDAS'
+      },
+      es: {
+        antifake: 'ANTIFAKE',
+        antiflood: 'ANTIFLOOD',
+        antilink: 'ANTILINK',
+        automsg: 'AUTOMSG',
+        ban: 'BAN',
+        schedule: 'HORARIOS',
+        warn: 'ADVERTENCIAS',
+        welcome: 'BIENVENIDA'
+      },
+      en: {
+        antifake: 'ANTIFAKE',
+        antiflood: 'ANTIFLOOD',
+        antilink: 'ANTILINK',
+        automsg: 'AUTOMSG',
+        ban: 'BAN',
+        schedule: 'SCHEDULE',
+        warn: 'WARN',
+        welcome: 'WELCOME'
+      }
+    };
+
     let menuText = `${t(lang, 'config.panel_title')}\n\n`;
     menuText += `${t(lang, 'config.panel_desc')}\n\n`;
     menuText += `📌 *Prefixo atual:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\`\n`;
     menuText += `─────────────────────────\n`;
 
+    const nameMap = localizedModuleNames[lang] || localizedModuleNames.pt;
+
     modules.forEach((mod, index) => {
       const statusIcon = mod.enabled ? '🟢 [ON]' : '🔴 [OFF]';
-      menuText += `*[${index + 1}]* ${statusIcon} *${mod.name.toUpperCase()}*\n`;
+      const displayName = nameMap[mod.name] || mod.name.toUpperCase();
+      menuText += `*[${index + 1}]* ${statusIcon} *${displayName}*\n`;
       if (mod.desc) menuText += `    _${mod.desc}_\n`;
     });
 

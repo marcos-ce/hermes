@@ -44,7 +44,7 @@ const dictionaries = {
     'reload.error': '❌ Erro ao recarregar módulos: {error}',
 
     // Painel !config
-    'config.panel_title': '⚙️ *PAINEL DE CONFIGURAÇÕES DO GRUPO*',
+    'config.panel_title': '⚙️ *PAINEL DE CONFIGURAÇÕES - HERMES*',
     'config.panel_desc': 'Responda com o *NÚMERO* do módulo para ativar/desativar ou configurar:\nOu digite:\n• *[P] [novo_prefixo]* para trocar o prefixo (Ex: P /)\n• *[L]* para trocar o idioma\n• *[X]* para apagar e fechar o menu',
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ Prefixo deste grupo alterado com sucesso para: *{prefix}*',
@@ -189,7 +189,7 @@ const dictionaries = {
     'reload.error': '❌ Error al recargar módulos: {error}',
 
     // Painel !config
-    'config.panel_title': '⚙️ *PANEL DE CONFIGURACIONES DEL GRUPO*',
+    'config.panel_title': '⚙️ *PANEL DE CONFIGURACIONES - HERMES*',
     'config.panel_desc': 'Responde con el *NÚMERO* del módulo para activar/desactivar o configurar:\nO escribe:\n• *[P] [nuevo_prefijo]* para cambiar el prefijo (Ej: P /)\n• *[L]* para cambiar el idioma\n• *[X]* para borrar y cerrar el menú',
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ Prefijo de este grupo cambiado con éxito a: *{prefix}*',
@@ -334,7 +334,7 @@ const dictionaries = {
     'reload.error': '❌ Error reloading modules: {error}',
 
     // Painel !config
-    'config.panel_title': '⚙️ *GROUP SETTINGS PANEL*',
+    'config.panel_title': '⚙️ *SETTINGS PANEL - HERMES*',
     'config.panel_desc': 'Reply with the module *NUMBER* to toggle or configure:\nOr type:\n• *[P] [new_prefix]* to change prefix (e.g., P /)\n• *[L]* to change language\n• *[X]* to delete and close the menu',
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ This group\'s prefix has been successfully changed to: *{prefix}*',
