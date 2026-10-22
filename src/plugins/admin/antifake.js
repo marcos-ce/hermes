@@ -42,15 +42,20 @@ module.exports = {
 
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'antifake', true);
-      if (!cfg.configured) {
-        return await wizardEngine.startWizard(sock, msg, from, sender, 'antifake');
-      }
-      return reply(t('common.saved') + '\n🎭 *AntiFake:* ATIVADO');
+      const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
+      return reply(`${t('common.saved')}\n🎭 *AntiFake:* ATIVADO\n🌍 *DDIs permitidos:* \`${ddis}\`\n💡 *Dica:* Para definir os DDIs direto: \`/antifake 55 351\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'antifake', false);
       return reply(t('common.saved') + '\n🎭 *AntiFake:* DESATIVADO');
+    }
+
+    // Configuração direta de DDIs: /antifake 55 ou /antifake 55 351 1
+    const ddiCandidates = args.map(a => a.replace(/\D/g, '')).filter(Boolean);
+    if (ddiCandidates.length > 0 && !['status', 'config', 'wizard', 'setup'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'antifake', { allowedDdis: ddiCandidates, enabled: true });
+      return reply(`💾 *AntiFake atualizado e ATIVADO!*\n🌍 *DDIs permitidos:* \`${ddiCandidates.join(', ')}\``);
     }
 
     if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
@@ -60,6 +65,8 @@ module.exports = {
     const status = configManager.isPluginEnabled(from, 'antifake') ? t('common.enabled') : t('common.disabled');
     const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
 
-    return reply(t('antifake.status', { status, ddis }));
+    let help = t('antifake.status', { status, ddis });
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/antifake on\` ou \`/antifake off\`\n• \`/antifake 55\` (permite apenas Brasil)\n• \`/antifake 55 351 1\` (permite Brasil, Portugal e EUA)\n• \`/antifake config\` (abre wizard)`;
+    return reply(help);
   }
 };

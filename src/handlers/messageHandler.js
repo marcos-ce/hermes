@@ -128,6 +128,15 @@ async function handleMessage(sock, m) {
           configManager.markExpiryNotified(from, true);
           await reply(translate('saas.license_expired'));
         }
+      } else {
+        // Se alguém tentar usar comandos em um grupo não ativado, orienta como ativar
+        const isCmd = text.startsWith(groupPrefix) || text.startsWith('/') || text.startsWith('!');
+        if (isCmd && text.length >= 2) {
+          const adminStatus = await checkAdminStatus(sock, from, sender);
+          if (isSenderOwner || adminStatus.isAdmin) {
+            await reply(`⚠️ *Grupo Não Ativado*\nO bot está conectado ao grupo, mas ainda não foi ativado.\n\n👉 Para ativar o bot neste grupo, digite:\n*${groupPrefix}bot on* (ou *${groupPrefix}ativar*)`);
+          }
+        }
       }
       return;
     }

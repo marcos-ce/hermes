@@ -45,7 +45,7 @@ const dictionaries = {
 
     // Painel !config
     'config.panel_title': '⚙️ *PAINEL DE CONFIGURAÇÕES DO GRUPO*',
-    'config.panel_desc': 'Responda com o *NÚMERO* do módulo para ativar/desativar ou configurar:\nOu digite:\n• *[P] [novo_prefixo]* para trocar o prefixo (Ex: P !)\n• *[L]* para trocar o idioma\n• *[X]* para fechar o menu',
+    'config.panel_desc': 'Responda com o *NÚMERO* do módulo para ativar/desativar ou configurar:\nOu digite:\n• *[P] [novo_prefixo]* para trocar o prefixo (Ex: P /)\n• *[L]* para trocar o idioma\n• *[X]* para apagar e fechar o menu',
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ Prefixo deste grupo alterado com sucesso para: *{prefix}*',
     'config.invalid_option': '⚠️ Opção inválida. Escolha um número do menu ou [X] para fechar.',
@@ -143,7 +143,7 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURAÇÃO: {plugin}* (Passo {step}/{total})',
     'wizard.current_val': '📌 *Valor atual:* `{current}`',
-    'wizard.default_hint': '💡 *Dica:* Envie `.` (ponto) para manter o valor atual.',
+    'wizard.default_hint': '💡 *Dica:* Envie */* ou *padrão* para manter o valor atual.',
     'wizard.invalid_input': '⚠️ Resposta inválida. Por favor, leia a pergunta e tente novamente.',
     'wizard.finished': '🎉 *Configuração de {plugin} concluída com sucesso!*',
     'wizard.choice_prompt': 'Escolha uma das opções abaixo:\n{choices}',
@@ -190,7 +190,7 @@ const dictionaries = {
 
     // Painel !config
     'config.panel_title': '⚙️ *PANEL DE CONFIGURACIONES DEL GRUPO*',
-    'config.panel_desc': 'Responde con el *NÚMERO* del módulo para activar/desactivar o configurar:\nO escribe:\n• *[P] [nuevo_prefijo]* para cambiar el prefijo (Ej: P !)\n• *[L]* para cambiar el idioma\n• *[X]* para cerrar el menú',
+    'config.panel_desc': 'Responde con el *NÚMERO* del módulo para activar/desactivar o configurar:\nO escribe:\n• *[P] [nuevo_prefijo]* para cambiar el prefijo (Ej: P /)\n• *[L]* para cambiar el idioma\n• *[X]* para borrar y cerrar el menú',
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ Prefijo de este grupo cambiado con éxito a: *{prefix}*',
     'config.invalid_option': '⚠️ Opción inválida. Elige un número del menú o [X] para cerrar.',
@@ -288,7 +288,7 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURACIÓN: {plugin}* (Paso {step}/{total})',
     'wizard.current_val': '📌 *Valor actual:* `{current}`',
-    'wizard.default_hint': '💡 *Pista:* Envía `.` (punto) para mantener el valor actual.',
+    'wizard.default_hint': '💡 *Pista:* Envía */* o *predeterminado* para mantener el valor actual.',
     'wizard.invalid_input': '⚠️ Respuesta inválida. Por favor, lee la pregunta e inténtalo de nuevo.',
     'wizard.finished': '🎉 *¡Configuración de {plugin} finalizada con éxito!*',
     'wizard.choice_prompt': 'Elige una de las siguientes opciones:\n{choices}',
@@ -335,7 +335,7 @@ const dictionaries = {
 
     // Painel !config
     'config.panel_title': '⚙️ *GROUP SETTINGS PANEL*',
-    'config.panel_desc': 'Reply with the module *NUMBER* to toggle or configure:\nOr type:\n• *[P] [new_prefix]* to change prefix (e.g., P !)\n• *[L]* to change language\n• *[X]* to close the menu',
+    'config.panel_desc': 'Reply with the module *NUMBER* to toggle or configure:\nOr type:\n• *[P] [new_prefix]* to change prefix (e.g., P /)\n• *[L]* to change language\n• *[X]* to delete and close the menu',
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ This group\'s prefix has been successfully changed to: *{prefix}*',
     'config.invalid_option': '⚠️ Invalid option. Choose a number from the menu or [X] to close.',
@@ -433,7 +433,7 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURATION: {plugin}* (Step {step}/{total})',
     'wizard.current_val': '📌 *Current value:* `{current}`',
-    'wizard.default_hint': '💡 *Tip:* Send `.` (period) to keep the current value.',
+    'wizard.default_hint': '💡 *Tip:* Send */* or *default* to keep the current value.',
     'wizard.invalid_input': '⚠️ Invalid response. Please read the prompt and try again.',
     'wizard.finished': '🎉 *Configuration for {plugin} completed successfully!*',
     'wizard.choice_prompt': 'Choose one of the options below:\n{choices}',

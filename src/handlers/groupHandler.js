@@ -95,10 +95,26 @@ async function handleParticipantsUpdate(sock, update) {
             .replace(/\{group\}/g, groupName)
             .replace(/\{desc\}/g, groupDesc);
 
-          const sentMsg = await sendSafeMessage(sock, groupJid, {
-            text: welcomeText,
+          // Tenta obter a foto do perfil do grupo para enriquecer as boas-vindas
+          let ppUrl = null;
+          try {
+            ppUrl = await sock.profilePictureUrl(groupJid, 'image');
+          } catch (_) {
+            ppUrl = null;
+          }
+
+          const messagePayload = {
             mentions: [targetGroupJid, targetPhoneJid]
-          });
+          };
+
+          if (ppUrl) {
+            messagePayload.image = { url: ppUrl };
+            messagePayload.caption = welcomeText;
+          } else {
+            messagePayload.text = welcomeText;
+          }
+
+          const sentMsg = await sendSafeMessage(sock, groupJid, messagePayload);
 
           // Auto-delete configurável em segundos
           const autoDeleteSecs = parseInt(welcomeCfg.autoDeleteSeconds, 10);

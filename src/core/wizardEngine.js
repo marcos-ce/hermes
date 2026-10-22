@@ -1,5 +1,5 @@
 const { wizardCache } = require('../utils/cache');
-const { sendSafeMessage } = require('../utils/antiBan');
+const { sendSafeMessage, safeDelete } = require('../utils/antiBan');
 const { t, resolveSchemaText } = require('../utils/i18n');
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
@@ -80,9 +80,9 @@ class WizardEngine {
     menuText += `─────────────────────────\n`;
     menuText += `💡 *Exemplos rápidos:*\n`;
     menuText += `• Digite *1* para ativar/desativar ou configurar o módulo 1\n`;
-    menuText += `• Digite *P .* para mudar o prefixo para .\n`;
+    menuText += `• Digite *P /* para mudar o prefixo para /\n`;
     menuText += `• Digite *L* para mudar o idioma\n`;
-    menuText += `• Digite *X* para sair do painel`;
+    menuText += `• Digite *X* para apagar e fechar o menu`;
 
     const session = {
       type: 'config_menu',
@@ -94,7 +94,11 @@ class WizardEngine {
     const sessionKey = `${from}:${sender}`;
     wizardCache.set(sessionKey, session);
 
-    await sendSafeMessage(sock, from, { text: menuText }, { quoted: msg });
+    const sentMsg = await sendSafeMessage(sock, from, { text: menuText }, { quoted: msg });
+    if (sentMsg?.key) {
+      session.menuMsgKey = sentMsg.key;
+      wizardCache.set(sessionKey, session);
+    }
     return true;
   }
 
@@ -115,10 +119,19 @@ class WizardEngine {
     const text = (rawText || '').trim();
     const lang = configManager.getGroupLang(from);
 
-    // Cancelamento expresso
+    // Cancelamento expresso: apaga o menu e a mensagem do usuário imediatamente
     if (text.toLowerCase() === 'x' || text.toLowerCase() === 'cancelar' || text.toLowerCase() === 'sair') {
+      if (session.menuMsgKey) {
+        try {
+          await safeDelete(sock, from, session.menuMsgKey);
+        } catch (_) {}
+      }
+      if (msg?.key) {
+        try {
+          await safeDelete(sock, from, msg.key);
+        } catch (_) {}
+      }
       wizardCache.del(sessionKey);
-      await sendSafeMessage(sock, from, { text: t(lang, 'common.canceled') }, { quoted: msg });
       return true;
     }
 
@@ -218,8 +231,8 @@ class WizardEngine {
 
     let finalValue = null;
 
-    // Atalho: Manter atual ou assumir padrão com ponto (.)
-    const isDefaultShortcut = ['.', 'padrao', 'padrão', 'default', 'todos'].includes(text.toLowerCase());
+    // Atalho: Manter atual ou assumir padrão com barra (/) ou ponto (.)
+    const isDefaultShortcut = ['/', '.', 'padrao', 'padrão', 'default', 'todos', 'manter', 'pular'].includes(text.toLowerCase());
 
     if (isDefaultShortcut) {
       const savedVal = session.existingConfig[currentField.name];
@@ -357,9 +370,13 @@ class WizardEngine {
     }
 
     prompt += `${t(lang, 'wizard.default_hint')}\n`;
-    prompt += `❌ Envie *X* a qualquer momento para cancelar.`;
+    prompt += `❌ Envie *X* a qualquer momento para apagar e fechar.`;
 
-    await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
+    const sentPrompt = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
+    if (sentPrompt?.key) {
+      session.menuMsgKey = sentPrompt.key;
+      wizardCache.set(sessionKey, session);
+    }
   }
 }
 

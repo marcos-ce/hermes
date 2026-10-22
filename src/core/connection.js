@@ -121,6 +121,23 @@ async function connectBot(options = {}) {
         });
       }
 
+      // Carrega e mapeia todos os grupos participantes e seus LIDs antecipadamente
+      try {
+        const groups = await sock.groupFetchAllParticipating();
+        const groupCount = Object.keys(groups || {}).length;
+        console.log(`👥 Grupos sincronizados na inicialização: ${groupCount}`);
+        for (const [gid, meta] of Object.entries(groups || {})) {
+          groupCache.set(gid, meta);
+          if (Array.isArray(meta.participants)) {
+            for (const p of meta.participants) {
+              registerParticipantLid(p);
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Erro ao sincronizar grupos na inicialização');
+      }
+
       // Garante presença invisível/unavailable ao conectar
       try {
         await sock.sendPresenceUpdate('unavailable');

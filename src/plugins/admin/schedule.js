@@ -52,15 +52,33 @@ module.exports = {
 
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'schedule', true);
-      if (!cfg.configured) {
-        return await wizardEngine.startWizard(sock, msg, from, sender, 'schedule');
-      }
-      return reply(t('common.saved') + '\n⏰ *Horários Automáticos:* ATIVADO');
+      const close = cfg.closeTime || '23:00';
+      const open = cfg.openTime || '07:00';
+      return reply(`${t('common.saved')}\n⏰ *Horários Automáticos:* ATIVADO\n🔒 *Fechar:* ${close} | 🔓 *Abrir:* ${open}\n💡 *Dica:* Para mudar direto: \`/horarios 22:30 06:30\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'schedule', false);
       return reply(t('common.saved') + '\n⏰ *Horários Automáticos:* DESATIVADO');
+    }
+
+    // Configuração direta de horário: /horarios 23:00 07:00
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (timeRegex.test(sub)) {
+      const closeTime = sub;
+      const openTime = args[1] && timeRegex.test(args[1]) ? args[1] : (cfg.openTime || '07:00');
+      configManager.updatePluginConfig(from, 'schedule', { closeTime, openTime, enabled: true });
+      return reply(`💾 *Horários atualizados e ATIVADOS!*\n🔒 *Fechar:* \`${closeTime}\`\n🔓 *Abrir:* \`${openTime}\``);
+    }
+
+    if (sub === 'fechar' && args[1] && timeRegex.test(args[1])) {
+      configManager.updatePluginConfig(from, 'schedule', { closeTime: args[1], enabled: true });
+      return reply(`💾 *Horário de fechar atualizado:* \`${args[1]}\``);
+    }
+
+    if (sub === 'abrir' && args[1] && timeRegex.test(args[1])) {
+      configManager.updatePluginConfig(from, 'schedule', { openTime: args[1], enabled: true });
+      return reply(`💾 *Horário de abrir atualizado:* \`${args[1]}\``);
     }
 
     if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
@@ -71,6 +89,8 @@ module.exports = {
     const close = cfg.closeTime || '23:00';
     const open = cfg.openTime || '07:00';
 
-    return reply(t('schedule.status', { status, close, open }));
+    let help = t('schedule.status', { status, close, open });
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/horarios on\` ou \`/horarios off\`\n• \`/horarios 23:00 07:00\` (define fechar e abrir direto)\n• \`/horarios fechar 23:00\`\n• \`/horarios abrir 07:00\`\n• \`/horarios config\` (abre wizard)`;
+    return reply(help);
   }
 };

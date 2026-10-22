@@ -46,6 +46,29 @@ module.exports = {
     const cfg = configManager.getPluginConfig(from, 'warn') || {};
     const maxWarns = cfg.maxWarns || 3;
 
+    // Configuração direta de limite de advertências (Ex: !adv max 5)
+    if (trigger === 'max' || trigger === 'limite') {
+      const parsedMax = parseInt(args[1], 10);
+      if (isNaN(parsedMax) || parsedMax < 1 || parsedMax > 20) {
+        return reply('⚠️ Digite um número válido entre 1 e 20. Ex: `/adv max 3`');
+      }
+      configManager.updatePluginConfig(from, 'warn', { maxWarns: parsedMax, enabled: true });
+      return reply(`💾 *Limite atualizado:* O grupo agora banirá automaticamente ao atingir *${parsedMax} advertências*.`);
+    }
+
+    // Zerar advertências de um membro (!adv zerar @user)
+    if (['zerar', 'reset', 'clear'].includes(trigger)) {
+      const targetText = args.slice(1).join(' ');
+      const targetData = await resolveTarget(sock, msg, from, targetText);
+      if (!targetData) {
+        return reply(t('common.not_found_target'));
+      }
+      configManager.resetWarns(from, targetData.phoneJid);
+      return reply(`✅ Advertências de @${targetData.displayNum} foram *zeradas*.`, {
+        mentions: [targetData.groupJid, targetData.phoneJid]
+      });
+    }
+
     // Configuração via Wizard
     if (trigger === 'config' || trigger === 'setup') {
       return await wizardEngine.startWizard(sock, msg, from, sender, 'warn');

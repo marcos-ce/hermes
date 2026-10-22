@@ -54,15 +54,42 @@ module.exports = {
 
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'welcome', true);
-      if (!cfg.configured) {
-        return await wizardEngine.startWizard(sock, msg, from, sender, 'welcome');
-      }
-      return reply(t('common.saved') + '\n👋 *Boas-Vindas:* ATIVADO');
+      const secs = cfg.autoDeleteSeconds || 0;
+      return reply(`${t('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${secs ? `${secs}s` : 'Desativado'}\n💡 *Dica:* Para definir o texto direto: \`/bemvindo Olá {user}, seja bem-vindo ao {group}!\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'welcome', false);
       return reply(t('common.saved') + '\n👋 *Boas-Vindas:* DESATIVADO');
+    }
+
+    // Configuração direta de tempo de auto-delete
+    if (['tempo', 'time', 'segundos', 'secs', 'seg'].includes(sub)) {
+      const parsedSecs = parseInt(args[1], 10);
+      if (isNaN(parsedSecs) || parsedSecs < 0) {
+        return reply('⚠️ Digite os segundos de auto-delete. Ex: `/bemvindo tempo 15` (ou 0 para não apagar).');
+      }
+      configManager.updatePluginConfig(from, 'welcome', { autoDeleteSeconds: parsedSecs, enabled: true });
+      return reply(`💾 *Boas-Vindas atualizado:* Auto-delete definido para *${parsedSecs} segundos*.`);
+    }
+
+    // Resetar para mensagem padrão
+    if (['padrao', 'padrão', 'default', 'reset'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'welcome', { 
+        message: '👋 Olá {user}, seja bem-vindo(a) ao grupo {group}!\n\n📋 Regras/Descrição: {desc}',
+        enabled: true 
+      });
+      return reply('💾 *Boas-Vindas atualizado:* Mensagem redefinida para o padrão.');
+    }
+
+    // Configuração direta do texto da mensagem (se começou com "texto" ou texto livre longo)
+    if (sub === 'texto' || sub === 'msg' || args.length > 1 || (args.length === 1 && !['status', 'config', 'wizard'].includes(sub))) {
+      const customText = sub === 'texto' || sub === 'msg' ? args.slice(1).join(' ') : args.join(' ');
+      if (customText.length < 3) {
+        return reply('⚠️ Texto muito curto. Use: `/bemvindo Olá {user}, bem-vindo ao {group}!`');
+      }
+      configManager.updatePluginConfig(from, 'welcome', { message: customText, enabled: true });
+      return reply(`💾 *Boas-Vindas atualizado!*\n\n📝 *Novo texto:* \n${customText}\n\n💡 *Tags suportadas:* \`{user}\` (menção), \`{group}\` (nome do grupo), \`{desc}\` (regras).`);
     }
 
     if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
@@ -71,7 +98,10 @@ module.exports = {
 
     const status = configManager.isPluginEnabled(from, 'welcome') ? t('common.enabled') : t('common.disabled');
     const seconds = cfg.autoDeleteSeconds || 0;
+    const currentMsg = cfg.message || t('welcome.default');
 
-    return reply(t('welcome.status', { status, seconds }));
+    let help = `${t('welcome.status', { status, seconds })}\n📝 *Mensagem atual:*\n${currentMsg}`;
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 15\` (apaga após 15s)\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre wizard)`;
+    return reply(help);
   }
 };

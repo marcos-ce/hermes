@@ -1,6 +1,6 @@
 module.exports = {
   name: 'mute',
-  aliases: ['mute', 'unmute', 'fechar', 'abrir', 'cerrar', 'lock', 'unlock', 'grupo'],
+  aliases: ['mute', 'unmute', 'fechar', 'abrir', 'cerrar', 'lock', 'unlock', 'grupo', 'mutar', 'desmutar'],
   description: 'Abre e fecha o grupo imediatamente para envio de mensagens',
   ownerOnly: false,
   adminOnly: true,
@@ -12,11 +12,11 @@ module.exports = {
     const cmd = (command || '').toLowerCase();
     const arg = (args[0] || '').toLowerCase();
 
-    const isCloseAction = ['fechar', 'cerrar', 'lock'].includes(cmd) || 
-                          arg === 'on' || arg === 'fechar' || arg === 'cerrar' || arg === '1';
+    const isCloseAction = ['fechar', 'cerrar', 'lock', 'mute', 'mutar'].includes(cmd) && arg !== 'off' && arg !== 'abrir' && arg !== '2' || 
+                          arg === 'on' || arg === 'fechar' || arg === 'cerrar' || arg === '1' || arg === 'mutar';
 
-    const isOpenAction = ['abrir', 'unlock', 'unmute'].includes(cmd) || 
-                         arg === 'off' || arg === 'abrir' || arg === '2';
+    const isOpenAction = ['abrir', 'unlock', 'unmute', 'desmutar'].includes(cmd) || 
+                         arg === 'off' || arg === 'abrir' || arg === '2' || arg === 'desmutar';
 
     if (isCloseAction) {
       await sock.groupSettingUpdate(from, 'announcement');

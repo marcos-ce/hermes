@@ -10,8 +10,10 @@ module.exports = {
   adminOnly: false,
   botAdminRequired: false,
 
-  async execute({ sock, msg, from, sender, args, reply, t, isOwner, isAdmin, isGroup }) {
-    const sub = (args[0] || 'status').toLowerCase();
+  async execute({ sock, msg, from, sender, args, command, reply, t, isOwner, isAdmin, isGroup }) {
+    const cmd = (command || '').toLowerCase();
+    const isDirectActivate = ['ativar', 'activar', 'activate'].includes(cmd);
+    const sub = isDirectActivate ? (args[0] ? args[0].toLowerCase() : 'on') : (args[0] || 'status').toLowerCase();
     const canManageGroup = isOwner || (settings.authMode === 'admin' && isAdmin);
 
     // ==========================================
@@ -85,10 +87,11 @@ module.exports = {
     }
 
     // ==========================================
-    // Ativação do Grupo (!bot on [dias])
+    // Ativação do Grupo (!bot on [dias] ou !ativar [dias])
     // ==========================================
     if (sub === 'on' || sub === 'ativar' || sub === 'activar' || sub === 'activate') {
-      const daysArg = parseInt(args[1], 10);
+      const rawDays = isDirectActivate && !isNaN(parseInt(args[0], 10)) ? args[0] : args[1];
+      const daysArg = parseInt(rawDays, 10);
       let expiryDisplay = t('common.lifetime');
 
       if (!isNaN(daysArg) && daysArg > 0) {

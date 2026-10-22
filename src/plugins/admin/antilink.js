@@ -62,10 +62,8 @@ module.exports = {
 
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'antilink', true);
-      if (!cfg.configured) {
-        return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
-      }
-      return reply(t('common.saved') + '\n🛡️ *AntiLink:* ATIVADO');
+      const action = cfg.action || 'delete';
+      return reply(`${t('common.saved')}\n🛡️ *AntiLink:* ATIVADO\n⚡ *Ação atual:* \`${action}\`\n💡 *Dica:* Para mudar a punição direto: \`/antilink ban\`, \`/antilink del\` ou \`/antilink adv\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
@@ -73,16 +71,45 @@ module.exports = {
       return reply(t('common.saved') + '\n🛡️ *AntiLink:* DESATIVADO');
     }
 
+    // Configuração direta de ação: ban, del, warn
+    if (['ban', 'banir', 'expulsar'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'antilink', { action: 'ban', enabled: true });
+      return reply('💾 *AntiLink atualizado:* Ação definida para *EXPULSAR (BAN)*.');
+    }
+    if (['delete', 'del', 'apagar', 'remover'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'antilink', { action: 'delete', enabled: true });
+      return reply('💾 *AntiLink atualizado:* Ação definida para *APENAS APAGAR*.');
+    }
+    if (['warn', 'adv', 'advertir', 'aviso'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'antilink', { action: 'warn', enabled: true });
+      return reply('💾 *AntiLink atualizado:* Ação definida para *APAGAR E ADVERTIR (WARN)*.');
+    }
+
+    // Configuração direta de Whitelist: permitir domínios
+    if (['permitir', 'allow', 'whitelist'].includes(sub)) {
+      const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
+      configManager.updatePluginConfig(from, 'antilink', { allowedDomains: domains, enabled: true });
+      const display = domains.length ? domains.join(', ') : 'Nenhum (Bloqueia Todos)';
+      return reply(`💾 *AntiLink atualizado:* Domínios permitidos: \`${display}\``);
+    }
+
+    if (['bloquear', 'blockall', 'bloqueartodos'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'antilink', { allowedDomains: [], enabled: true });
+      return reply('💾 *AntiLink atualizado:* Bloqueando absolutamente *TODOS* os links.');
+    }
+
     if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
       return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
     }
 
-    // Status
+    // Status com instruções de comandos diretos
     const status = configManager.isPluginEnabled(from, 'antilink') ? t('common.enabled') : t('common.disabled');
     const domains = (cfg.allowedDomains && cfg.allowedDomains.length) ? cfg.allowedDomains.join(', ') : 'Nenhum (Bloqueia Todos)';
     const action = cfg.action || 'delete';
 
-    return reply(t('antilink.status', { status, domains, action }));
+    let help = t('antilink.status', { status, domains, action });
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/antilink on\` ou \`/antilink off\`\n• \`/antilink ban\` (expulsa infrator)\n• \`/antilink del\` (apenas apaga)\n• \`/antilink adv\` (adverte infrator)\n• \`/antilink permitir youtube.com instagram.com\`\n• \`/antilink config\` (abre wizard)`;
+    return reply(help);
   },
 
   /**
