@@ -50,11 +50,19 @@ module.exports = {
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'schedule') || {};
 
+    // Digitar /horarios sem argumentos (ou /horarios config) abre direto o assistente interativo!
+    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'schedule');
+    }
+
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'schedule', true);
+      if (!cfg.configured) {
+        return await wizardEngine.startWizard(sock, msg, from, sender, 'schedule');
+      }
       const close = cfg.closeTime || '23:00';
       const open = cfg.openTime || '07:00';
-      return reply(`${t('common.saved')}\n⏰ *Horários Automáticos:* ATIVADO\n🔒 *Fechar:* ${close} | 🔓 *Abrir:* ${open}\n💡 *Dica:* Para mudar direto: \`/horarios 22:30 06:30\``);
+      return reply(`${t('common.saved')}\n⏰ *Horários Automáticos:* ATIVADO\n🔒 *Fechar:* ${close} | 🔓 *Abrir:* ${open}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {

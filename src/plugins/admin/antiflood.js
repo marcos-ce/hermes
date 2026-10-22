@@ -72,12 +72,20 @@ module.exports = {
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'antiflood') || {};
 
+    // Digitar /antiflood sem argumentos (ou /antiflood config) abre direto o assistente interativo!
+    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'antiflood');
+    }
+
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'antiflood', true);
+      if (!cfg.configured) {
+        return await wizardEngine.startWizard(sock, msg, from, sender, 'antiflood');
+      }
       const msgs = cfg.maxMessages || 6;
       const chars = cfg.maxChars || 2500;
       const action = cfg.action || 'warn';
-      return reply(`${t('common.saved')}\n🌊 *AntiFlood:* ATIVADO\n⚡ *Máx:* ${msgs} msgs/5s | *Trava:* ${chars} carac | *Ação:* ${action}\n💡 *Dica:* Para definir direto: \`/antiflood 5 2000\` ou \`/antiflood ban\``);
+      return reply(`${t('common.saved')}\n🌊 *AntiFlood:* ATIVADO\n⚡ *Máx:* ${msgs} msgs/5s | *Trava:* ${chars} carac | *Ação:* ${action}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {

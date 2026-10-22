@@ -62,11 +62,19 @@ module.exports = {
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'automsg') || {};
 
+    // Digitar /automsg sem argumentos (ou /automsg config) abre direto o assistente interativo!
+    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'automsg');
+    }
+
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'automsg', true);
+      if (!cfg.configured) {
+        return await wizardEngine.startWizard(sock, msg, from, sender, 'automsg');
+      }
       const minutes = cfg.intervalMinutes || 180;
       const alertMsg = cfg.message || 'Nenhuma mensagem configurada';
-      return reply(`${t('common.saved')}\n📢 *AutoMsg:* ATIVADO\n⏱️ *Intervalo:* a cada ${minutes} min\n💬 *Mensagem:* ${alertMsg}\n💡 *Dica:* Para mudar direto: \`/automsg 120 Atenção às regras!\``);
+      return reply(`${t('common.saved')}\n📢 *AutoMsg:* ATIVADO\n⏱️ *Intervalo:* a cada ${minutes} min\n💬 *Mensagem:* ${alertMsg}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {

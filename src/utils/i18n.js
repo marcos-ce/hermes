@@ -143,7 +143,7 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURAÇÃO: {plugin}* (Passo {step}/{total})',
     'wizard.current_val': '📌 *Valor atual:* `{current}`',
-    'wizard.default_hint': '💡 *Dica:* Envie */* ou *padrão* para manter o valor atual.',
+    'wizard.default_hint': '💡 *Dica:* Envie `.` (ponto) para manter o valor atual.',
     'wizard.invalid_input': '⚠️ Resposta inválida. Por favor, leia a pergunta e tente novamente.',
     'wizard.finished': '🎉 *Configuração de {plugin} concluída com sucesso!*',
     'wizard.choice_prompt': 'Escolha uma das opções abaixo:\n{choices}',
@@ -288,7 +288,7 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURACIÓN: {plugin}* (Paso {step}/{total})',
     'wizard.current_val': '📌 *Valor actual:* `{current}`',
-    'wizard.default_hint': '💡 *Pista:* Envía */* o *predeterminado* para mantener el valor actual.',
+    'wizard.default_hint': '💡 *Pista:* Envía `.` (punto) para mantener el valor actual.',
     'wizard.invalid_input': '⚠️ Respuesta inválida. Por favor, lee la pregunta e inténtalo de nuevo.',
     'wizard.finished': '🎉 *¡Configuración de {plugin} finalizada con éxito!*',
     'wizard.choice_prompt': 'Elige una de las siguientes opciones:\n{choices}',
@@ -433,7 +433,7 @@ const dictionaries = {
     // Wizard Prompts & Questions
     'wizard.step_header': '🧙‍♂️ *CONFIGURATION: {plugin}* (Step {step}/{total})',
     'wizard.current_val': '📌 *Current value:* `{current}`',
-    'wizard.default_hint': '💡 *Tip:* Send */* or *default* to keep the current value.',
+    'wizard.default_hint': '💡 *Tip:* Send `.` (period) to keep the current value.',
     'wizard.invalid_input': '⚠️ Invalid response. Please read the prompt and try again.',
     'wizard.finished': '🎉 *Configuration for {plugin} completed successfully!*',
     'wizard.choice_prompt': 'Choose one of the options below:\n{choices}',

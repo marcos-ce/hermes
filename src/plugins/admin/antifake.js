@@ -40,10 +40,18 @@ module.exports = {
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'antifake') || {};
 
+    // Digitar /antifake sem argumentos (ou /antifake config) abre direto o assistente interativo!
+    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'antifake');
+    }
+
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'antifake', true);
+      if (!cfg.configured) {
+        return await wizardEngine.startWizard(sock, msg, from, sender, 'antifake');
+      }
       const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
-      return reply(`${t('common.saved')}\n🎭 *AntiFake:* ATIVADO\n🌍 *DDIs permitidos:* \`${ddis}\`\n💡 *Dica:* Para definir os DDIs direto: \`/antifake 55 351\``);
+      return reply(`${t('common.saved')}\n🎭 *AntiFake:* ATIVADO\n🌍 *DDIs permitidos:* \`${ddis}\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {

@@ -406,7 +406,7 @@ class WizardEngine {
     }
 
     prompt += `${t(lang, 'wizard.default_hint')}\n`;
-    prompt += `❌ Envie *X* a qualquer momento para apagar e fechar.`;
+    prompt += `❌ Envie *X* a qualquer momento para cancelar.`;
 
     const sentPrompt = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
     if (sentPrompt?.key) {

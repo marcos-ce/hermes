@@ -52,10 +52,18 @@ module.exports = {
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'welcome') || {};
 
+    // Digitar /bemvindo sem argumentos (ou /bemvindo config) abre direto o assistente interativo!
+    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'welcome');
+    }
+
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'welcome', true);
+      if (!cfg.configured) {
+        return await wizardEngine.startWizard(sock, msg, from, sender, 'welcome');
+      }
       const secs = cfg.autoDeleteSeconds || 0;
-      return reply(`${t('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${secs ? `${secs}s` : 'Desativado'}\n💡 *Dica:* Para definir o texto direto: \`/bemvindo Olá {user}, seja bem-vindo ao {group}!\``);
+      return reply(`${t('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${secs ? `${secs}s` : 'Desativado'}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {

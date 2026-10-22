@@ -60,10 +60,18 @@ module.exports = {
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'antilink') || {};
 
+    // Digitar /antilink sem argumentos (ou /antilink config) abre direto o assistente interativo!
+    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
+    }
+
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'antilink', true);
+      if (!cfg.configured) {
+        return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
+      }
       const action = cfg.action || 'delete';
-      return reply(`${t('common.saved')}\n🛡️ *AntiLink:* ATIVADO\n⚡ *Ação atual:* \`${action}\`\n💡 *Dica:* Para mudar a punição direto: \`/antilink ban\`, \`/antilink del\` ou \`/antilink adv\``);
+      return reply(`${t('common.saved')}\n🛡️ *AntiLink:* ATIVADO\n⚡ *Ação atual:* \`${action}\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
@@ -73,43 +81,37 @@ module.exports = {
 
     // Configuração direta de ação: ban, del, warn
     if (['ban', 'banir', 'expulsar'].includes(sub)) {
-      configManager.updatePluginConfig(from, 'antilink', { action: 'ban', enabled: true });
+      configManager.updatePluginConfig(from, 'antilink', { action: 'ban', enabled: true, configured: true });
       return reply('💾 *AntiLink atualizado:* Ação definida para *EXPULSAR (BAN)*.');
     }
     if (['delete', 'del', 'apagar', 'remover'].includes(sub)) {
-      configManager.updatePluginConfig(from, 'antilink', { action: 'delete', enabled: true });
+      configManager.updatePluginConfig(from, 'antilink', { action: 'delete', enabled: true, configured: true });
       return reply('💾 *AntiLink atualizado:* Ação definida para *APENAS APAGAR*.');
     }
     if (['warn', 'adv', 'advertir', 'aviso'].includes(sub)) {
-      configManager.updatePluginConfig(from, 'antilink', { action: 'warn', enabled: true });
+      configManager.updatePluginConfig(from, 'antilink', { action: 'warn', enabled: true, configured: true });
       return reply('💾 *AntiLink atualizado:* Ação definida para *APAGAR E ADVERTIR (WARN)*.');
     }
 
     // Configuração direta de Whitelist: permitir domínios
     if (['permitir', 'allow', 'whitelist'].includes(sub)) {
       const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
-      configManager.updatePluginConfig(from, 'antilink', { allowedDomains: domains, enabled: true });
+      configManager.updatePluginConfig(from, 'antilink', { allowedDomains: domains, enabled: true, configured: true });
       const display = domains.length ? domains.join(', ') : 'Nenhum (Bloqueia Todos)';
       return reply(`💾 *AntiLink atualizado:* Domínios permitidos: \`${display}\``);
     }
 
     if (['bloquear', 'blockall', 'bloqueartodos'].includes(sub)) {
-      configManager.updatePluginConfig(from, 'antilink', { allowedDomains: [], enabled: true });
+      configManager.updatePluginConfig(from, 'antilink', { allowedDomains: [], enabled: true, configured: true });
       return reply('💾 *AntiLink atualizado:* Bloqueando absolutamente *TODOS* os links.');
     }
 
-    if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
-    }
-
-    // Status com instruções de comandos diretos
+    // Status
     const status = configManager.isPluginEnabled(from, 'antilink') ? t('common.enabled') : t('common.disabled');
     const domains = (cfg.allowedDomains && cfg.allowedDomains.length) ? cfg.allowedDomains.join(', ') : 'Nenhum (Bloqueia Todos)';
     const action = cfg.action || 'delete';
 
-    let help = t('antilink.status', { status, domains, action });
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/antilink on\` ou \`/antilink off\`\n• \`/antilink ban\` (expulsa infrator)\n• \`/antilink del\` (apenas apaga)\n• \`/antilink adv\` (adverte infrator)\n• \`/antilink permitir youtube.com instagram.com\`\n• \`/antilink config\` (abre wizard)`;
-    return reply(help);
+    return reply(t('antilink.status', { status, domains, action }));
   },
 
   /**
