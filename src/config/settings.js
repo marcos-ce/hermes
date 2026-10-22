@@ -39,15 +39,24 @@ class Settings {
     // Compara com o OWNER_NUMBER definido no .env
     if (this.ownerNumber) {
       if (cleanNumber === this.ownerNumber) return true;
-      // Trata variação de 9º dígito no Brasil se ambos tiverem pelo menos 10 dígitos (DDD + número)
-      if (cleanNumber.length >= 10 && this.ownerNumber.length >= 10) {
-        const cleanLast8 = cleanNumber.slice(-8);
-        const ownerLast8 = this.ownerNumber.slice(-8);
-        const cleanDdd = cleanNumber.slice(-10, -8);
-        const ownerDdd = this.ownerNumber.slice(-10, -8);
-        if (cleanLast8 === ownerLast8 && cleanDdd === ownerDdd) {
-          return true;
+
+      // Trata variação de 9º dígito no Brasil com extração exata de DDD e últimos 8 dígitos
+      const getBr = (num) => {
+        const c = (num || '').replace(/\D/g, '');
+        if (c.startsWith('55') && c.length >= 12) {
+          return { ddd: c.slice(2, 4), last8: c.slice(-8) };
         }
+        if (c.length === 10 || c.length === 11) {
+          return { ddd: c.slice(0, 2), last8: c.slice(-8) };
+        }
+        return { ddd: '', last8: c.slice(-8) };
+      };
+
+      const userBr = getBr(cleanNumber);
+      const ownerBr = getBr(this.ownerNumber);
+
+      if (userBr.ddd && ownerBr.ddd && userBr.ddd === ownerBr.ddd && userBr.last8 === ownerBr.last8) {
+        return true;
       }
     }
 

@@ -84,17 +84,37 @@ async function handleMessage(sock, m) {
   // ========================================================
   // 2. Verificação de Grupo Ativo e Licença SaaS
   // ========================================================
+  let matchedActivationPrefix = null;
+
   if (isGroup) {
     const isEnabled = configManager.isGroupEnabled(from);
-    const cmdBody = text.slice(groupPrefix.length).trim().toLowerCase();
-    const isActivatingCmd = text.startsWith(groupPrefix) && (
-      cmdBody.startsWith('bot') ||
-      cmdBody.startsWith('ativar') ||
-      cmdBody.startsWith('activar') ||
-      cmdBody.startsWith('activate') ||
-      cmdBody.startsWith('licenca') ||
-      cmdBody.startsWith('licencia')
-    );
+    
+    // Suporta o prefixo do grupo e prefixos universais (! e /) para comandos de ativação
+    const possiblePrefixes = Array.from(new Set([groupPrefix, '!', '/', '']));
+    for (const p of possiblePrefixes) {
+      if (p === '' && isSenderOwner) {
+        const lower = text.toLowerCase().trim();
+        if (lower.startsWith('bot on') || lower.startsWith('ativar') || lower.startsWith('bot status')) {
+          matchedActivationPrefix = '';
+          break;
+        }
+      } else if (p && text.startsWith(p)) {
+        const body = text.slice(p.length).trim().toLowerCase();
+        if (
+          body.startsWith('bot') ||
+          body.startsWith('ativar') ||
+          body.startsWith('activar') ||
+          body.startsWith('activate') ||
+          body.startsWith('licenca') ||
+          body.startsWith('licencia')
+        ) {
+          matchedActivationPrefix = p;
+          break;
+        }
+      }
+    }
+
+    const isActivatingCmd = matchedActivationPrefix !== null;
 
     if (!isEnabled && !isActivatingCmd) {
       // Licença expirada com aviso único
@@ -156,8 +176,13 @@ async function handleMessage(sock, m) {
   // ========================================================
   // 5. Checagem de Prefixo e Resolução de Comandos
   // ========================================================
+  let effectivePrefix = groupPrefix;
   if (!text.startsWith(groupPrefix)) {
-    return;
+    if (matchedActivationPrefix !== null && text.startsWith(matchedActivationPrefix)) {
+      effectivePrefix = matchedActivationPrefix;
+    } else {
+      return;
+    }
   }
 
   // Rate-Limit Anti-Spam por usuário (cooldown de 2 segundos)
@@ -165,7 +190,7 @@ async function handleMessage(sock, m) {
     return; // Descarta comandos duplicados silenciosamente
   }
 
-  const rawBody = text.slice(groupPrefix.length).trim();
+  const rawBody = text.slice(effectivePrefix.length).trim();
   if (!rawBody) return;
 
   const [commandTrigger, ...args] = rawBody.split(/\s+/);

@@ -157,17 +157,34 @@ async function checkAdminStatus(sock, groupJid, userJid) {
   const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
   const userNumber = cleanUser.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
+  const getBr = (num) => {
+    const c = (num || '').replace(/\D/g, '');
+    if (c.startsWith('55') && c.length >= 12) {
+      return { ddd: c.slice(2, 4), last8: c.slice(-8) };
+    }
+    if (c.length === 10 || c.length === 11) {
+      return { ddd: c.slice(0, 2), last8: c.slice(-8) };
+    }
+    return { ddd: '', last8: c.slice(-8) };
+  };
+
+  const userBr = getBr(userNumber);
+  const botBr = getBr(botNumber);
+
   for (const p of metadata.participants) {
     const pClean = cleanJid(p.id);
     const pNumber = pClean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
     const pLid = p.lid ? cleanJid(p.lid) : '';
+    const pBr = getBr(pNumber);
 
     const isMatchUser = (pClean === cleanUser) || 
                         (userNumber && pNumber === userNumber) || 
+                        (userBr.ddd && pBr.ddd && userBr.ddd === pBr.ddd && userBr.last8 === pBr.last8) ||
                         (pLid && pLid === cleanUser);
 
     const isMatchBot = (pClean === botJid) || 
                        (botNumber && pNumber === botNumber) || 
+                       (botBr.ddd && pBr.ddd && botBr.ddd === pBr.ddd && botBr.last8 === pBr.last8) ||
                        (pLid && pLid === botJid);
 
     if (isMatchUser) {
