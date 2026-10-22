@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-admin-bot",
+  "version": "2.0.0",
+  "description": "High-Performance WhatsApp Admin Bot with Wizard Engine, SaaS Licensing, i18n (PT/ES/EN) and Anti-Ban Protection",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "setup": "node index.js --setup",
+    "code": "node index.js --code"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "dotenv": "^16.4.5",
+    "node-cache": "^5.1.2",
+    "pino": "^9.0.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
