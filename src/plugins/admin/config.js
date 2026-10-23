@@ -2,7 +2,7 @@ const wizardEngine = require('../../core/wizardEngine');
 
 module.exports = {
   name: 'config',
-  aliases: ['config', 'painel', 'panel', 'settings', 'menu', 'cfg', 'wizard', 'ajuda', 'help'],
+  aliases: ['config', 'painel', 'panel', 'settings', 'cfg', 'wizard'],
   description: 'Painel Interativo de Configurações - Hermes Bot',
   ownerOnly: false,
   adminOnly: true,
