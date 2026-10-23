@@ -113,6 +113,9 @@ class ConfigManager {
     this.isDirty = false;
 
     try {
+      if (!fs.existsSync(this.dataDir)) {
+        fs.mkdirSync(this.dataDir, { recursive: true });
+      }
       const data = this._serialize();
       await fs.promises.writeFile(this.tmpPath, data, 'utf-8');
 
@@ -137,6 +140,9 @@ class ConfigManager {
     }
 
     try {
+      if (!fs.existsSync(this.dataDir)) {
+        fs.mkdirSync(this.dataDir, { recursive: true });
+      }
       const data = this._serialize();
       fs.writeFileSync(this.tmpPath, data, 'utf-8');
 

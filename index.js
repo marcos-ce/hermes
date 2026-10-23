@@ -1,5 +1,18 @@
 const fs = require('fs');
 const path = require('path');
+
+// Silencia logs de ratchet do libsignal que poluem o console com centenas de "Closing session"
+const originalConsoleInfo = console.info;
+console.info = function (...args) {
+  if (
+    typeof args[0] === 'string' &&
+    (args[0].startsWith('Closing session') || args[0].startsWith('Closing open session'))
+  ) {
+    return;
+  }
+  return originalConsoleInfo.apply(console, args);
+};
+
 const setupWizard = require('./src/core/setupWizard');
 const configManager = require('./src/core/configManager');
 const pluginLoader = require('./src/core/pluginLoader');

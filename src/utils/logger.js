@@ -6,8 +6,17 @@ const logger = pino({
   timestamp: pino.stdTimeFunctions.isoTime,
   hooks: {
     logMethod(inputArgs, method) {
-      // Suprime mensagens internas de sincronização entre dispositivos que o Baileys descarta
-      if (inputArgs[1] === 'error in handling message' || inputArgs[0]?.node?.attrs?.category === 'peer') {
+      const msg = typeof inputArgs[1] === 'string' ? inputArgs[1] : (typeof inputArgs[0] === 'string' ? inputArgs[0] : '');
+      const firstArg = typeof inputArgs[0] === 'object' && inputArgs[0] !== null ? inputArgs[0] : {};
+
+      // Suprime eventos internos cosméticos e esperados do WhatsApp/Baileys que inflam o contador de erro
+      if (
+        msg.includes('error in handling message') ||
+        msg.includes("unexpected error in 'init queries'") ||
+        msg.includes('stream errored out') ||
+        firstArg?.node?.attrs?.category === 'peer' ||
+        firstArg?.node?.attrs?.code === '515'
+      ) {
         return;
       }
       return method.apply(this, inputArgs);
