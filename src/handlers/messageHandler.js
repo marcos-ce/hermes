@@ -75,6 +75,41 @@ async function handleMessage(sock, m) {
     }
   }
 
+  // ========================================================
+  // Trava de Grupo Banido (Silêncio Total: bot fica 100% mudo e invisível)
+  // ========================================================
+  if (isGroup && configManager.isGroupBanned(from)) {
+    // Se o grupo está banido, o bot fica totalmente mudo e invisível.
+    // Apenas o Dono do bot pode enviar comando para desbanir o grupo:
+    if (!isSenderOwner) {
+      return; // Silêncio total absoluto para todos os membros e administradores
+    }
+
+    const lower = text.toLowerCase().trim();
+    const tempPrefix = configManager.getGroupPrefix(from);
+    const prefixes = [tempPrefix, '!', '/', ''];
+    let isUnbanCmd = false;
+
+    for (const p of prefixes) {
+      const body = p ? (lower.startsWith(p) ? lower.slice(p.length).trim() : null) : lower;
+      if (body && (
+        body.startsWith('desbanirgrupo') ||
+        body.startsWith('unbangroup') ||
+        body.startsWith('desbloqueargrupo') ||
+        body.startsWith('unblockgroup') ||
+        body.startsWith('desbanir') ||
+        (body.startsWith('bot') && (body.includes('unban') || body.includes('desbanir')))
+      )) {
+        isUnbanCmd = true;
+        break;
+      }
+    }
+
+    if (!isUnbanCmd) {
+      return; // Silêncio total no grupo banido para qualquer outra conversa do Dono
+    }
+  }
+
   // Define prefixo e idioma do contexto
   const groupPrefix = isGroup ? configManager.getGroupPrefix(from) : settings.defaultPrefix;
   const groupLang = isGroup ? configManager.getGroupLang(from) : settings.defaultLang;
@@ -98,7 +133,19 @@ async function handleMessage(sock, m) {
     for (const p of possiblePrefixes) {
       if (p === '' && isSenderOwner) {
         const lower = text.toLowerCase().trim();
-        if (lower.startsWith('bot on') || lower.startsWith('ativar') || lower.startsWith('bot status')) {
+        if (
+          lower.startsWith('bot on') ||
+          lower.startsWith('ativar') ||
+          lower.startsWith('bot status') ||
+          lower.startsWith('desbanirgrupo') ||
+          lower.startsWith('unbangroup') ||
+          lower.startsWith('desbloqueargrupo') ||
+          lower.startsWith('unblockgroup') ||
+          lower.startsWith('bangrupo') ||
+          lower.startsWith('bangroup') ||
+          lower.startsWith('gruposbanidos') ||
+          lower.startsWith('bannedgroups')
+        ) {
           matchedActivationPrefix = '';
           break;
         }
@@ -110,7 +157,15 @@ async function handleMessage(sock, m) {
           body.startsWith('activar') ||
           body.startsWith('activate') ||
           body.startsWith('licenca') ||
-          body.startsWith('licencia')
+          body.startsWith('licencia') ||
+          body.startsWith('desbanirgrupo') ||
+          body.startsWith('unbangroup') ||
+          body.startsWith('desbloqueargrupo') ||
+          body.startsWith('unblockgroup') ||
+          body.startsWith('bangrupo') ||
+          body.startsWith('bangroup') ||
+          body.startsWith('gruposbanidos') ||
+          body.startsWith('bannedgroups')
         ) {
           matchedActivationPrefix = p;
           break;
@@ -193,6 +248,10 @@ async function handleMessage(sock, m) {
   if (!text.startsWith(groupPrefix)) {
     if (matchedActivationPrefix !== null && text.startsWith(matchedActivationPrefix)) {
       effectivePrefix = matchedActivationPrefix;
+    } else if (!isGroup && (text.startsWith('/') || text.startsWith('!'))) {
+      effectivePrefix = text[0];
+    } else if (isSenderOwner && (text.startsWith('/') || text.startsWith('!'))) {
+      effectivePrefix = text[0];
     } else {
       return;
     }

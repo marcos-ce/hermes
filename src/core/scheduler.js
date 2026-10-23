@@ -68,6 +68,10 @@ class Scheduler {
       const executionQueue = [];
 
       for (const [groupJid, group] of allGroups) {
+        if (configManager.isGroupBanned(groupJid)) {
+          continue; // Grupo banido: 100% ignorado pelo scheduler
+        }
+
         if (!configManager.isGroupEnabled(groupJid)) {
           // Checagem de notificação de licença expirada
           if (group.expiresAt !== null && Date.now() > group.expiresAt && !group.expiryNotified) {

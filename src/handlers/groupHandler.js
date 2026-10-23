@@ -19,8 +19,8 @@ async function handleParticipantsUpdate(sock, update) {
   // Invalidação imediata do cache de metadados do grupo
   groupCache.del(groupJid);
 
-  // Se o grupo não estiver ativo na licença SaaS, ignora
-  if (!configManager.isGroupEnabled(groupJid)) {
+  // Se o grupo estiver banido ou inativo na licença SaaS, ignora 100% em silêncio
+  if (configManager.isGroupBanned(groupJid) || !configManager.isGroupEnabled(groupJid)) {
     return;
   }
 

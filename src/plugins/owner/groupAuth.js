@@ -50,7 +50,10 @@ module.exports = {
 
       let text = `${t('saas.list_header')}\n\n`;
       for (const [jid, data] of allGroups) {
-        const status = data.enabled ? '🟢 ATIVO' : '🔴 PAUSADO';
+        let status = data.enabled ? '🟢 ATIVO' : '🔴 PAUSADO';
+        if (configManager.isGroupBanned(jid)) {
+          status = '🛑 BANIDO';
+        }
         let remaining = t('common.lifetime');
         if (data.expiresAt) {
           const diffMs = data.expiresAt - Date.now();
@@ -69,6 +72,44 @@ module.exports = {
         }) + '\n';
       }
       return reply(text);
+    }
+
+    // ==========================================
+    // Banir / Desbanir Grupo via !bot
+    // ==========================================
+    if (sub === 'ban' || sub === 'bangrupo' || sub === 'banir') {
+      if (!isOwner) return reply(t('common.no_permission_owner'));
+      const targetJid = (args[1] && (args[1].includes('@g.us') || /^\d{15,25}$/.test(args[1])))
+        ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
+        : (isGroup ? from : null);
+      if (!targetJid) {
+        return reply('⚠️ Informe o ID do grupo ou execute dentro do grupo.\nEx: `/bot ban 120363000000000@g.us`');
+      }
+      configManager.banGroup(targetJid, args.slice(2).join(' '));
+      return reply(t('bangroup.banned', { id: targetJid }));
+    }
+
+    if (sub === 'unban' || sub === 'desbanir') {
+      if (!isOwner) return reply(t('common.no_permission_owner'));
+      const targetJid = (args[1] && (args[1].includes('@g.us') || /^\d{15,25}$/.test(args[1])))
+        ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
+        : (isGroup ? from : null);
+      if (!targetJid) {
+        return reply('⚠️ Informe o ID do grupo ou execute dentro do grupo.\nEx: `/bot unban 120363000000000@g.us`');
+      }
+      configManager.unbanGroup(targetJid);
+      return reply(t('bangroup.unbanned', { id: targetJid }));
+    }
+
+    if (sub === 'banidos' || sub === 'banned') {
+      if (!isOwner) return reply(t('common.no_permission_owner'));
+      const banned = configManager.getBannedGroups();
+      if (!banned.length) return reply(t('bangroup.list_empty'));
+      let txt = `${t('bangroup.list_title')}\n\n`;
+      banned.forEach((j, i) => {
+        txt += `*[${i + 1}]* \`${j}\`\n`;
+      });
+      return reply(txt);
     }
 
     // As ações a seguir são para grupos

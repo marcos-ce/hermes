@@ -39,6 +39,14 @@ const dictionaries = {
     'saas.pv_on': '🔓 Respostas a comandos no privado (DM) foram *ATIVADAS* para todos.',
     'saas.pv_off': '🔒 Respostas a comandos no privado (DM) foram *DESATIVADAS* (Modo Anti-Ban ativado: apenas o Dono pode usar no PV).',
 
+    // Banir Grupos
+    'bangroup.banned': '🛑 *GRUPO BANIDO COM SUCESSO*\nO grupo `{id}` foi banido. O bot está 100% mudo e invisível neste grupo.\n\n💡 Para reverter: `/desbanirgrupo {id}`',
+    'bangroup.unbanned': '🟢 *GRUPO DESBANIDO COM SUCESSO*\nO grupo `{id}` foi desbanido e o bot voltou a reconhecer o grupo.',
+    'bangroup.already_banned': '⚠️ Este grupo já está na lista de grupos banidos.',
+    'bangroup.not_banned': '⚠️ Este grupo não está banido.',
+    'bangroup.list_title': '🛑 *GRUPOS BANIDOS DO BOT:*',
+    'bangroup.list_empty': 'Nenhum grupo está banido no momento.',
+
     // Reload
     'reload.success': '🔄 *HOT-RELOAD CONCLUÍDO!*\nTodos os plugins, schemas e traduções foram recarregados com sucesso em tempo real.',
     'reload.error': '❌ Erro ao recarregar módulos: {error}',
@@ -185,6 +193,14 @@ const dictionaries = {
     'saas.pv_on': '🔓 Las respuestas a comandos en privado (DM) han sido *ACTIVADAS* para todos.',
     'saas.pv_off': '🔒 Las respuestas a comandos en privado (DM) han sido *DESACTIVADAS* (Modo Anti-Ban: solo el Dueño puede usar en privado).',
 
+    // Bloquear Grupos
+    'bangroup.banned': '🛑 *GRUPO BLOQUEADO CON ÉXITO*\nEl grupo `{id}` ha sido bloqueado. El bot está 100% mudo e invisible en este grupo.\n\n💡 Para revertir: `/desbanirgrupo {id}`',
+    'bangroup.unbanned': '🟢 *GRUPO DESBLOQUEADO CON ÉXITO*\nEl grupo `{id}` ha sido desbloqueado y el bot vuelve a estar activo.',
+    'bangroup.already_banned': '⚠️ Este grupo ya se encuentra en la lista de grupos bloqueados.',
+    'bangroup.not_banned': '⚠️ Este grupo no está bloqueado.',
+    'bangroup.list_title': '🛑 *GRUPOS BLOQUEADOS DEL BOT:*',
+    'bangroup.list_empty': 'Ningún grupo está bloqueado en este momento.',
+
     // Reload
     'reload.success': '🔄 *¡HOT-RELOAD COMPLETADO!*\nTodos los plugins, esquemas y traducciones se recargaron con éxito en tiempo real.',
     'reload.error': '❌ Error al recargar módulos: {error}',
@@ -330,6 +346,14 @@ const dictionaries = {
     'saas.list_empty': 'No groups registered at the moment.',
     'saas.pv_on': '🔓 Private commands (DM) are now *ENABLED* for everyone.',
     'saas.pv_off': '🔒 Private commands (DM) are now *DISABLED* (Anti-Ban mode: only Owner can use in DM).',
+
+    // Ban Groups
+    'bangroup.banned': '🛑 *GROUP BANNED SUCCESSFULLY*\nThe group `{id}` has been banned. The bot is 100% mute and invisible in this group.\n\n💡 To revert: `/unbangroup {id}`',
+    'bangroup.unbanned': '🟢 *GROUP UNBANNED SUCCESSFULLY*\nThe group `{id}` has been unbanned and the bot is active again.',
+    'bangroup.already_banned': '⚠️ This group is already banned.',
+    'bangroup.not_banned': '⚠️ This group is not banned.',
+    'bangroup.list_title': '🛑 *BANNED GROUPS:*',
+    'bangroup.list_empty': 'No groups are currently banned.',
 
     // Reload
     'reload.success': '🔄 *HOT-RELOAD COMPLETED!*\nAll plugins, schemas, and translations were reloaded in real time.',

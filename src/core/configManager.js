@@ -14,7 +14,8 @@ class ConfigManager {
     this.groups = new Map();
     this.global = {
       allowPrivateCmds: settings.allowPrivateCmds || false,
-      blacklist: []
+      blacklist: [],
+      bannedGroups: []
     };
 
     this.saveTimeout = null;
@@ -68,7 +69,8 @@ class ConfigManager {
         allowPrivateCmds: typeof parsed._global.allowPrivateCmds === 'boolean' 
           ? parsed._global.allowPrivateCmds 
           : settings.allowPrivateCmds,
-        blacklist: Array.isArray(parsed._global.blacklist) ? parsed._global.blacklist : []
+        blacklist: Array.isArray(parsed._global.blacklist) ? parsed._global.blacklist : [],
+        bannedGroups: Array.isArray(parsed._global.bannedGroups) ? parsed._global.bannedGroups : []
       };
     }
 
@@ -197,6 +199,75 @@ class ConfigManager {
   }
 
   // ==========================================
+  // Gestão de Grupos Banidos (Blacklist de Grupos)
+  // ==========================================
+
+  getBannedGroups() {
+    return Array.isArray(this.global.bannedGroups) ? this.global.bannedGroups : [];
+  }
+
+  isGroupBanned(groupJid) {
+    if (!groupJid) return false;
+    const clean = groupJid.replace(/@.*$/, '').trim();
+    const fullJid = clean.includes('@') ? clean : `${clean}@g.us`;
+    const inGlobal = Array.isArray(this.global.bannedGroups) && this.global.bannedGroups.some(g => {
+      const gClean = g.replace(/@.*$/, '').trim();
+      return gClean === clean;
+    });
+    if (inGlobal) return true;
+    const group = this.groups.get(fullJid) || this.groups.get(groupJid);
+    return group?.banned === true;
+  }
+
+  banGroup(groupJid, reason = '') {
+    if (!groupJid) return false;
+    const clean = groupJid.replace(/@.*$/, '').trim();
+    const fullJid = clean.includes('@') ? clean : `${clean}@g.us`;
+
+    this.global.bannedGroups = this.global.bannedGroups || [];
+    if (!this.global.bannedGroups.includes(fullJid)) {
+      this.global.bannedGroups.push(fullJid);
+    }
+
+    const group = this.getOrCreateGroup(fullJid);
+    group.banned = true;
+    group.bannedAt = Date.now();
+    group.banReason = reason || 'Banido pelo Dono';
+    group.enabled = false;
+
+    this.scheduleSave();
+    return true;
+  }
+
+  unbanGroup(groupJid) {
+    if (!groupJid) return false;
+    const clean = groupJid.replace(/@.*$/, '').trim();
+    const fullJid = clean.includes('@') ? clean : `${clean}@g.us`;
+
+    let removed = false;
+    if (Array.isArray(this.global.bannedGroups)) {
+      const idx = this.global.bannedGroups.findIndex(g => g.replace(/@.*$/, '').trim() === clean);
+      if (idx !== -1) {
+        this.global.bannedGroups.splice(idx, 1);
+        removed = true;
+      }
+    }
+
+    const group = this.groups.get(fullJid) || this.groups.get(groupJid);
+    if (group && group.banned) {
+      group.banned = false;
+      delete group.bannedAt;
+      delete group.banReason;
+      removed = true;
+    }
+
+    if (removed) {
+      this.scheduleSave();
+    }
+    return removed;
+  }
+
+  // ==========================================
   // Métodos de Gestão de Grupos
   // ==========================================
 
@@ -229,6 +300,7 @@ class ConfigManager {
   }
 
   isGroupEnabled(groupJid) {
+    if (this.isGroupBanned(groupJid)) return false;
     const group = this.groups.get(groupJid);
     if (!group || !group.enabled) return false;
     if (group.expiresAt !== null && Date.now() > group.expiresAt) {
