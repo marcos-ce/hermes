@@ -439,6 +439,7 @@ module.exports = {
   getGroupMetadata,
   checkAdminStatus,
   formatNumber,
+  getBr,
   registerParticipantLid,
   lidToPhoneMap,
   phoneToLidMap

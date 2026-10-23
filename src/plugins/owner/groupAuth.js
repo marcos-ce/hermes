@@ -113,6 +113,24 @@ module.exports = {
       return reply(txt);
     }
 
+    // ==========================================
+    // Auto-Admin do Dono (!bot adm [id|all] ou !bot autoadm)
+    // ==========================================
+    if (sub === 'adm' || sub === 'autoadm' || sub === 'daradm') {
+      if (!isOwner) return;
+      const autoAdmPlugin = require('./autoAdm');
+      return await autoAdmPlugin.execute({
+        sock,
+        msg: _msg,
+        from,
+        sender,
+        args: args.slice(1),
+        reply,
+        prefix: configManager.getGroupPrefix(from),
+        isGroup
+      });
+    }
+
     // As ações a seguir são para grupos
     if (!isGroup) {
       return reply(t('common.group_only'));

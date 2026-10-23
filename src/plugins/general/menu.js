@@ -142,6 +142,7 @@ module.exports = {
         `⏸️ *${p}bot off* - Pausar o bot no grupo (preserva configurações)\n` +
         `📋 *${p}bot list* - Listar todos os grupos cadastrados e status\n` +
         `📊 *${p}bot status* - Status da assinatura do grupo atual\n` +
+        `👮 *${p}autoadm <id | all>* - Promover você (Dono) a Admin (por ID ou em todos os grupos)\n` +
         `🔒 *${p}pv on / off* - Liberar ou bloquear respostas a comandos no privado\n` +
         `🚫 *${p}bangp [jid]* - Banir grupo (silêncio total do bot)\n` +
         `🟢 *${p}desbangp [jid]* - Desbanir grupo do bot\n` +
