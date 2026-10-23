@@ -19,6 +19,7 @@ module.exports = {
     'gpsbanidos',
     'bannedgroups'
   ],
+  usage: 'bangp [id] | /desbangp [id]',
   description: 'Bane ou desbane um grupo completamente (bot fica 100% mudo e invisível)',
   ownerOnly: true,
   adminOnly: false,

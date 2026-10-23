@@ -7,6 +7,7 @@ const settings = require('../../config/settings');
 module.exports = {
   name: 'warn',
   aliases: ['warn', 'adv', 'advertir', 'advertencia', 'aviso', 'unwarn', 'perdoar', 'perdonar', 'warns', 'advertencias'],
+  usage: 'warn @user | /unwarn | /warns',
   description: 'Sistema de advertências progressivas com banimento automático',
   ownerOnly: false,
   adminOnly: true,

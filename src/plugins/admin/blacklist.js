@@ -6,6 +6,7 @@ const settings = require('../../config/settings');
 module.exports = {
   name: 'blacklist',
   aliases: ['blacklist', 'listanegra', 'bl', 'bloqueados'],
+  usage: 'blacklist add/del/list',
   description: 'Lista negra do grupo ou global que expulsa automaticamente ao entrar',
   ownerOnly: false,
   adminOnly: true,

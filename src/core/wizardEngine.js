@@ -177,6 +177,48 @@ class WizardEngine {
       if (mod.desc) menuText += `    ${mod.desc}\n`;
     });
 
+    // Coleta dinâmica dos comandos utilitários e de moderação direta
+    const otherTitle = {
+      pt: '🛠️ *OUTROS COMANDOS DO BOT:*',
+      es: '🛠️ *OTROS COMANDOS DEL BOT:*',
+      en: '🛠️ *OTHER BOT COMMANDS:*'
+    }[lang] || '🛠️ *OUTROS COMANDOS DO BOT:*';
+
+    const directCommandsOrder = ['hidetag', 'promote', 'demote', 'ban', 'mute', 'del', 'warn', 'sortear', 'blacklist', 'idioma', 'ping'];
+    const directCommands = [];
+    for (const [name, plugin] of pluginLoader.commands.entries()) {
+      if (plugin.category === 'owner' || plugin.ownerOnly) continue;
+      if (['menu', 'config'].includes(name)) continue;
+
+      const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name);
+      if (!isUtility) continue;
+
+      const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
+      const desc = typeof plugin.description === 'object' 
+        ? (plugin.description[lang] || plugin.description.pt) 
+        : (plugin.description || '');
+
+      directCommands.push({
+        name,
+        usage: `${currentPrefix}${usage}`,
+        desc
+      });
+    }
+
+    directCommands.sort((a, b) => {
+      const idxA = directCommandsOrder.indexOf(a.name);
+      const idxB = directCommandsOrder.indexOf(b.name);
+      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
+
+    if (directCommands.length > 0) {
+      menuText += `─────────────────────────\n`;
+      menuText += `${otherTitle}\n`;
+      directCommands.forEach(cmd => {
+        menuText += `* *${cmd.usage}* - ${cmd.desc}\n`;
+      });
+    }
+
     menuText += `─────────────────────────\n`;
     menuText += `💡 Exemplos rápidos:\n`;
     menuText += `* Digite 1 para ativar/desativar ou configurar o módulo 1\n`;

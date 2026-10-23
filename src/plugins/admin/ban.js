@@ -7,6 +7,7 @@ const wizardEngine = require('../../core/wizardEngine');
 module.exports = {
   name: 'ban',
   aliases: ['ban', 'kick', 'remover', 'expulsar', 'banir', 'eliminar'],
+  usage: 'ban @user',
   description: 'Remove membro do grupo imediatamente com proteção para admins e dono',
   ownerOnly: false,
   adminOnly: true,

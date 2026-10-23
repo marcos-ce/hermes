@@ -4,6 +4,7 @@ const { cleanJid } = require('../../utils/jidResolver');
 module.exports = {
   name: 'del',
   aliases: ['del', 'apagar', 'delete', 'borrar', 'limparmsg', 'rm'],
+  usage: 'del (respondendo)',
   description: 'Apaga a mensagem específica respondida no chat',
   ownerOnly: false,
   adminOnly: true,

@@ -4,6 +4,7 @@ const { resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
 module.exports = {
   name: 'promote',
   aliases: ['promote', 'promover', 'adm', 'admin', 'daradm'],
+  usage: 'adm @user',
   description: 'Promove membro a Administrador do grupo',
   ownerOnly: false,
   adminOnly: true,

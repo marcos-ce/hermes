@@ -1,6 +1,7 @@
 module.exports = {
   name: 'mute',
   aliases: ['mute', 'unmute', 'fechar', 'abrir', 'cerrar', 'lock', 'unlock', 'grupo', 'mutar', 'desmutar'],
+  usage: 'fechar | /abrir',
   description: 'Abre e fecha o grupo imediatamente para envio de mensagens',
   ownerOnly: false,
   adminOnly: true,

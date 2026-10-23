@@ -5,6 +5,7 @@ const { getGroupMetadata } = require('../../utils/jidResolver');
 module.exports = {
   name: 'bot',
   aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm'],
+  usage: 'bot on/off/add/list/pv',
   description: 'Gestão de licenças SaaS e ativação do bot no grupo',
   ownerOnly: false, // Checado dinamicamente conforme authMode no execute
   adminOnly: false,

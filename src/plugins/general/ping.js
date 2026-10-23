@@ -18,6 +18,7 @@ function formatUptime(seconds) {
 module.exports = {
   name: 'ping',
   aliases: ['ping', 'status', 'info', 'latencia', 'uptime'],
+  usage: 'ping',
   description: 'Exibe status, latência, consumo de memória e validade da licença',
   ownerOnly: false,
   adminOnly: false,

@@ -1,5 +1,6 @@
 const { getGroupMetadata } = require('../../utils/jidResolver');
 const wizardEngine = require('../../core/wizardEngine');
+const pluginLoader = require('../../core/pluginLoader');
 
 module.exports = {
   name: 'menu',
@@ -28,101 +29,65 @@ module.exports = {
           membersCount = meta?.participants?.length || 0;
         } catch (_) {}
 
-        const menuData = {
+        // Coleta dinâmica de todos os plugins utilitários e de moderação direta
+        const directCommandsOrder = ['hidetag', 'promote', 'demote', 'ban', 'mute', 'del', 'warn', 'sortear', 'blacklist', 'idioma', 'ping'];
+        const groupCmds = [];
+
+        for (const [name, plugin] of pluginLoader.commands.entries()) {
+          if (plugin.category === 'owner' || plugin.ownerOnly) continue; // Nunca expõe comandos de dono em grupos
+          if (['menu', 'config'].includes(name)) continue;
+
+          const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name);
+          if (!isUtility) continue;
+
+          const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
+          const desc = typeof plugin.description === 'object'
+            ? (plugin.description[l] || plugin.description.pt)
+            : (plugin.description || '');
+
+          groupCmds.push({
+            name,
+            usage: `${p}${usage}`,
+            desc
+          });
+        }
+
+        groupCmds.sort((a, b) => {
+          const idxA = directCommandsOrder.indexOf(a.name);
+          const idxB = directCommandsOrder.indexOf(b.name);
+          return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+        });
+
+        const titles = {
           pt: {
             title: '🤖 *HERMES BOT - COMANDOS DO GRUPO*',
-            headerGroup: `👥 *Grupo:* ${groupName} (${membersCount} membros)`,
-            headerPrefix: `📌 *Prefixo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\``,
-            secAdmin: '╭━━━〔 🛡️ ADMINISTRAÇÃO & MODERAÇÃO 〕━━━╮',
-            secGeneral: '╭━━━〔 📊 GERAL & UTILIDADES 〕━━━╮',
-            footer: '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯',
-            tip: `💡 *Dica:* Para abrir o painel interativo de configurações, use *${p}menu* ou *${p}config*.`,
-            adminCmds: [
-              `📢 *${p}all* [texto] - Marcar todos os membros de forma oculta`,
-              `👮 *${p}adm* @user - Promover membro a Administrador`,
-              `📉 *${p}demote* @user - Rebaixar Administrador a membro comum`,
-              `🚫 *${p}ban* @user - Banir membro do grupo imediatamente`,
-              `🔒 *${p}fechar* | *${p}abrir* - Fechar ou abrir o grupo para mensagens`,
-              `🗑️ *${p}del* (respondendo) - Apagar mensagem específica do chat`,
-              `⚠️ *${p}warn* @user | *${p}unwarn* | *${p}warns* - Sistema de advertências`,
-              `🎲 *${p}sortear* [qtd] [prêmio] - Realizar sorteio aleatório entre membros`,
-              `⛔ *${p}blacklist* add/del/list - Lista negra com auto-ban na entrada`,
-              `⚙️ *${p}menu* (ou *${p}config*) - Abrir o Painel Interativo de Configurações`,
-              `🌐 *${p}idioma* [pt/es/en] - Trocar idioma do bot no grupo`
-            ],
-            generalCmds: [
-              `🏓 *${p}ping* - Status do bot, latência, RAM e validade`,
-              `📋 *${p}menu* - Painel interativo de configurações`
-            ]
+            sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRAÇÃO 〕━━━╮',
+            tip: `💡 *Dica:* Para abrir o painel interativo de configurações, use *${p}menu* ou *${p}config*.`
           },
           es: {
             title: '🤖 *HERMES BOT - COMANDOS DEL GRUPO*',
-            headerGroup: `👥 *Grupo:* ${groupName} (${membersCount} miembros)`,
-            headerPrefix: `📌 *Prefijo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\``,
-            secAdmin: '╭━━━〔 🛡️ ADMINISTRACIÓN & MODERACIÓN 〕━━━╮',
-            secGeneral: '╭━━━〔 📊 GENERAL & UTILIDADES 〕━━━╮',
-            footer: '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯',
-            tip: `💡 *Consejo:* Para abrir el panel interactivo de configuraciones, usa *${p}menu* o *${p}config*.`,
-            adminCmds: [
-              `📢 *${p}all* [texto] - Mencionar a todos los miembros ocultamente`,
-              `👮 *${p}adm* @user - Promover miembro a Administrador`,
-              `📉 *${p}demote* @user - Degradar Administrador a miembro común`,
-              `🚫 *${p}ban* @user - Expulsar miembro del grupo inmediatamente`,
-              `🔒 *${p}cerrar* | *${p}abrir* - Cerrar o abrir el grupo para mensajes`,
-              `🗑️ *${p}del* (respondiendo) - Borrar mensaje del chat`,
-              `⚠️ *${p}warn* @user | *${p}unwarn* | *${p}warns* - Sistema de advertencias`,
-              `🎲 *${p}sortear* [cant] [premio] - Realizar sorteo aleatorio`,
-              `⛔ *${p}blacklist* add/del/list - Lista negra con auto-expulsión`,
-              `⚙️ *${p}menu* (o *${p}config*) - Abrir el Panel Interactivo`,
-              `🌐 *${p}idioma* [pt/es/en] - Cambiar idioma del bot en el grupo`
-            ],
-            generalCmds: [
-              `🏓 *${p}ping* - Estado del bot, latencia, RAM y validez`,
-              `📋 *${p}menu* - Panel interactivo de configuraciones`
-            ]
+            sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRACIÓN 〕━━━╮',
+            tip: `💡 *Consejo:* Para abrir el panel interactivo de configuraciones, usa *${p}menu* o *${p}config*.`
           },
           en: {
             title: '🤖 *HERMES BOT - GROUP COMMANDS*',
-            headerGroup: `👥 *Group:* ${groupName} (${membersCount} members)`,
-            headerPrefix: `📌 *Prefix:* \`${p}\` | 🌐 *Language:* \`${l.toUpperCase()}\``,
-            secAdmin: '╭━━━〔 🛡️ ADMINISTRATION & MODERATION 〕━━━╮',
-            secGeneral: '╭━━━〔 📊 GENERAL & UTILITIES 〕━━━╮',
-            footer: '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯',
-            tip: `💡 *Tip:* To open the interactive configuration panel, use *${p}menu* or *${p}config*.`,
-            adminCmds: [
-              `📢 *${p}all* [text] - Tag all members invisibly`,
-              `👮 *${p}adm* @user - Promote member to Administrator`,
-              `📉 *${p}demote* @user - Demote Administrator to regular member`,
-              `🚫 *${p}ban* @user - Remove member immediately`,
-              `🔒 *${p}lock* | *${p}unlock* - Lock or unlock the group for messages`,
-              `🗑️ *${p}del* (replying) - Delete replied message`,
-              `⚠️ *${p}warn* @user | *${p}unwarn* | *${p}warns* - Warning system`,
-              `🎲 *${p}raffle* [qty] [prize] - Random raffle between members`,
-              `⛔ *${p}blacklist* add/del/list - Blacklist with auto-kick`,
-              `⚙️ *${p}menu* (or *${p}config*) - Open Interactive Panel`,
-              `🌐 *${p}lang* [pt/es/en] - Change bot language in the group`
-            ],
-            generalCmds: [
-              `🏓 *${p}ping* - Bot status, latency, RAM and license validity`,
-              `📋 *${p}menu* - Interactive configuration panel`
-            ]
+            sec: '╭━━━〔 🛡️ ADMINISTRATION COMMANDS 〕━━━╮',
+            tip: `💡 *Tip:* To open the interactive configuration panel, use *${p}menu* or *${p}config*.`
           }
         };
 
-        const d = menuData[l] || menuData.pt;
-        let output = `${d.title}\n\n`;
-        output += `${d.headerGroup}\n`;
-        output += `${d.headerPrefix}\n\n`;
+        const tInfo = titles[l] || titles.pt;
+        let output = `${tInfo.title}\n\n`;
+        output += `👥 *Grupo:* ${groupName} (${membersCount} membros)\n`;
+        output += `📌 *Prefixo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n\n`;
+        output += `${tInfo.sec}\n`;
 
-        output += `${d.secAdmin}\n`;
-        d.adminCmds.forEach(cmd => { output += `┃ ${cmd}\n`; });
-        output += `${d.footer}\n\n`;
+        groupCmds.forEach(cmd => {
+          output += `┃ *${cmd.usage}* - ${cmd.desc}\n`;
+        });
+        output += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        output += `${tInfo.tip}`;
 
-        output += `${d.secGeneral}\n`;
-        d.generalCmds.forEach(cmd => { output += `┃ ${cmd}\n`; });
-        output += `${d.footer}\n\n`;
-
-        output += `${d.tip}`;
         return reply(output);
       }
 
@@ -131,24 +96,47 @@ module.exports = {
     }
 
     // ========================================================
-    // 2. NO PRIVADO (DM) - APENAS PARA O DONO (EVITA POLUIÇÃO)
+    // 2. NO PRIVADO (DM) - APENAS PARA O DONO (DINÂMICO E ANTI-POLUIÇÃO)
     // ========================================================
     if (isOwner) {
-      const ownerMenu = `👑 *PAINEL DO DONO & SAAS - HERMES*\n\n` +
+      const ownerOrder = ['bot', 'autoadm', 'bangrupo', 'reload'];
+      const ownerCmds = [];
+
+      for (const [name, plugin] of pluginLoader.commands.entries()) {
+        if (plugin.category === 'owner' || plugin.ownerOnly) {
+          const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
+          const desc = typeof plugin.description === 'object'
+            ? (plugin.description[l] || plugin.description.pt)
+            : (plugin.description || '');
+
+          ownerCmds.push({
+            name,
+            usage: `${p}${usage}`,
+            desc
+          });
+        }
+      }
+
+      ownerCmds.sort((a, b) => {
+        const idxA = ownerOrder.indexOf(a.name);
+        const idxB = ownerOrder.indexOf(b.name);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      });
+
+      let ownerMenu = `👑 *PAINEL DO DONO & SAAS - HERMES*\n\n` +
         `📌 *Prefixo atual:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n` +
-        `─────────────────────────\n` +
-        `🔑 *${p}bot on [dias]* - Ativar o bot no grupo (Ex: \`${p}bot on 30\` ou \`${p}bot on\` para vitalício)\n` +
-        `➕ *${p}bot add <dias>* - Adicionar dias à assinatura do grupo\n` +
-        `⏸️ *${p}bot off* - Pausar o bot no grupo (preserva configurações)\n` +
-        `📋 *${p}bot list* - Listar todos os grupos cadastrados e status\n` +
-        `📊 *${p}bot status* - Status da assinatura do grupo atual\n` +
-        `👮 *${p}autoadm <id | all>* - Promover você (Dono) a Admin (por ID ou em todos os grupos)\n` +
-        `🔒 *${p}pv on / off* - Liberar ou bloquear respostas a comandos no privado\n` +
-        `🚫 *${p}bangp [jid]* - Banir grupo (silêncio total do bot)\n` +
-        `🟢 *${p}desbangp [jid]* - Desbanir grupo do bot\n` +
-        `🔄 *${p}reload* - Recarregar plugins e traduções em tempo real\n` +
-        `🏓 *${p}ping* - Status do bot, latência, RAM e uptime\n` +
-        `─────────────────────────\n` +
+        `─────────────────────────\n`;
+
+      ownerCmds.forEach(cmd => {
+        ownerMenu += `🔑 *${cmd.usage}*\n    _${cmd.desc}_\n`;
+      });
+
+      const pingPlugin = pluginLoader.commands.get('ping');
+      if (pingPlugin) {
+        ownerMenu += `🏓 *${p}${pingPlugin.usage || 'ping'}*\n    _${pingPlugin.description}_\n`;
+      }
+
+      ownerMenu += `─────────────────────────\n` +
         `💡 *Dica Anti-Ban:* Gerencie seus grupos e licenças aqui no privado para evitar poluição nos grupos.`;
 
       return reply(ownerMenu);

@@ -4,6 +4,7 @@ const { groupCache } = require('../../utils/cache');
 module.exports = {
   name: 'sortear',
   aliases: ['sortear', 'sorteio', 'sorteo', 'raffle', 'draw', 'ganhador'],
+  usage: 'sortear [qtd] [prêmio]',
   description: 'Sorteio rápido e justo entre os membros do grupo',
   ownerOnly: false,
   adminOnly: true,

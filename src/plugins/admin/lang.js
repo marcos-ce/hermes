@@ -5,6 +5,7 @@ const { t } = require('../../utils/i18n');
 module.exports = {
   name: 'idioma',
   aliases: ['idioma', 'lang', 'language', 'lingua', 'lenguaje'],
+  usage: 'idioma [pt/es/en]',
   description: 'Altera o idioma do bot no grupo',
   ownerOnly: false,
   adminOnly: true,

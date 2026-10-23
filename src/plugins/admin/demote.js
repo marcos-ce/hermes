@@ -5,6 +5,7 @@ const settings = require('../../config/settings');
 module.exports = {
   name: 'demote',
   aliases: ['demote', 'rebaixar', 'tiraradm', 'quitaradm', 'unadmin'],
+  usage: 'demote @user',
   description: 'Rebaixa administrador a membro comum',
   ownerOnly: false,
   adminOnly: true,
