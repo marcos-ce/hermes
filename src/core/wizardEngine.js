@@ -1,5 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, safeDelete } = require('../utils/antiBan');
+const { cleanJid } = require('../utils/jidResolver');
 const { t, resolveSchemaText } = require('../utils/i18n');
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
@@ -133,8 +134,40 @@ class WizardEngine {
     const sentMsg = await sendSafeMessage(sock, from, { text: menuText }, { quoted: msg });
     if (sentMsg?.key) {
       session.menuMsgKey = sentMsg.key;
+      session.promptKeys = [sentMsg.key];
       wizardCache.set(sessionKey, session);
     }
+    return true;
+  }
+
+  /**
+   * Inicia o fluxo interativo de seleção de idioma (!idioma)
+   * @param {object} sock 
+   * @param {object} msg 
+   * @param {string} from 
+   * @param {string} sender 
+   */
+  async startLangSelection(sock, msg, from, sender) {
+    const sessionKey = `${from}:${sender}`;
+
+    const promptText = `🌐 *SELEÇÃO DE IDIOMA - HERMES*\n\n` +
+      `Escolha o novo idioma do grupo:\n\n` +
+      `*[1]* 🇧🇷 Português\n` +
+      `*[2]* 🇪🇸 Español\n` +
+      `*[3]* 🇺🇸 English\n\n` +
+      `Responda com *1*, *2* ou *3* (ou *X* para cancelar).`;
+
+    const sent = await sendSafeMessage(sock, from, { text: promptText }, { quoted: msg });
+
+    const session = {
+      type: 'lang_selection',
+      groupJid: from,
+      sender,
+      menuMsgKey: sent?.key,
+      promptKeys: sent?.key ? [sent.key] : []
+    };
+
+    wizardCache.set(sessionKey, session);
     return true;
   }
 
@@ -148,18 +181,35 @@ class WizardEngine {
    * @returns {Promise<boolean>} Retorna true se a mensagem foi tratada pelo Wizard
    */
   async handleInput(sock, msg, from, sender, rawText) {
-    const sessionKey = `${from}:${sender}`;
-    const session = wizardCache.get(sessionKey);
+    let sessionKey = `${from}:${sender}`;
+    let session = wizardCache.get(sessionKey);
+    if (!session && msg) {
+      const rawSender = msg?.key?.participant || msg?.participant;
+      if (rawSender) {
+        const altKey = `${from}:${cleanJid(rawSender)}`;
+        session = wizardCache.get(altKey);
+        if (session) sessionKey = altKey;
+      }
+    }
     if (!session) return false;
 
     const text = (rawText || '').trim();
     const lang = configManager.getGroupLang(from);
 
-    // Cancelamento expresso: apaga o menu e a mensagem do usuário imediatamente
-    if (text.toLowerCase() === 'x' || text.toLowerCase() === 'cancelar' || text.toLowerCase() === 'sair') {
-      if (session.menuMsgKey) {
+    // Cancelamento expresso: apaga todos os menus/prompts e a mensagem do usuário
+    if (['x', 'cancelar', 'sair'].includes(text.toLowerCase())) {
+      const keysToDelete = [];
+      if (session.menuMsgKey) keysToDelete.push(session.menuMsgKey);
+      if (Array.isArray(session.promptKeys)) {
+        for (const pk of session.promptKeys) {
+          if (pk?.id && !keysToDelete.some(k => k.id === pk.id)) {
+            keysToDelete.push(pk);
+          }
+        }
+      }
+      for (const k of keysToDelete) {
         try {
-          await safeDelete(sock, from, session.menuMsgKey);
+          await safeDelete(sock, from, k);
         } catch (_) {}
       }
       if (msg?.key) {
@@ -175,6 +225,7 @@ class WizardEngine {
     // Filtro Inteligente de Conversa Paralela
     // ==========================================
     const isChoiceStep = session.type === 'config_menu' || 
+      session.type === 'lang_selection' ||
       (session.type === 'wizard' && ['choice', 'boolean'].includes(session.schema?.fields?.[session.stepIndex]?.type));
     
     const hasMentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0;
@@ -187,6 +238,10 @@ class WizardEngine {
     // Processa de acordo com o tipo de sessão
     if (session.type === 'config_menu') {
       return await this._handleConfigMenuInput(sock, msg, from, sender, text, session, lang);
+    }
+
+    if (session.type === 'lang_selection') {
+      return await this._handleLangSelectionInput(sock, msg, from, sender, text, session, lang);
     }
 
     if (session.type === 'wizard') {
@@ -214,13 +269,41 @@ class WizardEngine {
       }
     }
 
-    // Troca de Idioma: [L]
-    if (upper === 'L') {
-      wizardCache.del(sessionKey);
-      const langPlugin = pluginLoader.findCommand('idioma');
-      if (langPlugin) {
-        await langPlugin.execute({ sock, msg, from, sender, args: [], text: '', reply: (txt) => sendSafeMessage(sock, from, { text: txt }, { quoted: msg }), t: (k, v) => t(lang, k, v) });
+    // Troca de Idioma: [L] ou [L 1], [L pt], etc.
+    if (upper === 'L' || upper.startsWith('L ')) {
+      const parts = text.split(/\s+/);
+      const chosen = (parts[1] || '').toLowerCase();
+
+      let targetLang = null;
+      if (['1', 'pt', 'br', 'portugues', 'português'].includes(chosen)) targetLang = 'pt';
+      else if (['2', 'es', 'espanhol', 'español'].includes(chosen)) targetLang = 'es';
+      else if (['3', 'en', 'ingles', 'inglês', 'english'].includes(chosen)) targetLang = 'en';
+
+      if (targetLang) {
+        configManager.setGroupLang(from, targetLang);
+        wizardCache.del(sessionKey);
+        await sendSafeMessage(sock, from, { 
+          text: t(targetLang, 'lang.changed') 
+        }, { quoted: msg });
+        return true;
       }
+
+      // Transiciona a sessão para seleção de idioma interativa sem perder o contexto
+      session.type = 'lang_selection';
+      const promptText = `🌐 *SELEÇÃO DE IDIOMA - HERMES*\n\n` +
+        `Escolha o novo idioma do grupo:\n\n` +
+        `*[1]* 🇧🇷 Português\n` +
+        `*[2]* 🇪🇸 Español\n` +
+        `*[3]* 🇺🇸 English\n\n` +
+        `Responda com *1*, *2* ou *3* (ou *X* para cancelar).`;
+
+      const sent = await sendSafeMessage(sock, from, { text: promptText }, { quoted: msg });
+      if (sent?.key) {
+        session.menuMsgKey = sent.key;
+        session.promptKeys = session.promptKeys || [];
+        session.promptKeys.push(sent.key);
+      }
+      wizardCache.set(sessionKey, session);
       return true;
     }
 
@@ -257,6 +340,39 @@ class WizardEngine {
 
     // Entrada inválida no menu
     await sendSafeMessage(sock, from, { text: t(lang, 'config.invalid_option') }, { quoted: msg });
+    return true;
+  }
+
+  async _handleLangSelectionInput(sock, msg, from, sender, text, session, lang) {
+    const sessionKey = `${from}:${sender}`;
+    const lower = text.toLowerCase().trim();
+
+    let targetLang = null;
+    if (['1', 'pt', 'br', 'portugues', 'português'].includes(lower)) targetLang = 'pt';
+    else if (['2', 'es', 'espanhol', 'español'].includes(lower)) targetLang = 'es';
+    else if (['3', 'en', 'ingles', 'inglês', 'english'].includes(lower)) targetLang = 'en';
+
+    if (!targetLang) {
+      await sendSafeMessage(sock, from, {
+        text: `⚠️ Opção inválida.\nEscolha *1* (Português), *2* (Español), *3* (English) ou envie *X* para cancelar.`
+      }, { quoted: msg });
+      return true;
+    }
+
+    configManager.setGroupLang(from, targetLang);
+    wizardCache.del(sessionKey);
+
+    // Apaga o menu de idiomas anterior para manter o chat limpo
+    if (session.menuMsgKey) {
+      try {
+        await safeDelete(sock, from, session.menuMsgKey);
+      } catch (_) {}
+    }
+
+    await sendSafeMessage(sock, from, {
+      text: t(targetLang, 'lang.changed')
+    }, { quoted: msg });
+
     return true;
   }
 
@@ -425,6 +541,8 @@ class WizardEngine {
     const sentPrompt = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
     if (sentPrompt?.key) {
       session.menuMsgKey = sentPrompt.key;
+      session.promptKeys = session.promptKeys || [];
+      session.promptKeys.push(sentPrompt.key);
       wizardCache.set(sessionKey, session);
     }
   }

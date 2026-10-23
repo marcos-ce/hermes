@@ -1,4 +1,6 @@
 const configManager = require('../../core/configManager');
+const wizardEngine = require('../../core/wizardEngine');
+const { t } = require('../../utils/i18n');
 
 module.exports = {
   name: 'idioma',
@@ -8,28 +10,24 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: false,
 
-  async execute({ from, args, reply, t, isGroup }) {
+  async execute({ sock, msg, from, sender, args, reply, t: translate, isGroup }) {
     if (!isGroup) {
-      return reply(t('common.group_only'));
+      return reply(translate('common.group_only'));
     }
 
     const arg = (args[0] || '').toLowerCase();
 
-    if (arg === 'pt' || arg === '1' || arg === 'br') {
-      configManager.setGroupLang(from, 'pt');
-      return reply(t('lang.changed'));
+    let targetLang = null;
+    if (['1', 'pt', 'br', 'portugues', 'português'].includes(arg)) targetLang = 'pt';
+    else if (['2', 'es', 'espanhol', 'español'].includes(arg)) targetLang = 'es';
+    else if (['3', 'en', 'ingles', 'inglês', 'english'].includes(arg)) targetLang = 'en';
+
+    if (targetLang) {
+      configManager.setGroupLang(from, targetLang);
+      return reply(t(targetLang, 'lang.changed'));
     }
 
-    if (arg === 'es' || arg === '2') {
-      configManager.setGroupLang(from, 'es');
-      return reply(t('lang.changed'));
-    }
-
-    if (arg === 'en' || arg === '3') {
-      configManager.setGroupLang(from, 'en');
-      return reply(t('lang.changed'));
-    }
-
-    return reply(t('lang.prompt'));
+    // Se chamado sem argumentos (ex: /idioma), abre a seleção interativa que intercepta respostas 1, 2 ou 3
+    return await wizardEngine.startLangSelection(sock, msg, from, sender);
   }
 };

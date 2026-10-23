@@ -1,4 +1,5 @@
 const { cooldownCache } = require('./cache');
+const { cleanJid } = require('./jidResolver');
 
 /**
  * Aguarda um período em milissegundos
@@ -78,16 +79,50 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
 }
 
 /**
- * Ação de Emergência (Zero Delay): Apagar mensagem de infração imediatamente
+ * Ação de Emergência (Zero Delay): Apagar mensagem imediatamente
+ * Compatível com mensagens próprias do bot e mensagens de outros membros em grupos.
  * @param {object} sock 
  * @param {string} jid 
  * @param {object} key 
  */
 async function safeDelete(sock, jid, key) {
   if (!sock || !jid || !key) return;
+
+  const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
+  const botJid = cleanJid(sock?.user?.id || '');
+  const botLid = cleanJid(sock?.user?.lid || '');
+
+  // Clona e normaliza a chave
+  const cleanKey = {
+    remoteJid: key.remoteJid || jid,
+    id: key.id,
+    fromMe: key.fromMe !== undefined ? key.fromMe : true
+  };
+
+  if (key.participant) {
+    cleanKey.participant = key.participant;
+  } else if (isGroup && cleanKey.fromMe) {
+    cleanKey.participant = botJid || botLid;
+  }
+
+  // 1. Tenta deletar normalmente com a chave preparada
   try {
-    await sock.sendMessage(jid, { delete: key });
+    await sock.sendMessage(jid, { delete: cleanKey });
   } catch (_) {}
+
+  // 2. Se for em grupo, como o bot é admin, reforça com admin revoke (edit = '8')
+  // No Baileys, edit='8' garante que o WhatsApp apague mensagens mesmo quando edit='7' falha no servidor
+  if (isGroup) {
+    try {
+      const adminRevokeKey = {
+        remoteJid: jid,
+        id: key.id,
+        fromMe: false,
+        participant: cleanKey.participant || botJid || botLid
+      };
+      await sock.sendMessage(jid, { delete: adminRevokeKey });
+    } catch (_) {}
+  }
 }
 
 /**
