@@ -1,5 +1,6 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { parseHumanDuration, formatHumanDuration } = wizardEngine;
 
 module.exports = {
   name: 'welcome',
@@ -51,11 +52,12 @@ module.exports = {
     ]
   },
 
-  async execute({ sock, msg, from, sender, args, reply, t, isGroup }) {
+  async execute({ sock, msg, from, sender, args, reply, t, lang, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'welcome') || {};
+    const groupLang = lang || configManager.getGroupLang(from);
 
     // Digitar /bemvindo sem argumentos (ou /bemvindo config) abre direto o assistente interativo!
     if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
@@ -68,7 +70,8 @@ module.exports = {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'welcome');
       }
       const secs = cfg.autoDeleteSeconds || 0;
-      return reply(`${t('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${secs ? `${secs}s` : 'Desativado'}`);
+      const formattedTime = formatHumanDuration(secs, 'seconds', groupLang);
+      return reply(`${t('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${formattedTime}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {
@@ -78,18 +81,21 @@ module.exports = {
 
     // Configuração direta de tempo de auto-delete
     if (['tempo', 'time', 'segundos', 'secs', 'seg', 'min', 'minutos'].includes(sub)) {
-      const rawArg = (args[1] || '').toLowerCase().trim();
+      const rawArg = (args.slice(1).join(' ') || '').toLowerCase().trim();
       let parsedSecs = 0;
 
-      if (rawArg.endsWith('m') || rawArg.endsWith('min')) {
-        parsedSecs = parseInt(rawArg, 10) * 60;
-      } else if (rawArg.endsWith('s')) {
-        parsedSecs = parseInt(rawArg, 10);
+      if (['0', 'nao', 'não', 'nunca', 'desativado', 'desativar', 'permanente'].includes(rawArg)) {
+        parsedSecs = 0;
       } else {
-        const num = parseInt(rawArg, 10);
-        if (!isNaN(num)) {
-          // Se digitou entre 1 e 10 sem unidade, assume minutos (ex: 1 -> 60s, 2 -> 120s)
-          parsedSecs = (num > 0 && num <= 10) ? num * 60 : num;
+        const dur = parseHumanDuration(rawArg);
+        if (dur) {
+          parsedSecs = dur.totalSeconds;
+        } else {
+          const num = parseInt(rawArg, 10);
+          if (!isNaN(num)) {
+            // Se digitou entre 1 e 10 sem unidade, assume minutos (ex: 1 -> 60s, 2 -> 120s)
+            parsedSecs = (num > 0 && num <= 10) ? num * 60 : num;
+          }
         }
       }
 
@@ -98,7 +104,7 @@ module.exports = {
       }
 
       configManager.updatePluginConfig(from, 'welcome', { autoDeleteSeconds: parsedSecs, enabled: true });
-      const displayTime = parsedSecs === 0 ? 'Desativado (Permanente)' : (parsedSecs >= 60 ? `${Math.round(parsedSecs / 60)} minuto(s)` : `${parsedSecs} segundos`);
+      const displayTime = formatHumanDuration(parsedSecs, 'seconds', groupLang);
       return reply(`💾 *Boas-Vindas atualizado:* Auto-delete definido para *${displayTime}*.`);
     }
 
@@ -127,10 +133,11 @@ module.exports = {
 
     const status = configManager.isPluginEnabled(from, 'welcome') ? t('common.enabled') : t('common.disabled');
     const seconds = cfg.autoDeleteSeconds || 0;
+    const formattedTime = formatHumanDuration(seconds, 'seconds', groupLang);
     const currentMsg = cfg.message || t('welcome.default');
 
-    let help = `${t('welcome.status', { status, seconds })}\n📝 *Mensagem atual:*\n${currentMsg}`;
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 15\` (apaga após 15s)\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre wizard)`;
+    let help = `${t('welcome.status', { status, seconds, time: formattedTime })}\n📝 *Mensagem atual:*\n${currentMsg}`;
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 1m\` (apaga após 1 minuto) ou \`/bemvindo tempo 30s\`\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre assistente interativo)`;
     return reply(help);
   }
 };

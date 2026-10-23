@@ -5,6 +5,135 @@ const { t, resolveSchemaText } = require('../utils/i18n');
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
 
+/**
+ * Converte expressões humanas de tempo (ex: "3h", "3 horas", "30m", "1 dia", "30s") em minutos e segundos
+ * @param {string} text 
+ * @returns {{ totalMinutes: number, totalSeconds: number }|null}
+ */
+function parseHumanDuration(text) {
+  if (!text) return null;
+  const clean = text.toLowerCase().trim().replace(/^\[|\]$/g, '').trim();
+
+  // 1. Dias (ex: "1 dia", "2 dias", "1d", "2d")
+  const daysMatch = clean.match(/^(\d+(?:\.\d+)?)\s*(d|dias?|days?)$/i);
+  if (daysMatch) {
+    const d = parseFloat(daysMatch[1]);
+    return { totalMinutes: Math.round(d * 1440), totalSeconds: Math.round(d * 86400) };
+  }
+
+  // 2. Horas (ex: "3h", "3 horas", "3 hrs", "3hr", "3 h", "1.5h")
+  const hoursMatch = clean.match(/^(\d+(?:\.\d+)?)\s*(h|hrs?|horas?|hours?)$/i);
+  if (hoursMatch) {
+    const hours = parseFloat(hoursMatch[1]);
+    return { totalMinutes: Math.round(hours * 60), totalSeconds: Math.round(hours * 3600) };
+  }
+
+  // 3. Minutos (ex: "30m", "30 min", "30 minutos", "30mins")
+  const minMatch = clean.match(/^(\d+)\s*(m|min|mins|minutos?|minutes?)$/i);
+  if (minMatch) {
+    const mins = parseInt(minMatch[1], 10);
+    return { totalMinutes: mins, totalSeconds: mins * 60 };
+  }
+
+  // 4. Segundos (ex: "30s", "30 seg", "30 segundos", "30secs")
+  const secMatch = clean.match(/^(\d+)\s*(s|seg|segs|segundos?|seconds?|secs?)$/i);
+  if (secMatch) {
+    const secs = parseInt(secMatch[1], 10);
+    return { totalMinutes: Math.round(secs / 60), totalSeconds: secs };
+  }
+
+  return null;
+}
+
+/**
+ * Formata duração em texto natural amigável (ex: "3 horas", "1 hora", "30 segundos", "Desativado (Permanente)")
+ * @param {number} value 
+ * @param {string} unit 'minutes' | 'seconds'
+ * @param {string} lang 'pt' | 'es' | 'en'
+ * @returns {string}
+ */
+function formatHumanDuration(value, unit = 'minutes', lang = 'pt') {
+  const isPt = lang === 'pt';
+  const isEs = lang === 'es';
+
+  const numVal = parseInt(value, 10);
+  if (isNaN(numVal) || numVal === 0) {
+    if (isPt) return 'Desativado (Permanente)';
+    if (isEs) return 'Desactivado (Permanente)';
+    return 'Disabled (Permanent)';
+  }
+
+  let totalMinutes = unit === 'seconds' ? Math.round(numVal / 60) : numVal;
+  let totalSeconds = unit === 'seconds' ? numVal : numVal * 60;
+
+  if (unit === 'seconds' && totalSeconds < 60) {
+    if (isPt) return `${totalSeconds} segundos`;
+    if (isEs) return `${totalSeconds} segundos`;
+    return `${totalSeconds} seconds`;
+  }
+
+  if (totalMinutes >= 1440 && totalMinutes % 1440 === 0) {
+    const days = totalMinutes / 1440;
+    if (isPt) return days === 1 ? '1 dia' : `${days} dias`;
+    if (isEs) return days === 1 ? '1 día' : `${days} días`;
+    return days === 1 ? '1 day' : `${days} days`;
+  }
+
+  if (totalMinutes >= 60 && totalMinutes % 60 === 0) {
+    const hours = totalMinutes / 60;
+    if (isPt) return hours === 1 ? '1 hora' : `${hours} horas`;
+    if (isEs) return hours === 1 ? '1 hora' : `${hours} horas`;
+    return hours === 1 ? '1 hour' : `${hours} hours`;
+  }
+
+  if (totalMinutes > 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const remMin = totalMinutes % 60;
+    if (isPt) return `${hours}h e ${remMin}min`;
+    if (isEs) return `${hours}h y ${remMin}min`;
+    return `${hours}h ${remMin}m`;
+  }
+
+  if (isPt) return `${totalMinutes} minuto${totalMinutes > 1 ? 's' : ''}`;
+  if (isEs) return `${totalMinutes} minuto${totalMinutes > 1 ? 's' : ''}`;
+  return `${totalMinutes} minute${totalMinutes > 1 ? 's' : ''}`;
+}
+
+/**
+ * Formata o valor de um campo de configuração de forma humanizada e elegante para menus e resumos
+ * @param {any} val 
+ * @param {object} field 
+ * @param {string} lang 
+ * @returns {string}
+ */
+function formatFieldValue(val, field, lang = 'pt') {
+  if (val === undefined || val === null) return 'Padrão';
+
+  if (field.type === 'boolean') {
+    if (lang === 'es') return val ? 'Sí (Activado)' : 'No (Desactivado)';
+    if (lang === 'en') return val ? 'Yes (Enabled)' : 'No (Disabled)';
+    return val ? 'Sim (Ativado)' : 'Não (Desativado)';
+  }
+
+  if (field.type === 'choice' && Array.isArray(field.choices)) {
+    const matchChoice = field.choices.find(c => c.value === val);
+    if (matchChoice) return resolveSchemaText(matchChoice.label, lang);
+    if (field.unit === 'minutes' || field.unit === 'seconds') {
+      return formatHumanDuration(val, field.unit, lang);
+    }
+  }
+
+  if (field.unit === 'minutes' || field.unit === 'seconds') {
+    return formatHumanDuration(val, field.unit, lang);
+  }
+
+  if (Array.isArray(val)) {
+    return val.join(', ') || 'Nenhum';
+  }
+
+  return String(val);
+}
+
 class WizardEngine {
   /**
    * Inicia o fluxo de configuração interativa de um plugin
@@ -499,19 +628,9 @@ class WizardEngine {
     text += `Escolha qual etapa você deseja alterar:\n\n`;
 
     session.schema.fields.forEach((field, idx) => {
-      const qText = resolveSchemaText(field.question, lang).split('\n')[0].replace(/[?:]/g, '');
+      const qText = resolveSchemaText(field.question, lang).split('\n')[0].replace(/[?:]/g, '').trim();
       const currentVal = session.existingConfig[field.name];
-      let displayVal = 'Padrão';
-      if (currentVal !== undefined) {
-        if (field.type === 'choice' && Array.isArray(field.choices)) {
-          const matchChoice = field.choices.find(c => c.value === currentVal);
-          displayVal = matchChoice ? resolveSchemaText(matchChoice.label, lang) : String(currentVal);
-        } else if (Array.isArray(currentVal)) {
-          displayVal = currentVal.join(', ') || 'Nenhum';
-        } else {
-          displayVal = String(currentVal);
-        }
-      }
+      const displayVal = formatFieldValue(currentVal, field, lang);
       text += `*[${idx + 1}]* 📝 *${qText}*\n`;
       text += `    📌 _Atual: \`${displayVal}\`_\n\n`;
     });
@@ -585,43 +704,69 @@ class WizardEngine {
       // 2. Validação por tipo de campo
       switch (currentField.type) {
         case 'choice': {
-          const choiceIndex = parseInt(text, 10);
-          if (!isNaN(choiceIndex) && choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
-            finalValue = currentField.choices[choiceIndex - 1].value;
-          } else {
-            // Suporte inteligente a tempo se as choices forem de tempo (ex: 1m, 2m, 30s)
-            const lowText = text.toLowerCase().trim();
-            if (['1m', '1 min', '1 minuto', '60s', '60'].includes(lowText)) {
-              const c = currentField.choices.find(c => c.value === 60);
-              if (c) finalValue = c.value;
-            } else if (['30s', '30 seg', '30 segundos', '30'].includes(lowText)) {
-              const c = currentField.choices.find(c => c.value === 30);
-              if (c) finalValue = c.value;
-            } else if (['2m', '2 min', '2 minutos', '120s', '120'].includes(lowText)) {
-              const c = currentField.choices.find(c => c.value === 120);
-              if (c) finalValue = c.value;
-            } else if (['5m', '5 min', '5 minutos', '300s', '300'].includes(lowText)) {
-              const c = currentField.choices.find(c => c.value === 300);
-              if (c) finalValue = c.value;
-            } else if (['0', 'nao', 'não', 'nunca', 'desativado', 'desativar', 'permanente'].includes(lowText)) {
+          const cleanOption = trimmed.replace(/^\[|\]$/g, '').trim();
+
+          // 1. Se digitou APENAS o número da opção (ex: "1", "2", "[1]", "[2]")
+          if (/^\d+$/.test(cleanOption)) {
+            const choiceIndex = parseInt(cleanOption, 10);
+            if (choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
+              finalValue = currentField.choices[choiceIndex - 1].value;
+            }
+          }
+
+          // 2. Tenta parsing de tempo humano (ex: "3h", "1m", "30s", "2 horas", "1 min", "3 horas")
+          if (finalValue === null) {
+            const duration = parseHumanDuration(trimmed);
+            if (duration) {
+              const targetVal = currentField.unit === 'seconds' ? duration.totalSeconds : duration.totalMinutes;
+              const matchChoice = currentField.choices.find(c => c.value === targetVal);
+              if (matchChoice) {
+                finalValue = matchChoice.value;
+              } else {
+                finalValue = targetVal;
+              }
+            }
+          }
+
+          // 3. Suporte a palavras-chave (ex: "não", "permanente", "desativar", labels de opções em qualquer idioma)
+          if (finalValue === null) {
+            const lowText = trimmed.toLowerCase();
+            if (['0', 'nao', 'não', 'nunca', 'desativado', 'desativar', 'permanente', 'none'].includes(lowText)) {
               const c = currentField.choices.find(c => c.value === 0);
               if (c) finalValue = c.value;
-            }
-
-            if (finalValue === null) {
-              // Tenta match direto por string do valor
-              const found = currentField.choices.find(c => String(c.value).toLowerCase() === text.toLowerCase());
-              if (found) finalValue = found.value;
+            } else {
+              for (const c of currentField.choices) {
+                const labelPt = resolveSchemaText(c.label, 'pt').toLowerCase();
+                const labelEs = resolveSchemaText(c.label, 'es').toLowerCase();
+                const labelEn = resolveSchemaText(c.label, 'en').toLowerCase();
+                if (lowText === labelPt || lowText === labelEs || lowText === labelEn || String(c.value).toLowerCase() === lowText) {
+                  finalValue = c.value;
+                  break;
+                }
+              }
             }
           }
           break;
         }
 
         case 'boolean': {
-          const lower = text.toLowerCase().trim();
-          if (['sim', 's', 'yes', 'y', 'true', 'on', 'ativo', 'ativar', '1'].includes(lower)) {
+          const lower = text.toLowerCase().trim().replace(/^\[|\]$/g, '').trim();
+
+          const TRUE_VALUES = [
+            '1', '1.', 'sim', 's', 'si', 'sí', 'yes', 'y', 'true', 't', 
+            'ativo', 'ativar', 'ativado', 'on', 'ligar', 'ligado', 
+            'habilitar', 'habilitado', 'quero', 'apagar', 'com certeza', 'excluir', 'verdadeiro'
+          ];
+          const FALSE_VALUES = [
+            '2', '2.', 'não', 'nao', 'n', 'no', 'false', 'f', 
+            'inativo', 'desativar', 'desativado', 'off', 'desligar', 'desligado', 
+            'desabilitar', 'desabilitado', 'não apagar', 'nao apagar', 
+            'nao quero', 'não quero', 'manter', 'salvar', 'falso'
+          ];
+
+          if (TRUE_VALUES.includes(lower) || lower.startsWith('1') || lower.startsWith('sim') || lower.startsWith('si') || lower.startsWith('yes')) {
             finalValue = true;
-          } else if (['não', 'nao', 'n', 'no', 'false', 'off', 'inativo', 'desativar', '2'].includes(lower)) {
+          } else if (FALSE_VALUES.includes(lower) || lower.startsWith('2') || lower.startsWith('não') || lower.startsWith('nao') || lower.startsWith('no')) {
             finalValue = false;
           }
           break;
@@ -629,14 +774,16 @@ class WizardEngine {
 
         case 'number': {
           let parsed = NaN;
-          const lower = text.toLowerCase().trim();
-          if (/^\d+h$/i.test(lower)) {
-            parsed = parseInt(lower) * 60; // horas → minutos
-          } else if (/^\d+m$/i.test(lower)) {
-            parsed = parseInt(lower);
+          const trimmedText = text.trim();
+
+          // 1. Tenta parsing de tempo humano primeiro (ex: "3h", "1h", "30m", "45min", "2 horas", "30s")
+          const duration = parseHumanDuration(trimmedText);
+          if (duration) {
+            parsed = (currentField.unit === 'seconds') ? duration.totalSeconds : duration.totalMinutes;
           } else {
-            parsed = parseInt(text, 10);
+            parsed = parseInt(trimmedText, 10);
           }
+
           if (!isNaN(parsed)) {
             const min = currentField.min !== undefined ? currentField.min : -Infinity;
             const max = currentField.max !== undefined ? currentField.max : Infinity;
@@ -707,8 +854,9 @@ class WizardEngine {
 
       let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
       summaryText += `📋 *Configuração atualizada com sucesso:*\n`;
-      const valDisplay = Array.isArray(finalValue) ? (finalValue.length ? finalValue.join(', ') : 'Nenhum') : String(finalValue);
-      summaryText += `• *${currentField.name}:* \`${valDisplay}\`\n\n`;
+      const valDisplay = formatFieldValue(finalValue, currentField, lang);
+      const fieldTitle = resolveSchemaText(currentField.question, lang).split('\n')[0].replace(/[?:]/g, '').trim();
+      summaryText += `• *${fieldTitle}:* \`${valDisplay}\`\n\n`;
       summaryText += `${t(lang, 'common.saved')}`;
 
       await sendSafeMessage(sock, from, { text: summaryText }, { quoted: msg });
@@ -729,8 +877,10 @@ class WizardEngine {
       let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
       summaryText += `📋 *Resumo das configurações salvas:*\n`;
       for (const [key, val] of Object.entries(session.answers)) {
-        const valDisplay = Array.isArray(val) ? (val.length ? val.join(', ') : 'Nenhum') : String(val);
-        summaryText += `• *${key}:* \`${valDisplay}\`\n`;
+        const fieldObj = session.schema.fields.find(f => f.name === key);
+        const valDisplay = fieldObj ? formatFieldValue(val, fieldObj, lang) : String(val);
+        const fieldTitle = fieldObj ? resolveSchemaText(fieldObj.question, lang).split('\n')[0].replace(/[?:]/g, '').trim() : key;
+        summaryText += `• *${fieldTitle}:* \`${valDisplay}\`\n`;
       }
       summaryText += `\n${t(lang, 'common.saved')}`;
 
@@ -763,19 +913,11 @@ class WizardEngine {
 
     const currentVal = session.existingConfig[field.name];
     if (currentVal !== undefined) {
-      let displayVal = Array.isArray(currentVal) ? (currentVal.join(', ') || 'Nenhum') : String(currentVal);
-      if (field.type === 'choice' && Array.isArray(field.choices)) {
-        const matchChoice = field.choices.find(c => c.value === currentVal);
-        if (matchChoice) displayVal = resolveSchemaText(matchChoice.label, lang);
-      }
+      const displayVal = formatFieldValue(currentVal, field, lang);
       prompt += `${t(lang, 'wizard.current_val', { current: displayVal })}\n`;
       prompt += `💡 *Dica:* Envie *.* (ponto) para MANTER o valor atual.\n\n`;
     } else if (field.default !== undefined) {
-      let displayDef = Array.isArray(field.default) ? (field.default.join(', ') || 'Nenhum') : String(field.default);
-      if (field.type === 'choice' && Array.isArray(field.choices)) {
-        const matchDef = field.choices.find(c => c.value === field.default);
-        if (matchDef) displayDef = resolveSchemaText(matchDef.label, lang);
-      }
+      const displayDef = formatFieldValue(field.default, field, lang);
       prompt += `📌 *Valor padrão:* \`${displayDef}\`\n`;
       prompt += `💡 *Dica:* Envie *.* (ponto) para USAR o valor padrão.\n\n`;
     }
@@ -793,4 +935,7 @@ class WizardEngine {
 }
 
 const wizardEngine = new WizardEngine();
+wizardEngine.parseHumanDuration = parseHumanDuration;
+wizardEngine.formatHumanDuration = formatHumanDuration;
+wizardEngine.formatFieldValue = formatFieldValue;
 module.exports = wizardEngine;

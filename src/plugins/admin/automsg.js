@@ -1,5 +1,6 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { parseHumanDuration, formatHumanDuration } = wizardEngine;
 
 module.exports = {
   name: 'automsg',
@@ -33,15 +34,22 @@ module.exports = {
       },
       {
         name: 'intervalMinutes',
-        type: 'number',
+        type: 'choice',
         question: {
-          pt: 'Qual o intervalo em minutos entre cada envio? (Ex: 180 para 3 horas):',
-          es: '¿Cuál es el intervalo en minutos entre cada envío? (Ej: 180 para 3 horas):',
-          en: 'What is the interval in minutes between messages? (e.g. 180 for 3 hours):'
+          pt: 'Qual o intervalo de tempo entre cada envio do comunicado?',
+          es: '¿Cuál es el intervalo de tiempo entre cada envío del comunicado?',
+          en: 'What is the time interval between announcement messages?'
         },
-        default: 180,
-        min: 15,
-        max: 1440
+        choices: [
+          { value: 60, label: { pt: '1 hora', es: '1 hora', en: '1 hour' } },
+          { value: 120, label: { pt: '2 horas', es: '2 horas', en: '2 hours' } },
+          { value: 180, label: { pt: '3 horas (Recomendado)', es: '3 horas (Recomendado)', en: '3 hours (Recommended)' } },
+          { value: 360, label: { pt: '6 horas', es: '6 horas', en: '6 hours' } },
+          { value: 720, label: { pt: '12 horas', es: '12 horas', en: '12 hours' } },
+          { value: 1440, label: { pt: '24 horas (1 dia)', es: '24 horas (1 día)', en: '24 hours (1 day)' } }
+        ],
+        unit: 'minutes',
+        default: 180
       },
       {
         name: 'onlyIfActive',
@@ -56,11 +64,12 @@ module.exports = {
     ]
   },
 
-  async execute({ sock, msg, from, sender, args, reply, t, isGroup }) {
+  async execute({ sock, msg, from, sender, args, reply, t, lang, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'automsg') || {};
+    const groupLang = lang || configManager.getGroupLang(from);
 
     // Digitar /automsg sem argumentos (ou /automsg config) abre direto o assistente interativo!
     if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
@@ -73,8 +82,9 @@ module.exports = {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'automsg');
       }
       const minutes = cfg.intervalMinutes || 180;
+      const formattedTime = formatHumanDuration(minutes, 'minutes', groupLang);
       const alertMsg = cfg.message || 'Nenhuma mensagem configurada';
-      return reply(`${t('common.saved')}\n📢 *AutoMsg:* ATIVADO\n⏱️ *Intervalo:* a cada ${minutes} min\n💬 *Mensagem:* ${alertMsg}`);
+      return reply(`${t('common.saved')}\n📢 *AutoMsg:* ATIVADO\n⏱️ *Intervalo:* a cada ${formattedTime}\n💬 *Mensagem:* ${alertMsg}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {
@@ -82,26 +92,31 @@ module.exports = {
       return reply(t('common.saved') + '\n📢 *AutoMsg:* DESATIVADO');
     }
 
-    // Configuração direta: /automsg 120 <texto...> (primeiro arg é um número)
-    const parsedMinutes = parseInt(sub, 10);
+    // Configuração direta: /automsg 3h <texto...> ou /automsg 120 <texto...> (primeiro arg é tempo/número)
+    const durSub = parseHumanDuration(sub);
+    const parsedMinutes = durSub ? durSub.totalMinutes : parseInt(sub, 10);
     if (!isNaN(parsedMinutes) && parsedMinutes >= 5) {
       const customText = args.slice(1).join(' ').trim();
+      const formattedTime = formatHumanDuration(parsedMinutes, 'minutes', groupLang);
       if (!customText) {
         configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, enabled: true });
-        return reply(`💾 *AutoMsg atualizado:* Intervalo alterado para *${parsedMinutes} minutos*.`);
+        return reply(`💾 *AutoMsg atualizado:* Intervalo alterado para *a cada ${formattedTime}*.`);
       }
       configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, message: customText, enabled: true });
-      return reply(`💾 *AutoMsg atualizado e ATIVADO!*\n⏱️ *Intervalo:* a cada ${parsedMinutes} minutos\n💬 *Mensagem:*\n${customText}`);
+      return reply(`💾 *AutoMsg atualizado e ATIVADO!*\n⏱️ *Intervalo:* a cada ${formattedTime}\n💬 *Mensagem:*\n${customText}`);
     }
 
-    // Configuração direta de tempo: /automsg tempo 60
-    if (['tempo', 'intervalo', 'minutos', 'min'].includes(sub)) {
-      const minutesArg = parseInt(args[1], 10);
+    // Configuração direta de tempo: /automsg tempo 3h ou /automsg tempo 60
+    if (['tempo', 'intervalo', 'minutos', 'min', 'horas', 'hora'].includes(sub)) {
+      const rawArg = args.slice(1).join(' ').trim();
+      const dur = parseHumanDuration(rawArg);
+      const minutesArg = dur ? dur.totalMinutes : parseInt(rawArg, 10);
       if (isNaN(minutesArg) || minutesArg < 5) {
-        return reply('⚠️ Digite um intervalo válido em minutos (mínimo 5). Ex: `/automsg tempo 60`');
+        return reply('⚠️ Digite um intervalo válido. Ex: `/automsg tempo 3h` (3 horas) ou `/automsg tempo 30m` (30 minutos)');
       }
+      const formattedTime = formatHumanDuration(minutesArg, 'minutes', groupLang);
       configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: minutesArg, enabled: true });
-      return reply(`💾 *AutoMsg atualizado:* Intervalo definido para a cada *${minutesArg} minutos*.`);
+      return reply(`💾 *AutoMsg atualizado:* Intervalo definido para *a cada ${formattedTime}*.`);
     }
 
     // Configuração direta de texto: /automsg texto <texto...>
@@ -120,10 +135,11 @@ module.exports = {
 
     const status = configManager.isPluginEnabled(from, 'automsg') ? t('common.enabled') : t('common.disabled');
     const minutes = cfg.intervalMinutes || 180;
+    const formattedInterval = formatHumanDuration(minutes, 'minutes', groupLang);
     const alertMsg = cfg.message || 'Nenhuma mensagem configurada';
 
-    let help = t('automsg.status', { status, minutes, msg: alertMsg });
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 120 [texto]\` (define tempo e texto direto)\n• \`/automsg tempo 60\` (define minutos)\n• \`/automsg texto [mensagem]\` (define texto)\n• \`/automsg config\` (abre wizard)`;
+    let help = t('automsg.status', { status, interval: formattedInterval, msg: alertMsg });
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 3h [texto]\` (define horas/minutos e texto direto)\n• \`/automsg tempo 3h\` (define horas ou minutos)\n• \`/automsg texto [mensagem]\` (define texto)\n• \`/automsg config\` (abre assistente interativo)`;
     return reply(help);
   }
 };

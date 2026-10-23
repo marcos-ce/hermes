@@ -71,7 +71,7 @@ const dictionaries = {
 
     // Welcome
     'welcome.default': '👋 Olá @{user}, seja muito bem-vindo(a) ao *{group}*!\n\n📋 *Descrição:* {desc}',
-    'welcome.status': '👋 *Boas-Vindas:* {status}\n⏱️ *Auto-delete:* {seconds}s',
+    'welcome.status': '👋 *Boas-Vindas:* {status}\n⏱️ *Auto-delete:* {time}',
 
     // Warn
     'warn.added': '⚠️ @{user} recebeu uma advertência!\nMotivo: *{reason}*\nAdvertências: *{warns}/{max}*',
@@ -99,7 +99,7 @@ const dictionaries = {
     'schedule.status': '⏰ *Horários Automáticos:* {status}\n🔒 Fechar: *{close}* | 🔓 Abrir: *{open}*',
 
     // AutoMsg
-    'automsg.status': '📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* a cada {minutes} minutos\n💬 *Mensagem:* {msg}',
+    'automsg.status': '📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* a cada {interval}\n💬 *Mensagem:* {msg}',
 
     // Ban
     'ban.cannot_ban_admin': '⚠️ Não é permitido banir administradores do grupo.',
@@ -156,7 +156,7 @@ const dictionaries = {
     'wizard.invalid_input': '⚠️ Resposta inválida. Por favor, leia a pergunta e tente novamente.',
     'wizard.finished': '🎉 *Configuração de {plugin} concluída com sucesso!*',
     'wizard.choice_prompt': 'Escolha uma das opções abaixo:\n{choices}',
-    'wizard.boolean_prompt': 'Responda com *Sim* ou *Não*.'
+    'wizard.boolean_prompt': '*[1]* ✅ Sim (Ativado)\n*[2]* ❌ Não (Desativado)\n\n👉 Responda com *1* (Sim) ou *2* (Não)'
   },
 
   es: {
@@ -225,7 +225,7 @@ const dictionaries = {
 
     // Welcome
     'welcome.default': '👋 Hola @{user}, ¡bienvenido(a) a *{group}*!\n\n📋 *Descripción:* {desc}',
-    'welcome.status': '👋 *Bienvenida:* {status}\n⏱️ *Auto-borrado:* {seconds}s',
+    'welcome.status': '👋 *Bienvenida:* {status}\n⏱️ *Auto-borrado:* {time}',
 
     // Warn
     'warn.added': '⚠️ @{user} recibió una advertencia.\nMotivo: *{reason}*\nAdvertencias: *{warns}/{max}*',
@@ -253,7 +253,7 @@ const dictionaries = {
     'schedule.status': '⏰ *Horarios Automáticos:* {status}\n🔒 Cerrar: *{close}* | 🔓 Abrir: *{open}*',
 
     // AutoMsg
-    'automsg.status': '📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* cada {minutes} minutos\n💬 *Mensaje:* {msg}',
+    'automsg.status': '📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* cada {interval}\n💬 *Mensaje:* {msg}',
 
     // Ban
     'ban.cannot_ban_admin': '⚠️ No está permitido expulsar administradores del grupo.',
@@ -310,7 +310,7 @@ const dictionaries = {
     'wizard.invalid_input': '⚠️ Respuesta inválida. Por favor, lee la pregunta e inténtalo de nuevo.',
     'wizard.finished': '🎉 *¡Configuración de {plugin} finalizada con éxito!*',
     'wizard.choice_prompt': 'Elige una de las siguientes opciones:\n{choices}',
-    'wizard.boolean_prompt': '[1] Sí (Activado)\n[2] No (Desactivado)'
+    'wizard.boolean_prompt': '*[1]* ✅ Sí (Activado)\n*[2]* ❌ No (Desactivado)\n\n👉 Responde con *1* (Sí) o *2* (No)'
   },
 
   en: {
@@ -379,7 +379,7 @@ const dictionaries = {
 
     // Welcome
     'welcome.default': '👋 Hello @{user}, welcome to *{group}*!\n\n📋 *Description:* {desc}',
-    'welcome.status': '👋 *Welcome:* {status}\n⏱️ *Auto-delete:* {seconds}s',
+    'welcome.status': '👋 *Welcome:* {status}\n⏱️ *Auto-delete:* {time}',
 
     // Warn
     'warn.added': '⚠️ @{user} received a warning.\nReason: *{reason}*\nWarnings: *{warns}/{max}*',
@@ -407,7 +407,7 @@ const dictionaries = {
     'schedule.status': '⏰ *Automated Schedule:* {status}\n🔒 Close: *{close}* | 🔓 Open: *{open}*',
 
     // AutoMsg
-    'automsg.status': '📢 *AutoMsg:* {status}\n⏱️ *Interval:* every {minutes} minutes\n💬 *Message:* {msg}',
+    'automsg.status': '📢 *AutoMsg:* {status}\n⏱️ *Interval:* every {interval}\n💬 *Message:* {msg}',
 
     // Ban
     'ban.cannot_ban_admin': '⚠️ You cannot ban group administrators.',
@@ -464,7 +464,7 @@ const dictionaries = {
     'wizard.invalid_input': '⚠️ Invalid response. Please read the prompt and try again.',
     'wizard.finished': '🎉 *Configuration for {plugin} completed successfully!*',
     'wizard.choice_prompt': 'Choose one of the options below:\n{choices}',
-    'wizard.boolean_prompt': '[1] Yes (Enabled)\n[2] No (Disabled)'
+    'wizard.boolean_prompt': '*[1]* ✅ Yes (Enabled)\n*[2]* ❌ No (Disabled)\n\n👉 Reply with *1* (Yes) or *2* (No)'
   }
 };
 
