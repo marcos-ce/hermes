@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-admin-bot",
   "version": "2.0.0",
-  "description": "High-Performance WhatsApp Admin Bot with Wizard Engine, SaaS Licensing, i18n (PT/ES/EN) and Anti-Ban Protection",
+  "description": "High-Performance WhatsApp Admin Bot with Wizard Engine, i18n (PT/ES/EN) and Anti-Ban Protection",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
