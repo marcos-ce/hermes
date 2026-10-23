@@ -313,22 +313,13 @@ async function processSingleMessage(sock, msg) {
     isSuperAdmin = isSenderOwner;
   }
 
-  // Comando exclusivo do Dono
+  // Comando exclusivo do Dono (Silêncio total para membros comuns para evitar flood)
   if (plugin.ownerOnly && !isSenderOwner) {
-    console.log(`[AUTH] Comando exclusivo de dono negado para ${sender} (raw: ${rawSender}). Dono: ${settings.ownerNumber}`);
-    let help = `${translate('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``;
-    const lidToCheck = sender.endsWith('@lid') ? sender : (rawSender.endsWith('@lid') ? rawSender : '');
-    if (lidToCheck) {
-      const lidNum = lidToCheck.replace(/@.*$/, '').replace(/\D/g, '');
-      help += `\n\n💡 *Dica:* Seu WhatsApp está enviando mensagens com identificador @lid neste grupo. Adicione \`OWNER_LID=${lidNum}\` no seu arquivo \`.env\` para autorização direta instantânea!`;
-    }
-    await reply(help);
     return;
   }
 
-  // Comando exclusivo de Administradores
+  // Comando exclusivo de Administradores (Silêncio total para membros comuns para evitar flood)
   if (plugin.adminOnly && !isAdmin && !isSenderOwner) {
-    await reply(translate('common.no_permission_admin'));
     return;
   }
 

@@ -22,7 +22,7 @@ module.exports = {
     // ==========================================
     if (isPvDirect || sub === 'pv' || sub === 'dm') {
       if (!isOwner) {
-        return reply(t('common.no_permission_owner'));
+        return;
       }
       const state = (isPvDirect ? (args[0] || '') : (args[1] || '')).toLowerCase();
       if (state === 'on' || state === '1' || state === 'ativar') {
@@ -42,7 +42,7 @@ module.exports = {
     // ==========================================
     if (sub === 'list' || sub === 'lista') {
       if (!isOwner) {
-        return reply(t('common.no_permission_owner'));
+        return;
       }
       const allGroups = configManager.getAllGroups();
       if (allGroups.length === 0) {
@@ -79,7 +79,7 @@ module.exports = {
     // Banir / Desbanir Grupo via !bot
     // ==========================================
     if (sub === 'ban' || sub === 'bangrupo' || sub === 'banir') {
-      if (!isOwner) return reply(t('common.no_permission_owner'));
+      if (!isOwner) return;
       const targetJid = (args[1] && (args[1].includes('@g.us') || /^\d{15,25}$/.test(args[1])))
         ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
         : (isGroup ? from : null);
@@ -91,7 +91,7 @@ module.exports = {
     }
 
     if (sub === 'unban' || sub === 'desbanir') {
-      if (!isOwner) return reply(t('common.no_permission_owner'));
+      if (!isOwner) return;
       const targetJid = (args[1] && (args[1].includes('@g.us') || /^\d{15,25}$/.test(args[1])))
         ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
         : (isGroup ? from : null);
@@ -103,7 +103,7 @@ module.exports = {
     }
 
     if (sub === 'banidos' || sub === 'banned') {
-      if (!isOwner) return reply(t('common.no_permission_owner'));
+      if (!isOwner) return;
       const banned = configManager.getBannedGroups();
       if (!banned.length) return reply(t('bangroup.list_empty'));
       let txt = `${t('bangroup.list_title')}\n\n`;
@@ -119,13 +119,7 @@ module.exports = {
     }
 
     if (!canManageGroup) {
-      console.log(`[AUTH] Permissão negada no grupo ${from}. Remetente: ${sender}, Dono configurado: ${settings.ownerNumber}`);
-      let help = `${t('common.no_permission_owner')}\n\n🔍 *Seu ID detectado:* \`${sender}\``;
-      if (sender.endsWith('@lid')) {
-        const lidNum = sender.replace(/@.*$/, '').replace(/\D/g, '');
-        help += `\n\n💡 *Dica:* Seu WhatsApp está enviando mensagens com identificador @lid neste grupo. Adicione \`OWNER_LID=${lidNum}\` no seu arquivo \`.env\` para autorização direta instantânea!`;
-      }
-      return reply(help);
+      return;
     }
 
     // ==========================================
@@ -161,7 +155,7 @@ module.exports = {
     // ==========================================
     if (sub === 'add' || sub === 'somar' || sub === 'dias') {
       if (!isOwner) {
-        return reply(t('common.no_permission_owner'));
+        return;
       }
       const daysArg = parseInt(args[1], 10);
       if (isNaN(daysArg) || daysArg <= 0) {
