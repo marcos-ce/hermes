@@ -1,5 +1,6 @@
 const { cooldownCache } = require('./cache');
 const { cleanJid } = require('./jidResolver');
+const logger = require('./logger');
 
 /**
  * Aguarda um período em milissegundos
@@ -95,12 +96,24 @@ async function safeDelete(sock, jid, key) {
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const botJid = cleanJid(sock?.user?.id || '');
   const botLid = cleanJid(sock?.user?.lid || '');
+  const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+  let isFromMe = key.fromMe;
+  if (isFromMe === undefined) {
+    if (key.participant) {
+      const p = cleanJid(key.participant);
+      const pNum = p.replace(/@.*$/, '').replace(/\D/g, '');
+      isFromMe = (botJid && p === botJid) || (botLid && p === botLid) || (botNum && pNum === botNum);
+    } else {
+      isFromMe = true;
+    }
+  }
 
   // Clona e normaliza a chave
   const cleanKey = {
     remoteJid: key.remoteJid || jid,
     id: key.id,
-    fromMe: key.fromMe !== undefined ? key.fromMe : true
+    fromMe: Boolean(isFromMe)
   };
 
   if (key.participant) {
@@ -123,10 +136,12 @@ async function safeDelete(sock, jid, key) {
         remoteJid: jid,
         id: key.id,
         fromMe: false,
-        participant: cleanKey.participant || botJid || botLid
+        participant: cleanKey.participant
       };
       await sock.sendMessage(jid, { delete: adminRevokeKey });
-    } catch (_) {}
+    } catch (err) {
+      logger.warn({ err, jid, key: cleanKey }, 'Falha no admin revoke de mensagem em grupo');
+    }
   }
 }
 
@@ -141,7 +156,9 @@ async function safeKick(sock, jid, participants) {
   const list = Array.isArray(participants) ? participants : [participants];
   try {
     await sock.groupParticipantsUpdate(jid, list, 'remove');
-  } catch (_) {}
+  } catch (err) {
+    logger.warn({ err, jid, participants: list }, 'Falha ao remover participante no safeKick');
+  }
 }
 
 /**

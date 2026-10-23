@@ -1,5 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
+const { t } = require('../../utils/i18n');
 
 module.exports = {
   name: 'antifake',
@@ -8,6 +10,7 @@ module.exports = {
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
+  priority: 20,
 
   configSchema: {
     title: {
@@ -34,8 +37,35 @@ module.exports = {
     ]
   },
 
-  async execute({ sock, msg, from, sender, args, reply, t, isGroup }) {
-    if (!isGroup) return reply(t('common.group_only'));
+  /**
+   * Hook passivo: monitora novos membros e expulsa se o DDI não for autorizado
+   */
+  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, action }) {
+    if (action !== 'add') return false;
+
+    const antifakeCfg = configManager.getPluginConfig(groupJid, 'antifake');
+    if (antifakeCfg && antifakeCfg.enabled) {
+      const allowedDdis = Array.isArray(antifakeCfg.allowedDdis) && antifakeCfg.allowedDdis.length > 0
+        ? antifakeCfg.allowedDdis
+        : ['55', '351', '1', '34', '54', '52'];
+
+      const hasValidDdi = allowedDdis.some(ddi => participantNumber.startsWith(ddi.replace(/\D/g, '')));
+      if (!hasValidDdi) {
+        // Número estrangeiro não permitido -> Ban imediato
+        await safeKick(sock, groupJid, targetGroupJid);
+        await sendSafeMessage(sock, groupJid, {
+          text: t(lang, 'antifake.detected', { user: participantNumber }),
+          mentions: [targetGroupJid, targetPhoneJid]
+        });
+        return { stop: true }; // Interrompe próximos plugins (como welcome)
+      }
+    }
+
+    return false;
+  },
+
+  async execute({ sock, msg, from, sender, args, reply, t: translate, isGroup }) {
+    if (!isGroup) return reply(translate('common.group_only'));
 
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'antifake') || {};
@@ -51,12 +81,12 @@ module.exports = {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'antifake');
       }
       const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
-      return reply(`${t('common.saved')}\n🎭 *AntiFake:* ATIVADO\n🌍 *DDIs permitidos:* \`${ddis}\``);
+      return reply(`${translate('common.saved')}\n🎭 *AntiFake:* ATIVADO\n🌍 *DDIs permitidos:* \`${ddis}\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'antifake', false);
-      return reply(t('common.saved') + '\n🎭 *AntiFake:* DESATIVADO');
+      return reply(translate('common.saved') + '\n🎭 *AntiFake:* DESATIVADO');
     }
 
     // Configuração direta de DDIs: /antifake 55 ou /antifake 55 351 1
@@ -66,14 +96,10 @@ module.exports = {
       return reply(`💾 *AntiFake atualizado e ATIVADO!*\n🌍 *DDIs permitidos:* \`${ddiCandidates.join(', ')}\``);
     }
 
-    if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'antifake');
-    }
-
-    const status = configManager.isPluginEnabled(from, 'antifake') ? t('common.enabled') : t('common.disabled');
+    const status = configManager.isPluginEnabled(from, 'antifake') ? translate('common.enabled') : translate('common.disabled');
     const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
 
-    let help = t('antifake.status', { status, ddis });
+    let help = translate('antifake.status', { status, ddis });
     help += `\n\n💡 *Comandos Diretos:*\n• \`/antifake on\` ou \`/antifake off\`\n• \`/antifake 55\` (permite apenas Brasil)\n• \`/antifake 55 351 1\` (permite Brasil, Portugal e EUA)\n• \`/antifake config\` (abre wizard)`;
     return reply(help);
   }

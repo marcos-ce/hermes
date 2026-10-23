@@ -24,6 +24,8 @@ module.exports = {
   ownerOnly: true,
   adminOnly: false,
   botAdminRequired: false,
+  allowWhenBanned: true,
+  allowWhenInactive: true,
 
   async execute({ _sock, _msg, from, _sender, args, command, reply, t: translate, isGroup }) {
     const cmd = (command || '').toLowerCase();

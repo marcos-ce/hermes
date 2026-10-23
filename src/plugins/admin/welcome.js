@@ -1,5 +1,9 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { getGroupMetadata } = require('../../utils/jidResolver');
+const { sendSafeMessage, safeDelete } = require('../../utils/antiBan');
+const { t } = require('../../utils/i18n');
+const logger = require('../../utils/logger');
 const { parseHumanDuration, formatHumanDuration } = wizardEngine;
 
 module.exports = {
@@ -9,6 +13,7 @@ module.exports = {
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: false,
+  priority: 50,
 
   configSchema: {
     title: {
@@ -18,7 +23,7 @@ module.exports = {
     },
     description: {
       pt: 'Envia mensagem personalizada quando novos membros entram',
-      es: 'Envía mensaje personalizado cuando entran nuevos miembros',
+      es: 'Envía mensaje personalizado cuando entran novos membros',
       en: 'Sends custom message when new members join'
     },
     fields: [
@@ -52,8 +57,66 @@ module.exports = {
     ]
   },
 
-  async execute({ sock, msg, from, sender, args, reply, t, lang, isGroup }) {
-    if (!isGroup) return reply(t('common.group_only'));
+  /**
+   * Hook passivo: envia mensagem e foto de boas-vindas quando novos membros entram
+   */
+  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, action }) {
+    if (action !== 'add') return false;
+
+    const welcomeCfg = configManager.getPluginConfig(groupJid, 'welcome');
+    if (!welcomeCfg || !welcomeCfg.enabled) return false;
+
+    try {
+      const metadata = await getGroupMetadata(sock, groupJid);
+      const groupName = metadata?.subject || 'Grupo';
+      const groupDesc = metadata?.desc || '';
+
+      let welcomeText = welcomeCfg.message || t(lang, 'welcome.default');
+      welcomeText = welcomeText
+        .replace(/\{user\}/g, `@${participantNumber}`)
+        .replace(/\{group\}/g, groupName)
+        .replace(/\{desc\}/g, groupDesc);
+
+      // Tenta obter a foto do perfil do grupo para enriquecer as boas-vindas
+      let ppUrl = null;
+      try {
+        ppUrl = await sock.profilePictureUrl(groupJid, 'image');
+      } catch (_) {
+        ppUrl = null;
+      }
+
+      const messagePayload = {
+        mentions: [targetGroupJid, targetPhoneJid]
+      };
+
+      if (ppUrl) {
+        messagePayload.image = { url: ppUrl };
+        messagePayload.caption = welcomeText;
+      } else {
+        messagePayload.text = welcomeText;
+      }
+
+      const sentMsg = await sendSafeMessage(sock, groupJid, messagePayload);
+
+      // Auto-delete configurável em segundos
+      let autoDeleteSecs = parseInt(welcomeCfg.autoDeleteSeconds, 10);
+      if (autoDeleteSecs > 0 && sentMsg?.key) {
+        if (autoDeleteSecs < 5) {
+          autoDeleteSecs = 60;
+        }
+        setTimeout(async () => {
+          await safeDelete(sock, groupJid, sentMsg.key);
+        }, autoDeleteSecs * 1000);
+      }
+    } catch (err) {
+      logger.error({ err, groupJid }, 'Erro ao disparar mensagem de boas-vindas');
+    }
+
+    return true;
+  },
+
+  async execute({ sock, msg, from, sender, args, reply, t: translate, lang, isGroup }) {
+    if (!isGroup) return reply(translate('common.group_only'));
 
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'welcome') || {};
@@ -71,12 +134,12 @@ module.exports = {
       }
       const secs = cfg.autoDeleteSeconds || 0;
       const formattedTime = formatHumanDuration(secs, 'seconds', groupLang);
-      return reply(`${t('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${formattedTime}`);
+      return reply(`${translate('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${formattedTime}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'welcome', false);
-      return reply(t('common.saved') + '\n👋 *Boas-Vindas:* DESATIVADO');
+      return reply(translate('common.saved') + '\n👋 *Boas-Vindas:* DESATIVADO');
     }
 
     // Configuração direta de tempo de auto-delete
@@ -127,16 +190,12 @@ module.exports = {
       return reply(`💾 *Boas-Vindas atualizado!*\n\n📝 *Novo texto:* \n${customText}\n\n💡 *Tags suportadas:* \`{user}\` (menção), \`{group}\` (nome do grupo), \`{desc}\` (regras).`);
     }
 
-    if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'welcome');
-    }
-
-    const status = configManager.isPluginEnabled(from, 'welcome') ? t('common.enabled') : t('common.disabled');
+    const status = configManager.isPluginEnabled(from, 'welcome') ? translate('common.enabled') : translate('common.disabled');
     const seconds = cfg.autoDeleteSeconds || 0;
     const formattedTime = formatHumanDuration(seconds, 'seconds', groupLang);
-    const currentMsg = cfg.message || t('welcome.default');
+    const currentMsg = cfg.message || translate('welcome.default');
 
-    let help = `${t('welcome.status', { status, seconds, time: formattedTime })}\n📝 *Mensagem atual:*\n${currentMsg}`;
+    let help = `${translate('welcome.status', { status, seconds, time: formattedTime })}\n📝 *Mensagem atual:*\n${currentMsg}`;
     help += `\n\n💡 *Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 1m\` (apaga após 1 minuto) ou \`/bemvindo tempo 30s\`\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre assistente interativo)`;
     return reply(help);
   }

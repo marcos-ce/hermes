@@ -116,10 +116,6 @@ module.exports = {
       return reply(`💾 *AntiFlood atualizado e ATIVADO!*\n⚡ *Limite Flood:* \`${parsedMsgs} mensagens em 5s\`\n🛡️ *Limite Anti-Trava:* \`${parsedChars} caracteres\``);
     }
 
-    if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'antiflood');
-    }
-
     const status = configManager.isPluginEnabled(from, 'antiflood') ? t('common.enabled') : t('common.disabled');
     const msgs = cfg.maxMessages || 6;
     const chars = cfg.maxChars || 2500;

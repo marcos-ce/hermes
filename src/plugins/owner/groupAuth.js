@@ -10,6 +10,7 @@ module.exports = {
   ownerOnly: false, // Checado dinamicamente conforme authMode no execute
   adminOnly: false,
   botAdminRequired: false,
+  allowWhenInactive: true,
 
   async execute({ sock, _msg, from, sender, args, command, reply, t, isOwner, isAdmin, isGroup }) {
     const cmd = (command || '').toLowerCase();

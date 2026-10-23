@@ -1,4 +1,5 @@
 const configManager = require('./configManager');
+const pluginLoader = require('./pluginLoader');
 const settings = require('../config/settings');
 const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
 const { t } = require('../utils/i18n');
@@ -88,66 +89,26 @@ class Scheduler {
 
         const lang = group.lang || 'pt';
 
-        // 1. Verificação do Plugin Schedule (!horarios)
-        const scheduleCfg = configManager.getPluginConfig(groupJid, 'schedule');
-        if (scheduleCfg && scheduleCfg.enabled) {
-          const closeTime = scheduleCfg.closeTime;
-          const openTime = scheduleCfg.openTime;
+        // Despacha dinamicamente para todos os plugins que possuem rotina agendada (onSchedule)
+        for (const plugin of pluginLoader.onScheduleHooks) {
+          const cfg = configManager.getPluginConfig(groupJid, plugin.name);
+          if (!cfg || !cfg.enabled) continue;
 
-          // Fechar grupo no horário agendado
-          if (closeTime && closeTime === currentHHMM && closeTime !== '0') {
-            const execKey = `${groupJid}:close:${currentDateKey}:${currentHHMM}`;
-            if (!this.lastExecutedSchedule.has(execKey)) {
-              this.lastExecutedSchedule.add(execKey);
-              executionQueue.push({
-                type: 'schedule_close',
-                groupJid,
-                lang
-              });
-            }
-          }
-
-          // Abrir grupo no horário agendado
-          if (openTime && openTime === currentHHMM && openTime !== '0') {
-            const execKey = `${groupJid}:open:${currentDateKey}:${currentHHMM}`;
-            if (!this.lastExecutedSchedule.has(execKey)) {
-              this.lastExecutedSchedule.add(execKey);
-              executionQueue.push({
-                type: 'schedule_open',
-                groupJid,
-                lang
-              });
-            }
-          }
-        }
-
-        // 2. Verificação do Plugin AutoMsg (!automsg)
-        const automsgCfg = configManager.getPluginConfig(groupJid, 'automsg');
-        if (automsgCfg && automsgCfg.enabled && automsgCfg.message) {
-          const intervalMs = (automsgCfg.intervalMinutes || 180) * 60 * 1000;
-          const lastSent = this.lastAutoMsgTimes.get(groupJid) || automsgCfg.lastSent || 0;
-
-          if (lastSent === 0) {
-            // Primeiro boot: inicializa o marco temporal para aguardar o intervalo completo antes de disparar
-            this.lastAutoMsgTimes.set(groupJid, Date.now());
-            configManager.updatePluginConfig(groupJid, 'automsg', { lastSent: Date.now() });
-          } else {
-            const timeSinceLast = Date.now() - lastSent;
-
-            if (timeSinceLast >= intervalMs) {
-              const lastActivity = group.lastActivity || 0;
-              const onlyIfActive = automsgCfg.onlyIfActive !== false;
-
-              // Se onlyIfActive estiver ativado, só envia se houver atividade desde o último envio
-              if (!onlyIfActive || lastActivity > lastSent) {
-                executionQueue.push({
-                  type: 'automsg',
-                  groupJid,
-                  message: automsgCfg.message,
-                  lang
-                });
-              }
-            }
+          try {
+            await plugin.onSchedule({
+              sock: this.sock,
+              groupJid,
+              group,
+              config: cfg,
+              currentHHMM,
+              currentDateKey,
+              lang,
+              queueTask: (task) => executionQueue.push(task),
+              lastExecuted: this.lastExecutedSchedule,
+              lastAutoMsgTimes: this.lastAutoMsgTimes
+            });
+          } catch (err) {
+            logger.error({ err, pluginName: plugin.name }, 'Erro no hook onSchedule do plugin');
           }
         }
       }
@@ -160,27 +121,11 @@ class Scheduler {
         await randomDelay(1500, 3500);
 
         try {
-          switch (item.type) {
-            case 'schedule_close':
-              await this.sock.groupSettingUpdate(item.groupJid, 'announcement');
-              await sendSafeMessage(this.sock, item.groupJid, { text: t(item.lang, 'schedule.closed') });
-              break;
-
-            case 'schedule_open':
-              await this.sock.groupSettingUpdate(item.groupJid, 'not_announcement');
-              await sendSafeMessage(this.sock, item.groupJid, { text: t(item.lang, 'schedule.opened') });
-              break;
-
-            case 'automsg':
-              await sendSafeMessage(this.sock, item.groupJid, { text: item.message });
-              this.lastAutoMsgTimes.set(item.groupJid, Date.now());
-              configManager.updatePluginConfig(item.groupJid, 'automsg', { lastSent: Date.now() });
-              break;
-
-            case 'license_expired':
-              await sendSafeMessage(this.sock, item.groupJid, { text: t(item.lang, 'saas.license_expired') });
-              configManager.markExpiryNotified(item.groupJid, true);
-              break;
+          if (typeof item.run === 'function') {
+            await item.run();
+          } else if (item.type === 'license_expired') {
+            await sendSafeMessage(this.sock, item.groupJid, { text: t(item.lang, 'saas.license_expired') });
+            configManager.markExpiryNotified(item.groupJid, true);
           }
         } catch (err) {
           logger.warn({ err, item }, 'Falha ao executar ação escalonada no Scheduler');

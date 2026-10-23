@@ -55,6 +55,9 @@ class PluginLoader {
 
     /** @type {Array<object>} Plugins que possuem hook onParticipantsUpdate */
     this.onParticipantsUpdateHooks = [];
+
+    /** @type {Array<object>} Plugins que possuem hook onSchedule */
+    this.onScheduleHooks = [];
   }
 
   /**
@@ -66,6 +69,7 @@ class PluginLoader {
     this.schemas.clear();
     this.onMessageHooks = [];
     this.onParticipantsUpdateHooks = [];
+    this.onScheduleHooks = [];
 
     if (!fs.existsSync(this.pluginsDir)) {
       logger.warn(`Diretório de plugins não encontrado: ${this.pluginsDir}`);
@@ -85,12 +89,31 @@ class PluginLoader {
       }
     }
 
-    // Registra mapeamento canônico de números atrelados aos comandos
+    // Ordena os hooks de atualização de participantes por prioridade declarada (menor número = roda primeiro)
+    this.onParticipantsUpdateHooks.sort((a, b) => {
+      const prioA = typeof a.priority === 'number' ? a.priority : 100;
+      const prioB = typeof b.priority === 'number' ? b.priority : 100;
+      return prioA - prioB;
+    });
+
+    // 1. Registra números declarados diretamente no próprio arquivo do plugin (prioridade ao plugin)
+    for (const [, plugin] of this.commands.entries()) {
+      if (plugin.cmdNumber) {
+        const numStr = String(plugin.cmdNumber);
+        this.aliases.set(numStr, plugin);
+        if (!Array.isArray(plugin.aliases)) plugin.aliases = [];
+        if (!plugin.aliases.includes(numStr)) {
+          plugin.aliases.push(numStr);
+        }
+      }
+    }
+
+    // 2. Registra mapeamento canônico de fallback para plugins que não declararam cmdNumber
     let nextAvailableNumber = 23;
 
     for (const [numStr, cmdName] of Object.entries(COMMAND_NUMBER_MAP)) {
       const plugin = this.commands.get(cmdName.toLowerCase());
-      if (plugin) {
+      if (plugin && !plugin.cmdNumber) {
         plugin.cmdNumber = parseInt(numStr, 10);
         this.aliases.set(numStr, plugin);
         if (!Array.isArray(plugin.aliases)) plugin.aliases = [];
@@ -100,10 +123,13 @@ class PluginLoader {
       }
     }
 
-    // Para qualquer plugin adicional que não estiver no mapa fixo, atribui número sequencial automático
-    for (const [cmdName, plugin] of this.commands.entries()) {
+    // 3. Para qualquer plugin adicional que ainda não tiver número, atribui número sequencial automático
+    for (const [, plugin] of this.commands.entries()) {
       if (!plugin.cmdNumber) {
-        while (Object.keys(COMMAND_NUMBER_MAP).includes(String(nextAvailableNumber))) {
+        while (
+          Object.keys(COMMAND_NUMBER_MAP).includes(String(nextAvailableNumber)) ||
+          this.aliases.has(String(nextAvailableNumber))
+        ) {
           nextAvailableNumber++;
         }
         const numStr = String(nextAvailableNumber++);
@@ -116,7 +142,9 @@ class PluginLoader {
       }
     }
 
-    logger.info(`Plugins carregados: ${this.commands.size} comandos, ${this.aliases.size} aliases (incluindo atalhos numéricos), ${this.schemas.size} schemas.`);
+    logger.info(
+      `Plugins carregados: ${this.commands.size} comandos, ${this.aliases.size} aliases, ${this.schemas.size} schemas, ${this.onScheduleHooks.length} rotinas agendadas.`
+    );
   }
 
   /**
@@ -164,6 +192,10 @@ class PluginLoader {
 
       if (typeof plugin.onParticipantsUpdate === 'function') {
         this.onParticipantsUpdateHooks.push(plugin);
+      }
+
+      if (typeof plugin.onSchedule === 'function') {
+        this.onScheduleHooks.push(plugin);
       }
     } catch (err) {
       logger.error({ err, filePath }, 'Erro ao carregar arquivo de plugin');

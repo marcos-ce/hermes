@@ -37,7 +37,7 @@ module.exports = {
           if (plugin.category === 'owner' || plugin.ownerOnly) continue; // Nunca expõe comandos de dono em grupos
           if (['menu', 'config'].includes(name)) continue;
 
-          const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name);
+          const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name) || plugin.isDirectCommand;
           if (!isUtility) continue;
 
           const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;

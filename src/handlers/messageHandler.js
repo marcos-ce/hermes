@@ -151,43 +151,6 @@ async function processSingleMessage(sock, msg) {
     }
   }
 
-  // ========================================================
-  // Trava de Grupo Banido (Silêncio Total: bot fica 100% mudo e invisível)
-  // ========================================================
-  if (isGroup && configManager.isGroupBanned(from)) {
-    // Se o grupo está banido, o bot fica totalmente mudo e invisível.
-    // Apenas o Dono do bot pode enviar comando para desbanir o grupo:
-    if (!isSenderOwner) {
-      return; // Silêncio total absoluto para todos os membros e administradores
-    }
-
-    const lower = text.toLowerCase().trim();
-    const tempPrefix = configManager.getGroupPrefix(from);
-    const prefixes = [tempPrefix, '!', '/', ''];
-    let isUnbanCmd = false;
-
-    for (const p of prefixes) {
-      const body = p ? (lower.startsWith(p) ? lower.slice(p.length).trim() : null) : lower;
-      if (body && (
-        body.startsWith('desbanirgrupo') ||
-        body.startsWith('unbangroup') ||
-        body.startsWith('desbloqueargrupo') ||
-        body.startsWith('unblockgroup') ||
-        body.startsWith('desbangp') ||
-        body.startsWith('unbangp') ||
-        body.startsWith('desbanir') ||
-        (body.startsWith('bot') && (body.includes('unban') || body.includes('desbanir')))
-      )) {
-        isUnbanCmd = true;
-        break;
-      }
-    }
-
-    if (!isUnbanCmd) {
-      return; // Silêncio total no grupo banido para qualquer outra conversa do Dono
-    }
-  }
-
   // Define prefixo e idioma do contexto
   const groupPrefix = isGroup ? configManager.getGroupPrefix(from) : settings.defaultPrefix;
   const groupLang = isGroup ? configManager.getGroupLang(from) : settings.defaultLang;
@@ -199,96 +162,91 @@ async function processSingleMessage(sock, msg) {
   const translate = (key, vars = {}) => t(groupLang, key, vars);
 
   // ========================================================
-  // 2. Verificação de Grupo Ativo e Licença SaaS
+  // Resolução Dinâmica de Prefixo e Comando (Totalmente Desacoplada)
   // ========================================================
-  let matchedActivationPrefix = null;
+  let effectivePrefix = null;
+  let rawBody = '';
 
-  if (isGroup) {
-    const isEnabled = configManager.isGroupEnabled(from);
-    
-    // Suporta o prefixo do grupo, menção ao bot e prefixos universais (! e /) para comandos de ativação
-    const possiblePrefixes = Array.from(new Set([
-      groupPrefix,
-      isMentionPrefix ? mentionPrefixStr : '',
-      '!',
-      '/',
-      ''
-    ]));
-    for (const p of possiblePrefixes) {
-      if (p === '' && isSenderOwner) {
-        const lower = text.toLowerCase().trim();
-        if (
-          lower.startsWith('bot on') ||
-          lower.startsWith('ativar') ||
-          lower.startsWith('bot status') ||
-          lower.startsWith('desbanirgrupo') ||
-          lower.startsWith('unbangroup') ||
-          lower.startsWith('desbloqueargrupo') ||
-          lower.startsWith('unblockgroup') ||
-          lower.startsWith('desbangp') ||
-          lower.startsWith('unbangp') ||
-          lower.startsWith('bangrupo') ||
-          lower.startsWith('bangroup') ||
-          lower.startsWith('bangp') ||
-          lower.startsWith('gruposbanidos') ||
-          lower.startsWith('gpsbanidos') ||
-          lower.startsWith('bannedgroups')
-        ) {
-          matchedActivationPrefix = '';
-          break;
-        }
-      } else if (p && text.startsWith(p)) {
-        let body = text.slice(p.length).trim().toLowerCase();
-        if (body.startsWith('/') || body.startsWith('!')) {
-          body = body.slice(1).trim();
-        }
-        if (
-          body.startsWith('bot') ||
-          body.startsWith('ativar') ||
-          body.startsWith('activar') ||
-          body.startsWith('activate') ||
-          body.startsWith('licenca') ||
-          body.startsWith('licencia') ||
-          body.startsWith('desbanirgrupo') ||
-          body.startsWith('unbangroup') ||
-          body.startsWith('desbloqueargrupo') ||
-          body.startsWith('unblockgroup') ||
-          body.startsWith('desbangp') ||
-          body.startsWith('unbangp') ||
-          body.startsWith('bangrupo') ||
-          body.startsWith('bangroup') ||
-          body.startsWith('bangp') ||
-          body.startsWith('gruposbanidos') ||
-          body.startsWith('gpsbanidos') ||
-          body.startsWith('bannedgroups')
-        ) {
-          matchedActivationPrefix = p;
-          break;
-        }
+  if (isMentionPrefix) {
+    effectivePrefix = mentionPrefixStr;
+    rawBody = text.slice(mentionPrefixLength).trim();
+    if (rawBody.startsWith(groupPrefix) || rawBody.startsWith('/') || rawBody.startsWith('!')) {
+      rawBody = rawBody.slice(1).trim();
+    }
+    // Se o usuário apenas mencionou o bot sem comando ("@bot")
+    if (!rawBody && isGroup) {
+      const adminStatus = await checkAdminStatus(sock, from, sender);
+      if (adminStatus.isAdmin || isSenderOwner) {
+        await reply(`🤖 *Hermes Bot*\n📌 *Prefixo atual:* \`${groupPrefix}\`\n👉 Envie *${groupPrefix}menu* ou *@bot menu* para abrir o painel de configurações e comandos!`);
       }
+      return;
+    }
+  } else if (text.startsWith(groupPrefix)) {
+    effectivePrefix = groupPrefix;
+    rawBody = text.slice(groupPrefix.length).trim();
+  } else if (!isGroup && (text.startsWith('/') || text.startsWith('!'))) {
+    effectivePrefix = text[0];
+    rawBody = text.slice(1).trim();
+  } else if (isSenderOwner && (text.startsWith('/') || text.startsWith('!'))) {
+    effectivePrefix = text[0];
+    rawBody = text.slice(1).trim();
+  } else if (isSenderOwner && isGroup) {
+    // Permite que o Dono envie comandos mesmo sem prefixo em emergências (ex: "bot on", "desbangp")
+    const firstWord = text.split(/\s+/)[0].toLowerCase();
+    const probe = pluginLoader.findCommand(firstWord);
+    if (probe && (probe.ownerOnly || probe.allowWhenInactive || probe.allowWhenBanned)) {
+      effectivePrefix = '';
+      rawBody = text.trim();
+    }
+  }
+
+  const [commandTrigger, ...args] = rawBody ? rawBody.split(/\s+/) : ['', []];
+  const commandArgsText = commandTrigger ? rawBody.slice(commandTrigger.length).trim() : '';
+  const plugin = commandTrigger ? pluginLoader.findCommand(commandTrigger) : null;
+
+  // ========================================================
+  // Trava de Grupo Banido (Silêncio Total: bot fica 100% mudo e invisível)
+  // ========================================================
+  if (isGroup && configManager.isGroupBanned(from)) {
+    // Se o grupo está banido, o bot fica totalmente mudo e invisível.
+    // Apenas o Dono do bot pode enviar comando para desbanir o grupo:
+    if (!isSenderOwner) {
+      return; // Silêncio total absoluto para todos os membros e administradores
     }
 
-    const isActivatingCmd = matchedActivationPrefix !== null;
+    // Apenas permite passar se o plugin declarar expressamente allowWhenBanned: true
+    if (!plugin || !plugin.allowWhenBanned) {
+      return;
+    }
+  }
 
-    if (!isEnabled && !isActivatingCmd) {
-      // Licença expirada com aviso único
-      if (configManager.isGroupExpired(from)) {
-        const group = configManager.getGroup(from);
-        if (group && !group.expiryNotified) {
-          configManager.markExpiryNotified(from, true);
-          await reply(translate('saas.license_expired'));
-        }
+  // ========================================================
+  // 2. Verificação de Grupo Ativo e Licença SaaS
+  // ========================================================
+  if (isGroup) {
+    const isEnabled = configManager.isGroupEnabled(from);
+
+    if (!isEnabled) {
+      // Se for um comando com permissão declarada de execução quando inativo (ex: groupAuth !bot on)
+      if (plugin && plugin.allowWhenInactive) {
+        // Permite seguir para a execução do comando de ativação/gestão
       } else {
-        // Se alguém tentar usar comandos em um grupo não ativado, orienta como ativar
-        const isCmd = text.startsWith(groupPrefix) || text.startsWith('/') || text.startsWith('!');
-        if (isCmd && text.length >= 2) {
+        // Licença expirada com aviso único
+        if (configManager.isGroupExpired(from)) {
+          const group = configManager.getGroup(from);
+          if (group && !group.expiryNotified) {
+            configManager.markExpiryNotified(from, true);
+            await reply(translate('saas.license_expired'));
+          }
+        } else if (plugin) {
+          // Se alguém tentar usar comandos comuns em um grupo não ativado, orienta como ativar
           const adminStatus = await checkAdminStatus(sock, from, sender);
           if (isSenderOwner || adminStatus.isAdmin) {
             await reply(`⚠️ *Grupo Não Ativado*\nO bot está conectado ao grupo, mas ainda não foi ativado.\n\n👉 Para ativar o bot neste grupo, digite:\n*${groupPrefix}bot on* (ou *${groupPrefix}ativar*)`);
           }
         }
+        return;
       }
-      return;
     }
 
     // Registra atividade recente do grupo para o AutoMsg
@@ -329,7 +287,7 @@ async function processSingleMessage(sock, msg) {
   const activeSession = wizardCache.get(wizardKey) || (rawSender ? wizardCache.get(`${from}:${rawSender}`) : null);
 
   // Se existe sessão do Wizard ativa e o texto NÃO é um comando com prefixo ou menção
-  const isExplicitCommand = text.startsWith(groupPrefix) || isMentionPrefix;
+  const isExplicitCommand = effectivePrefix !== null && effectivePrefix !== '';
   if (activeSession && !isExplicitCommand) {
     const intercepted = await wizardEngine.handleInput(sock, msg, from, sender, text);
     if (intercepted) {
@@ -337,40 +295,8 @@ async function processSingleMessage(sock, msg) {
     }
   }
 
-  // ========================================================
-  // 5. Checagem de Prefixo e Resolução de Comandos
-  // ========================================================
-  let effectivePrefix = groupPrefix;
-  let rawBody = '';
-
-  if (isMentionPrefix) {
-    effectivePrefix = mentionPrefixStr;
-    rawBody = text.slice(mentionPrefixLength).trim();
-    // Se o usuário digitou "@bot /menu" ou "@bot !ping", remove o símbolo redundante
-    if (rawBody.startsWith(groupPrefix) || rawBody.startsWith('/') || rawBody.startsWith('!')) {
-      rawBody = rawBody.slice(1).trim();
-    }
-    // Se o usuário apenas mencionou o bot sem comando ("@bot")
-    if (!rawBody && isGroup) {
-      const adminStatus = await checkAdminStatus(sock, from, sender);
-      if (adminStatus.isAdmin || isSenderOwner) {
-        await reply(`🤖 *Hermes Bot*\n📌 *Prefixo atual:* \`${groupPrefix}\`\n👉 Envie *${groupPrefix}menu* ou *@bot menu* para abrir o painel de configurações e comandos!`);
-      }
-      return;
-    }
-  } else if (text.startsWith(groupPrefix)) {
-    effectivePrefix = groupPrefix;
-    rawBody = text.slice(groupPrefix.length).trim();
-  } else if (matchedActivationPrefix !== null && text.startsWith(matchedActivationPrefix)) {
-    effectivePrefix = matchedActivationPrefix;
-    rawBody = text.slice(matchedActivationPrefix.length).trim();
-  } else if (!isGroup && (text.startsWith('/') || text.startsWith('!'))) {
-    effectivePrefix = text[0];
-    rawBody = text.slice(1).trim();
-  } else if (isSenderOwner && (text.startsWith('/') || text.startsWith('!'))) {
-    effectivePrefix = text[0];
-    rawBody = text.slice(1).trim();
-  } else {
+  // Se não foi identificado comando válido com prefixo ou menção, encerra o pipeline
+  if (effectivePrefix === null || !rawBody || !plugin) {
     return;
   }
 
@@ -379,18 +305,8 @@ async function processSingleMessage(sock, msg) {
     return; // Descarta comandos duplicados silenciosamente
   }
 
-  if (!rawBody) return;
-
-  const [commandTrigger, ...args] = rawBody.split(/\s+/);
-  const commandArgsText = rawBody.slice(commandTrigger.length).trim();
-
-  const plugin = pluginLoader.findCommand(commandTrigger);
-  if (!plugin) {
-    return;
-  }
-
   // ========================================================
-  // 6. Verificação de Permissões (Owner, Admin, BotAdmin)
+  // 5. Verificação de Permissões (Owner, Admin, BotAdmin)
   // ========================================================
   let isAdmin = false;
   let isSuperAdmin = false;
@@ -423,7 +339,7 @@ async function processSingleMessage(sock, msg) {
   }
 
   // ========================================================
-  // 7. Execução do Comando
+  // 6. Execução do Comando
   // ========================================================
   try {
     await plugin.execute({

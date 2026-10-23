@@ -1,5 +1,6 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { sendSafeMessage } = require('../../utils/antiBan');
 const { parseHumanDuration, formatHumanDuration } = wizardEngine;
 
 module.exports = {
@@ -62,6 +63,43 @@ module.exports = {
         default: true
       }
     ]
+  },
+
+  /**
+   * Hook de execução periódica chamado a cada minuto pelo scheduler
+   */
+  async onSchedule({ sock, groupJid, group, config, queueTask, lastAutoMsgTimes }) {
+    const automsgCfg = config;
+    if (!automsgCfg || !automsgCfg.enabled || !automsgCfg.message) return;
+
+    const intervalMs = (automsgCfg.intervalMinutes || 180) * 60 * 1000;
+    const lastSent = lastAutoMsgTimes.get(groupJid) || automsgCfg.lastSent || 0;
+
+    if (lastSent === 0) {
+      // Primeiro boot: inicializa o marco temporal para aguardar o intervalo completo antes de disparar
+      lastAutoMsgTimes.set(groupJid, Date.now());
+      configManager.updatePluginConfig(groupJid, 'automsg', { lastSent: Date.now() });
+    } else {
+      const timeSinceLast = Date.now() - lastSent;
+
+      if (timeSinceLast >= intervalMs) {
+        const lastActivity = group.lastActivity || 0;
+        const onlyIfActive = automsgCfg.onlyIfActive !== false;
+
+        // Se onlyIfActive estiver ativado, só envia se houver atividade desde o último envio
+        if (!onlyIfActive || lastActivity > lastSent) {
+          queueTask({
+            type: 'automsg',
+            groupJid,
+            run: async () => {
+              lastAutoMsgTimes.set(groupJid, Date.now());
+              configManager.updatePluginConfig(groupJid, 'automsg', { lastSent: Date.now() });
+              await sendSafeMessage(sock, groupJid, { text: automsgCfg.message });
+            }
+          });
+        }
+      }
+    }
   },
 
   async execute({ sock, msg, from, sender, args, reply, t, lang, isGroup }) {
@@ -129,17 +167,13 @@ module.exports = {
       return reply(`💾 *AutoMsg atualizado!*\n💬 *Novo texto:*\n${customText}`);
     }
 
-    if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'automsg');
-    }
-
     const status = configManager.isPluginEnabled(from, 'automsg') ? t('common.enabled') : t('common.disabled');
     const minutes = cfg.intervalMinutes || 180;
     const formattedInterval = formatHumanDuration(minutes, 'minutes', groupLang);
     const alertMsg = cfg.message || 'Nenhuma mensagem configurada';
 
-    let help = t('automsg.status', { status, interval: formattedInterval, msg: alertMsg });
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 3h [texto]\` (define horas/minutos e texto direto)\n• \`/automsg tempo 3h\` (define horas ou minutos)\n• \`/automsg texto [mensagem]\` (define texto)\n• \`/automsg config\` (abre assistente interativo)`;
+    let help = `${t('automsg.status', { status, interval: formattedInterval })}\n💬 *Mensagem atual:*\n${alertMsg}`;
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 3h [seu texto aqui]\` (define intervalo e mensagem direto)\n• \`/automsg tempo 2h\` (ou \`/automsg tempo 30m\`)\n• \`/automsg texto [seu texto]\` (atualiza apenas a mensagem)\n• \`/automsg config\` (abre assistente interativo)`;
     return reply(help);
   }
 };

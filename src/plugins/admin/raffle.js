@@ -103,7 +103,7 @@ module.exports = {
       if (w.lid) mentionsSet.add(cleanJid(w.lid));
       if (w.jid) mentionsSet.add(cleanJid(w.jid));
 
-      displayNum = resolved?.displayNum || (phoneJid ? phoneJid.replace(/@.*$/, '').replace(/\D/g, '') : cleanJid(w.id).replace(/@.*$/, ''));
+      displayNum = resolved?.displayNum || (phoneJid ? phoneJid.replace(/@.*$/, '').replace(/\D/g, '') : cleanJid(w.id).replace(/@.*$/, '').replace(/\D/g, ''));
 
       winnersText += `🏅 *${idx + 1}º Lugar:* @${displayNum}\n`;
     }

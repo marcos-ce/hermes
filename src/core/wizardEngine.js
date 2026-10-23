@@ -301,7 +301,7 @@ class WizardEngine {
 
     modules.forEach((mod, index) => {
       const statusIcon = mod.enabled ? '🟢 [ON]' : '🔴 [OFF]';
-      const displayName = nameMap[mod.name] || mod.name.toUpperCase();
+      const displayName = mod.title ? mod.title.toUpperCase() : (nameMap[mod.name] || mod.name.toUpperCase());
       menuText += `[${index + 1}] ${statusIcon} ${displayName}\n`;
       if (mod.desc) menuText += `    ${mod.desc}\n`;
     });
@@ -319,7 +319,7 @@ class WizardEngine {
       if (plugin.category === 'owner' || plugin.ownerOnly) continue;
       if (['menu', 'config'].includes(name)) continue;
 
-      const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name);
+      const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name) || plugin.isDirectCommand;
       if (!isUtility) continue;
 
       const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
@@ -353,7 +353,7 @@ class WizardEngine {
 
     menuText += `─────────────────────────\n`;
     menuText += `💡 Exemplos rápidos:\n`;
-    menuText += `* Digite 1 a 8 para ativar/desativar ou configurar os módulos no painel\n`;
+    menuText += `* Digite 1 a ${modules.length} para ativar/desativar ou configurar os módulos no painel\n`;
     menuText += `* Use os números com a barra direto no chat (Ex: /5 @user dá ban, /9 aviso marca todos, /10 @user dá adm, /17 dá ping)\n`;
     menuText += `* Digite P / para mudar o prefixo para /\n`;
     menuText += `* Digite L para mudar o idioma\n`;

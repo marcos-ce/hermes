@@ -1,5 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { sendSafeMessage } = require('../../utils/antiBan');
+const { t } = require('../../utils/i18n');
 
 module.exports = {
   name: 'schedule',
@@ -44,8 +46,51 @@ module.exports = {
     ]
   },
 
-  async execute({ sock, msg, from, sender, args, reply, t, isGroup }) {
-    if (!isGroup) return reply(t('common.group_only'));
+  /**
+   * Hook de execução periódica chamado a cada minuto pelo scheduler
+   */
+  async onSchedule({ sock, groupJid, config, currentHHMM, currentDateKey, lang, queueTask, lastExecuted }) {
+    const scheduleCfg = config;
+    if (!scheduleCfg || !scheduleCfg.enabled) return;
+
+    const closeTime = scheduleCfg.closeTime;
+    const openTime = scheduleCfg.openTime;
+
+    // Fechar grupo no horário agendado
+    if (closeTime && closeTime === currentHHMM && closeTime !== '0') {
+      const execKey = `${groupJid}:close:${currentDateKey}:${currentHHMM}`;
+      if (!lastExecuted.has(execKey)) {
+        lastExecuted.add(execKey);
+        queueTask({
+          type: 'schedule_close',
+          groupJid,
+          run: async () => {
+            await sock.groupSettingUpdate(groupJid, 'announcement');
+            await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.closed') });
+          }
+        });
+      }
+    }
+
+    // Abrir grupo no horário agendado
+    if (openTime && openTime === currentHHMM && openTime !== '0') {
+      const execKey = `${groupJid}:open:${currentDateKey}:${currentHHMM}`;
+      if (!lastExecuted.has(execKey)) {
+        lastExecuted.add(execKey);
+        queueTask({
+          type: 'schedule_open',
+          groupJid,
+          run: async () => {
+            await sock.groupSettingUpdate(groupJid, 'not_announcement');
+            await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.opened') });
+          }
+        });
+      }
+    }
+  },
+
+  async execute({ sock, msg, from, sender, args, reply, t: translate, isGroup }) {
+    if (!isGroup) return reply(translate('common.group_only'));
 
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'schedule') || {};
@@ -62,12 +107,12 @@ module.exports = {
       }
       const close = cfg.closeTime || '23:00';
       const open = cfg.openTime || '07:00';
-      return reply(`${t('common.saved')}\n⏰ *Horários Automáticos:* ATIVADO\n🔒 *Fechar:* ${close} | 🔓 *Abrir:* ${open}`);
+      return reply(`${translate('common.saved')}\n⏰ *Horários Automáticos:* ATIVADO\n🔒 *Fechar:* ${close} | 🔓 *Abrir:* ${open}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'schedule', false);
-      return reply(t('common.saved') + '\n⏰ *Horários Automáticos:* DESATIVADO');
+      return reply(translate('common.saved') + '\n⏰ *Horários Automáticos:* DESATIVADO');
     }
 
     // Configuração direta de horário: /horarios 23:00 07:00
@@ -89,15 +134,11 @@ module.exports = {
       return reply(`💾 *Horário de abrir atualizado:* \`${args[1]}\``);
     }
 
-    if (sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'schedule');
-    }
-
-    const status = configManager.isPluginEnabled(from, 'schedule') ? t('common.enabled') : t('common.disabled');
+    const status = configManager.isPluginEnabled(from, 'schedule') ? translate('common.enabled') : translate('common.disabled');
     const close = cfg.closeTime || '23:00';
     const open = cfg.openTime || '07:00';
 
-    let help = t('schedule.status', { status, close, open });
+    let help = translate('schedule.status', { status, close, open });
     help += `\n\n💡 *Comandos Diretos:*\n• \`/horarios on\` ou \`/horarios off\`\n• \`/horarios 23:00 07:00\` (define fechar e abrir direto)\n• \`/horarios fechar 23:00\`\n• \`/horarios abrir 07:00\`\n• \`/horarios config\` (abre wizard)`;
     return reply(help);
   }

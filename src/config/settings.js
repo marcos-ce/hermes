@@ -4,6 +4,20 @@ const path = require('path');
 // Carrega variáveis do arquivo .env
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+/**
+ * Extrai DDD e últimos 8 dígitos para comparação de números brasileiros com/sem 9º dígito
+ */
+function getBr(num) {
+  const c = (num || '').replace(/\D/g, '');
+  if (c.startsWith('55') && c.length >= 12) {
+    return { ddd: c.slice(2, 4), last8: c.slice(-8) };
+  }
+  if (c.length === 10 || c.length === 11) {
+    return { ddd: c.slice(0, 2), last8: c.slice(-8) };
+  }
+  return { ddd: '', last8: c.slice(-8) };
+}
+
 class Settings {
   constructor() {
     this.load();
@@ -47,17 +61,6 @@ class Settings {
       if (cleanNumber === this.ownerNumber || jid.includes(this.ownerNumber)) return true;
 
       // Trata variação de 9º dígito no Brasil com extração exata de DDD e últimos 8 dígitos
-      const getBr = (num) => {
-        const c = (num || '').replace(/\D/g, '');
-        if (c.startsWith('55') && c.length >= 12) {
-          return { ddd: c.slice(2, 4), last8: c.slice(-8) };
-        }
-        if (c.length === 10 || c.length === 11) {
-          return { ddd: c.slice(0, 2), last8: c.slice(-8) };
-        }
-        return { ddd: '', last8: c.slice(-8) };
-      };
-
       const userBr = getBr(cleanNumber);
       const ownerBr = getBr(this.ownerNumber);
 

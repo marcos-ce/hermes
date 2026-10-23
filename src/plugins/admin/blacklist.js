@@ -1,6 +1,7 @@
 const configManager = require('../../core/configManager');
 const { resolveTarget } = require('../../utils/jidResolver');
-const { safeKick } = require('../../utils/antiBan');
+const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
+const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
 
 module.exports = {
@@ -11,9 +12,32 @@ module.exports = {
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
+  priority: 10,
 
-  async execute({ sock, msg, from, _sender, args, _text, reply, t, isOwner, isGroup }) {
-    if (!isGroup) return reply(t('common.group_only'));
+  /**
+   * Hook passivo: monitora entrada de participantes e expulsa imediatamente se estiver na blacklist
+   */
+  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, action }) {
+    if (action !== 'add') return false;
+
+    const isGlobalBL = configManager.isGlobalBlacklisted(targetPhoneJid) || configManager.isGlobalBlacklisted(targetGroupJid);
+    const isGroupBL = configManager.isGroupBlacklisted(groupJid, targetPhoneJid) || configManager.isGroupBlacklisted(groupJid, targetGroupJid);
+
+    if (isGlobalBL || isGroupBL) {
+      // Remoção de Emergência (Zero Delay) usando o JID exato do grupo
+      await safeKick(sock, groupJid, targetGroupJid);
+      await sendSafeMessage(sock, groupJid, {
+        text: t(lang, 'blacklist.banned_entry', { user: participantNumber }),
+        mentions: [targetGroupJid, targetPhoneJid]
+      });
+      return { stop: true }; // Interrompe próximos plugins (como welcome e antifake)
+    }
+
+    return false;
+  },
+
+  async execute({ sock, msg, from, _sender, args, _text, reply, t: translate, isOwner, isGroup }) {
+    if (!isGroup) return reply(translate('common.group_only'));
 
     const sub = (args[0] || 'list').toLowerCase();
 
@@ -25,10 +49,10 @@ module.exports = {
       const globalList = configManager.getGlobalBlacklist();
 
       if (groupList.length === 0 && globalList.length === 0) {
-        return reply(t('blacklist.list_empty'));
+        return reply(translate('blacklist.list_empty'));
       }
 
-      let res = `${t('blacklist.list_title')}\n\n`;
+      let res = `${translate('blacklist.list_title')}\n\n`;
       if (groupList.length > 0) {
         res += `📌 *Lista do Grupo:*\n`;
         for (const jid of groupList) {
@@ -53,13 +77,13 @@ module.exports = {
     // ==========================================
     if (sub === 'global') {
       if (!isOwner) {
-        return reply(t('common.no_permission_owner'));
+        return reply(translate('common.no_permission_owner'));
       }
 
       const targetText = args.slice(1).join(' ');
       const targetData = await resolveTarget(sock, msg, from, targetText);
       if (!targetData) {
-        return reply(t('common.not_found_target'));
+        return reply(translate('common.not_found_target'));
       }
 
       configManager.addGlobalBlacklist(targetData.phoneJid);
@@ -67,7 +91,7 @@ module.exports = {
       // Se o usuário estiver no grupo atual, já remove usando o JID de grupo
       await safeKick(sock, from, targetData.groupJid);
 
-      return reply(t('blacklist.added_global', { user: targetData.displayNum }), {
+      return reply(translate('blacklist.added_global', { user: targetData.displayNum }), {
         mentions: [targetData.groupJid, targetData.phoneJid]
       });
     }
@@ -79,7 +103,7 @@ module.exports = {
       const targetText = args.slice(1).join(' ');
       const targetData = await resolveTarget(sock, msg, from, targetText);
       if (!targetData) {
-        return reply(t('common.not_found_target'));
+        return reply(translate('common.not_found_target'));
       }
 
       if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
@@ -91,7 +115,7 @@ module.exports = {
       // Remove imediatamente se estiver presente
       await safeKick(sock, from, targetData.groupJid);
 
-      return reply(t('blacklist.added', { user: targetData.displayNum }), {
+      return reply(translate('blacklist.added', { user: targetData.displayNum }), {
         mentions: [targetData.groupJid, targetData.phoneJid]
       });
     }
@@ -103,7 +127,7 @@ module.exports = {
       const targetText = args.slice(1).join(' ');
       const targetData = await resolveTarget(sock, msg, from, targetText);
       if (!targetData) {
-        return reply(t('common.not_found_target'));
+        return reply(translate('common.not_found_target'));
       }
 
       const targetNum = targetData.displayNum;
@@ -117,13 +141,13 @@ module.exports = {
       }
 
       if (removedGlobal) {
-        return reply(t('blacklist.removed_global', { user: targetNum }), {
+        return reply(translate('blacklist.removed_global', { user: targetNum }), {
           mentions: [targetData.groupJid, targetData.phoneJid]
         });
       }
 
       if (removedGroup) {
-        return reply(t('blacklist.removed', { user: targetNum }), {
+        return reply(translate('blacklist.removed', { user: targetNum }), {
           mentions: [targetData.groupJid, targetData.phoneJid]
         });
       }
