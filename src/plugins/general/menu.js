@@ -62,17 +62,17 @@ module.exports = {
           pt: {
             title: '🤖 *HERMES BOT - COMANDOS DO GRUPO*',
             sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRAÇÃO 〕━━━╮',
-            tip: `💡 *Dica:* Para abrir o painel interativo de configurações, use *${p}menu* ou *${p}config*.`
+            tip: `💡 *Dica:* Você pode usar comandos com o prefixo (Ex: \`${p}all\`) ou mencionando o bot (Ex: \`@bot all\`, \`@bot menu\`).`
           },
           es: {
             title: '🤖 *HERMES BOT - COMANDOS DEL GRUPO*',
             sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRACIÓN 〕━━━╮',
-            tip: `💡 *Consejo:* Para abrir el panel interactivo de configuraciones, usa *${p}menu* o *${p}config*.`
+            tip: `💡 *Consejo:* Puedes usar comandos con prefijo (Ej: \`${p}all\`) o mencionando al bot (Ej: \`@bot all\`, \`@bot menu\`).`
           },
           en: {
             title: '🤖 *HERMES BOT - GROUP COMMANDS*',
             sec: '╭━━━〔 🛡️ ADMINISTRATION COMMANDS 〕━━━╮',
-            tip: `💡 *Tip:* To open the interactive configuration panel, use *${p}menu* or *${p}config*.`
+            tip: `💡 *Tip:* You can send commands with prefix (e.g. \`${p}all\`) or by mentioning the bot (e.g. \`@bot all\`, \`@bot menu\`).`
           }
         };
 

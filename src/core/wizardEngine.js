@@ -224,7 +224,8 @@ class WizardEngine {
     menuText += `* Digite 1 para ativar/desativar ou configurar o módulo 1\n`;
     menuText += `* Digite P / para mudar o prefixo para /\n`;
     menuText += `* Digite L para mudar o idioma\n`;
-    menuText += `* Digite X para apagar e fechar o menu`;
+    menuText += `* Digite X para apagar e fechar o menu\n`;
+    menuText += `* Ou mencione o bot para enviar comandos (Ex: @bot menu ou @bot ping)`;
 
     const session = {
       type: 'config_menu',

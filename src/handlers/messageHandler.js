@@ -1,6 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
-const { extractSender, resolveSender, checkAdminStatus } = require('../utils/jidResolver');
+const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');
@@ -69,6 +69,69 @@ async function processSingleMessage(sock, msg) {
   const sender = await resolveSender(sock, msg);
   const isGroup = from.endsWith('@g.us');
   const text = extractText(msg.message).trim();
+  if (!text) return;
+
+  // ========================================================
+  // Detecção de Menção ao Bot como Prefixo Simultâneo
+  // ========================================================
+  const botJid = cleanJid(sock?.user?.id || '');
+  const botLid = cleanJid(sock?.user?.lid || '');
+  const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  const envBotNum = (settings.botNumber || '').replace(/\D/g, '');
+  const botBr = getBr(botNum || envBotNum);
+
+  const realMsg = msg?.message?.ephemeralMessage?.message ||
+                  msg?.message?.viewOnceMessage?.message ||
+                  msg?.message?.viewOnceMessageV2?.message ||
+                  msg?.message?.documentWithCaptionMessage?.message ||
+                  msg?.message;
+
+  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                      realMsg?.imageMessage?.contextInfo ||
+                      realMsg?.videoMessage?.contextInfo ||
+                      realMsg?.documentMessage?.contextInfo;
+
+  const mentionedJids = contextInfo?.mentionedJid || [];
+  const isBotMentionedInContext = Array.isArray(mentionedJids) && mentionedJids.some(j => {
+    const clean = cleanJid(j);
+    const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const numBr = getBr(num);
+    return clean === botJid || 
+           clean === botLid || 
+           (botNum && num === botNum) || 
+           (botLidNum && num === botLidNum) || 
+           (envBotNum && num === envBotNum) ||
+           (botBr.ddd && numBr.ddd && botBr.ddd === numBr.ddd && botBr.last8 === numBr.last8);
+  });
+
+  let isMentionPrefix = false;
+  let mentionPrefixLength = 0;
+  let mentionPrefixStr = '';
+
+  if (text.startsWith('@')) {
+    const mentionMatch = text.match(/^@([a-zA-Z0-9_:.-]+)\s*/);
+    if (mentionMatch) {
+      const targetStr = mentionMatch[1].toLowerCase();
+      const targetDigits = targetStr.replace(/:\d+$/, '').replace(/\D/g, '');
+      const targetBr = getBr(targetDigits);
+
+      const isBotTarget =
+        targetStr === 'bot' ||
+        targetStr === 'hermes' ||
+        (botNum && targetDigits === botNum) ||
+        (botLidNum && targetDigits === botLidNum) ||
+        (envBotNum && targetDigits === envBotNum) ||
+        (botBr.ddd && targetBr.ddd && botBr.ddd === targetBr.ddd && botBr.last8 === targetBr.last8) ||
+        (isBotMentionedInContext);
+
+      if (isBotTarget) {
+        isMentionPrefix = true;
+        mentionPrefixLength = mentionMatch[0].length;
+        mentionPrefixStr = mentionMatch[0];
+      }
+    }
+  }
 
   // ========================================================
   // 1. Trava Anti-Ban de Privado (DM)
@@ -143,8 +206,14 @@ async function processSingleMessage(sock, msg) {
   if (isGroup) {
     const isEnabled = configManager.isGroupEnabled(from);
     
-    // Suporta o prefixo do grupo e prefixos universais (! e /) para comandos de ativação
-    const possiblePrefixes = Array.from(new Set([groupPrefix, '!', '/', '']));
+    // Suporta o prefixo do grupo, menção ao bot e prefixos universais (! e /) para comandos de ativação
+    const possiblePrefixes = Array.from(new Set([
+      groupPrefix,
+      isMentionPrefix ? mentionPrefixStr : '',
+      '!',
+      '/',
+      ''
+    ]));
     for (const p of possiblePrefixes) {
       if (p === '' && isSenderOwner) {
         const lower = text.toLowerCase().trim();
@@ -169,7 +238,10 @@ async function processSingleMessage(sock, msg) {
           break;
         }
       } else if (p && text.startsWith(p)) {
-        const body = text.slice(p.length).trim().toLowerCase();
+        let body = text.slice(p.length).trim().toLowerCase();
+        if (body.startsWith('/') || body.startsWith('!')) {
+          body = body.slice(1).trim();
+        }
         if (
           body.startsWith('bot') ||
           body.startsWith('ativar') ||
@@ -256,8 +328,8 @@ async function processSingleMessage(sock, msg) {
   const wizardKey = `${from}:${sender}`;
   const activeSession = wizardCache.get(wizardKey) || (rawSender ? wizardCache.get(`${from}:${rawSender}`) : null);
 
-  // Se existe sessão do Wizard ativa e o texto NÃO é um comando com prefixo
-  if (activeSession && (!text.startsWith(groupPrefix) || text.length <= 3)) {
+  // Se existe sessão do Wizard ativa e o texto NÃO é um comando com prefixo ou menção
+  if (activeSession && !isMentionPrefix && (!text.startsWith(groupPrefix) || text.length <= 3)) {
     const intercepted = await wizardEngine.handleInput(sock, msg, from, sender, text);
     if (intercepted) {
       return;
@@ -268,16 +340,37 @@ async function processSingleMessage(sock, msg) {
   // 5. Checagem de Prefixo e Resolução de Comandos
   // ========================================================
   let effectivePrefix = groupPrefix;
-  if (!text.startsWith(groupPrefix)) {
-    if (matchedActivationPrefix !== null && text.startsWith(matchedActivationPrefix)) {
-      effectivePrefix = matchedActivationPrefix;
-    } else if (!isGroup && (text.startsWith('/') || text.startsWith('!'))) {
-      effectivePrefix = text[0];
-    } else if (isSenderOwner && (text.startsWith('/') || text.startsWith('!'))) {
-      effectivePrefix = text[0];
-    } else {
+  let rawBody = '';
+
+  if (isMentionPrefix) {
+    effectivePrefix = mentionPrefixStr;
+    rawBody = text.slice(mentionPrefixLength).trim();
+    // Se o usuário digitou "@bot /menu" ou "@bot !ping", remove o símbolo redundante
+    if (rawBody.startsWith(groupPrefix) || rawBody.startsWith('/') || rawBody.startsWith('!')) {
+      rawBody = rawBody.slice(1).trim();
+    }
+    // Se o usuário apenas mencionou o bot sem comando ("@bot")
+    if (!rawBody && isGroup) {
+      const adminStatus = await checkAdminStatus(sock, from, sender);
+      if (adminStatus.isAdmin || isSenderOwner) {
+        await reply(`🤖 *Hermes Bot*\n📌 *Prefixo atual:* \`${groupPrefix}\`\n👉 Envie *${groupPrefix}menu* ou *@bot menu* para abrir o painel de configurações e comandos!`);
+      }
       return;
     }
+  } else if (text.startsWith(groupPrefix)) {
+    effectivePrefix = groupPrefix;
+    rawBody = text.slice(groupPrefix.length).trim();
+  } else if (matchedActivationPrefix !== null && text.startsWith(matchedActivationPrefix)) {
+    effectivePrefix = matchedActivationPrefix;
+    rawBody = text.slice(matchedActivationPrefix.length).trim();
+  } else if (!isGroup && (text.startsWith('/') || text.startsWith('!'))) {
+    effectivePrefix = text[0];
+    rawBody = text.slice(1).trim();
+  } else if (isSenderOwner && (text.startsWith('/') || text.startsWith('!'))) {
+    effectivePrefix = text[0];
+    rawBody = text.slice(1).trim();
+  } else {
+    return;
   }
 
   // Rate-Limit Anti-Spam por usuário (cooldown de 2 segundos)
@@ -285,7 +378,6 @@ async function processSingleMessage(sock, msg) {
     return; // Descarta comandos duplicados silenciosamente
   }
 
-  const rawBody = text.slice(effectivePrefix.length).trim();
   if (!rawBody) return;
 
   const [commandTrigger, ...args] = rawBody.split(/\s+/);
