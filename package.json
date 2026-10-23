@@ -5,9 +5,9 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --max-old-space-size=280 index.js",
     "setup": "node index.js --setup",
-    "code": "node index.js --code"
+    "code": "node --max-old-space-size=280 index.js --code"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
