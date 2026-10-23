@@ -6,6 +6,9 @@ const { t } = require('../../utils/i18n');
 module.exports = {
   name: 'bangrupo',
   aliases: [
+    'bangp',
+    'desbangp',
+    'unbangp',
     'bangrupo',
     'bangroup',
     'banirgrupo',
@@ -16,6 +19,7 @@ module.exports = {
     'desbloqueargrupo',
     'unblockgroup',
     'gruposbanidos',
+    'gpsbanidos',
     'bannedgroups'
   ],
   description: 'Bane ou desbane um grupo completamente (bot fica 100% mudo e invisível)',
@@ -26,6 +30,8 @@ module.exports = {
   async execute({ sock, msg, from, sender, args, command, reply, t: translate, isGroup }) {
     const cmd = (command || '').toLowerCase();
     const isUnbanAction = [
+      'desbangp',
+      'unbangp',
       'desbanirgrupo',
       'unbangroup',
       'desbloqueargrupo',
@@ -34,6 +40,7 @@ module.exports = {
 
     const isListAction = [
       'gruposbanidos',
+      'gpsbanidos',
       'bannedgroups'
     ].includes(cmd) || (args[0] && ['list', 'lista', 'listar'].includes(args[0].toLowerCase()));
 
@@ -53,7 +60,7 @@ module.exports = {
         const reason = groupData?.banReason ? ` (Motivo: _${groupData.banReason}_)` : '';
         listText += `*[${index + 1}]* ${name}\n    🆔 \`${jid}\`${reason}\n`;
       });
-      listText += `\n💡 Para desbanir: \`/desbanirgrupo <id>\``;
+      listText += `\n💡 Para desbanir: \`/desbangp <id>\` (ou \`/desbanirgrupo <id>\`)`;
       return reply(listText);
     }
 
@@ -70,7 +77,7 @@ module.exports = {
     } else if (isGroup) {
       targetGroupJid = from;
       reason = args.join(' ').trim();
-    } else if (firstArg === 'unban' || firstArg === 'desbanir') {
+    } else if (firstArg === 'unban' || firstArg === 'desbanir' || firstArg === 'desbangp') {
       const secondArg = args[1] || '';
       if (secondArg.includes('@g.us') || /^\d{15,25}$/.test(secondArg)) {
         targetGroupJid = secondArg.endsWith('@g.us') ? secondArg : `${secondArg}@g.us`;
@@ -81,9 +88,9 @@ module.exports = {
       return reply(
         '⚠️ Informe o ID do grupo para executar esta ação no privado.\n' +
         'Exemplos:\n' +
-        '• `/bangrupo 120363000000000@g.us` (para banir)\n' +
-        '• `/desbanirgrupo 120363000000000@g.us` (para desbanir)\n' +
-        '• `/gruposbanidos` (para listar)'
+        '• `/bangp 120363000000000@g.us` (para banir)\n' +
+        '• `/desbangp 120363000000000@g.us` (para desbanir)\n' +
+        '• `/gpsbanidos` (para listar)'
       );
     }
 

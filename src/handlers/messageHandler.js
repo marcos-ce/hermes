@@ -97,6 +97,8 @@ async function handleMessage(sock, m) {
         body.startsWith('unbangroup') ||
         body.startsWith('desbloqueargrupo') ||
         body.startsWith('unblockgroup') ||
+        body.startsWith('desbangp') ||
+        body.startsWith('unbangp') ||
         body.startsWith('desbanir') ||
         (body.startsWith('bot') && (body.includes('unban') || body.includes('desbanir')))
       )) {
@@ -141,9 +143,13 @@ async function handleMessage(sock, m) {
           lower.startsWith('unbangroup') ||
           lower.startsWith('desbloqueargrupo') ||
           lower.startsWith('unblockgroup') ||
+          lower.startsWith('desbangp') ||
+          lower.startsWith('unbangp') ||
           lower.startsWith('bangrupo') ||
           lower.startsWith('bangroup') ||
+          lower.startsWith('bangp') ||
           lower.startsWith('gruposbanidos') ||
+          lower.startsWith('gpsbanidos') ||
           lower.startsWith('bannedgroups')
         ) {
           matchedActivationPrefix = '';
@@ -162,9 +168,13 @@ async function handleMessage(sock, m) {
           body.startsWith('unbangroup') ||
           body.startsWith('desbloqueargrupo') ||
           body.startsWith('unblockgroup') ||
+          body.startsWith('desbangp') ||
+          body.startsWith('unbangp') ||
           body.startsWith('bangrupo') ||
           body.startsWith('bangroup') ||
+          body.startsWith('bangp') ||
           body.startsWith('gruposbanidos') ||
+          body.startsWith('gpsbanidos') ||
           body.startsWith('bannedgroups')
         ) {
           matchedActivationPrefix = p;
