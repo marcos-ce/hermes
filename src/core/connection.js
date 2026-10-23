@@ -80,7 +80,12 @@ async function connectBot(options = {}) {
           console.log('\n====================================================');
           console.log(`📱 CÓDIGO DE EMPARELHAMENTO DO WHATSAPP:`);
           console.log(`👉  [ ${formattedCode} ]  👈`);
-          console.log('Digite este código no seu WhatsApp: Aparelhos Conectados > Conectar com número');
+          console.log('📌 ONDE DIGITAR O CÓDIGO (NÃO É NO TERMINAL DA HOSPEDAGEM):');
+          console.log('1. Abra o WhatsApp no celular do chip do bot');
+          console.log('2. Vá em Configurações (ou ⋮) > Aparelhos Conectados');
+          console.log('3. Toque em "Conectar um aparelho"');
+          console.log('4. Na parte inferior, toque em "Conectar com número de telefone"');
+          console.log(`5. Digite o código [ ${formattedCode} ] no seu celular!`);
           console.log('====================================================\n');
         } catch (err) {
           logger.error({ err }, 'Erro ao solicitar Pairing Code');
@@ -100,7 +105,7 @@ async function connectBot(options = {}) {
 
     // Exibição do QR Code no terminal se conexão for via QR
     if (qr && !isPairingCode) {
-      console.clear();
+      if (process.stdout.isTTY) console.clear();
       console.log('\n⚡ Escaneie o QR Code abaixo com o seu WhatsApp:\n');
       qrcode.generate(qr, { small: true });
       console.log('\nAguardando leitura do QR Code...\n');

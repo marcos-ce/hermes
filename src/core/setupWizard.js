@@ -16,7 +16,35 @@ async function run(force = false) {
     return false;
   }
 
-  console.clear();
+  // Se o ambiente não for interativo (sem TTY), como Discloud, Docker ou PM2 em background:
+  if (!process.stdin.isTTY && !force) {
+    console.log('⚠️ Ambiente de terminal não-interativo detectado (Discloud/Docker). Pulando setup CLI.');
+    const examplePath = path.resolve(process.cwd(), '.env.example');
+    if (fs.existsSync(examplePath)) {
+      fs.copyFileSync(examplePath, envPath);
+      console.log('✅ Arquivo .env inicializado com base no .env.example.');
+    } else {
+      const defaultEnv = `# ==========================================
+# WhatsApp Admin Bot - Configurações Automáticas
+# ==========================================
+
+CONNECTION_METHOD=qr
+BOT_NUMBER=
+OWNER_NUMBER=
+DEFAULT_PREFIX=/
+DEFAULT_LANG=pt
+AUTH_MODE=owner
+ALLOW_PRIVATE_CMDS=false
+LOG_LEVEL=warn
+`;
+      fs.writeFileSync(envPath, defaultEnv, 'utf-8');
+      console.log('✅ Arquivo .env padrão gerado com sucesso.');
+    }
+    settings.reload();
+    return true;
+  }
+
+  if (process.stdout.isTTY) console.clear();
   console.log('====================================================');
   console.log('🤖  BEM-VINDO AO ASSISTENTE DE INSTALAÇÃO DO BOT   🤖');
   console.log('====================================================');
