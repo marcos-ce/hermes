@@ -137,14 +137,21 @@ function extractSender(msg) {
 }
 
 /**
- * Extrai o JID alvo da mensagem através de:
- * 1. Mensagem respondida (Quoted participant)
- * 2. Menção direta (@5511...)
- * 3. Número digitado no texto do comando
- * @param {object} msg 
- * @param {string} textArgs 
- * @returns {string|null}
+ * Extrai componentes DDD e últimos 8 dígitos para comparação robusta de números brasileiros (com ou sem 9º dígito)
+ * @param {string} num 
+ * @returns {{ ddd: string, last8: string }}
  */
+function getBr(num) {
+  const c = (num || '').replace(/\D/g, '');
+  if (c.startsWith('55') && c.length >= 12) {
+    return { ddd: c.slice(2, 4), last8: c.slice(-8) };
+  }
+  if (c.length === 10 || c.length === 11) {
+    return { ddd: c.slice(0, 2), last8: c.slice(-8) };
+  }
+  return { ddd: '', last8: c.slice(-8) };
+}
+
 /**
  * Extrai o JID alvo da mensagem através de:
  * 1. Mensagem respondida (Quoted participant)
@@ -209,6 +216,9 @@ async function resolveParticipant(sock, groupJid, targetJid) {
   let groupParticipantJid = cleanTarget;
 
   if (groupJid && groupJid.endsWith('@g.us') && sock) {
+    const targetNumber = cleanTarget.replace(/@.*$/, '').replace(/\D/g, '');
+    const targetBr = getBr(targetNumber);
+
     const meta = await getGroupMetadata(sock, groupJid);
     if (meta && Array.isArray(meta.participants)) {
       for (const p of meta.participants) {
@@ -217,8 +227,15 @@ async function resolveParticipant(sock, groupJid, targetJid) {
         const pId = cleanJid(p.id);
         const pJid = p.jid ? cleanJid(p.jid) : (pId.endsWith('@s.whatsapp.net') ? pId : null);
         const pLid = p.lid ? cleanJid(p.lid) : (pId.endsWith('@lid') ? pId : null);
+        const pNumber = (pJid || pId).replace(/@.*$/, '').replace(/\D/g, '');
+        const pBr = getBr(pNumber);
 
-        const isMatch = (pId === cleanTarget) || (pJid === cleanTarget) || (pLid === cleanTarget);
+        const isMatch = (pId === cleanTarget) || 
+                        (pJid === cleanTarget) || 
+                        (pLid === cleanTarget) ||
+                        (targetNumber && pNumber && targetNumber === pNumber) ||
+                        (targetBr.ddd && pBr.ddd && targetBr.ddd === pBr.ddd && targetBr.last8 === pBr.last8);
+
         if (isMatch) {
           groupParticipantJid = pId; // O JID exato que o grupo espera nas ações do Baileys
           if (pJid) phoneJid = pJid;
@@ -352,17 +369,6 @@ async function checkAdminStatus(sock, groupJid, userJid) {
   const botLid = cleanJid(sock?.user?.lid || '');
   const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
   const userNumber = cleanUser.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-
-  const getBr = (num) => {
-    const c = (num || '').replace(/\D/g, '');
-    if (c.startsWith('55') && c.length >= 12) {
-      return { ddd: c.slice(2, 4), last8: c.slice(-8) };
-    }
-    if (c.length === 10 || c.length === 11) {
-      return { ddd: c.slice(0, 2), last8: c.slice(-8) };
-    }
-    return { ddd: '', last8: c.slice(-8) };
-  };
 
   const userBr = getBr(userNumber);
   const botBr = getBr(botNumber);

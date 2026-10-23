@@ -67,15 +67,19 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
     } catch (_) {}
   }
 
-  // 3. Disparo da mensagem
-  const sent = await sock.sendMessage(jid, payload, options);
-
-  // 4. Modo Furtivo: Retorna imediatamente a presença para 'unavailable'
+  // 3. Disparo da mensagem com garantia de restauração da presença
   try {
-    await sock.sendPresenceUpdate('unavailable');
-  } catch (_) {}
-
-  return sent;
+    const sent = await sock.sendMessage(jid, payload, options);
+    try {
+      await sock.sendPresenceUpdate('unavailable');
+    } catch (_) {}
+    return sent;
+  } catch (err) {
+    try {
+      await sock.sendPresenceUpdate('unavailable');
+    } catch (_) {}
+    throw err;
+  }
 }
 
 /**

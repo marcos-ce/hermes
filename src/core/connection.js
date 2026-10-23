@@ -15,6 +15,8 @@ const { handleParticipantsUpdate } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
 
 let currentSock = null;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
 
 /**
  * Inicia e gerencia a conexão do socket Baileys com reconexão automática
@@ -22,6 +24,20 @@ let currentSock = null;
  * @returns {Promise<object>} Instância do socket Baileys
  */
 async function connectBot(options = {}) {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  // Encerra e limpa listeners da conexão anterior para prevenir vazamento de memória
+  if (currentSock) {
+    try {
+      currentSock.ev.removeAllListeners();
+      currentSock.end?.(new Error('Reiniciando conexão Baileys'));
+    } catch (_) {}
+    currentSock = null;
+  }
+
   const authDir = path.resolve(process.cwd(), 'src', 'auth');
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version, isLatest } = await fetchLatestBaileysVersion();
@@ -97,12 +113,15 @@ async function connectBot(options = {}) {
       logger.warn(`Conexão encerrada. Motivo: ${statusCode || 'Desconhecido'}. Reconectar: ${shouldReconnect}`);
 
       if (shouldReconnect) {
-        console.log('🔄 Reconectando ao WhatsApp em 3 segundos...');
-        setTimeout(() => connectBot(options), 3000);
+        const delay = Math.min(3000 * Math.pow(1.3, reconnectAttempts), 30000);
+        reconnectAttempts++;
+        console.log(`🔄 Reconectando ao WhatsApp em ${(delay / 1000).toFixed(1)} segundos (tentativa ${reconnectAttempts})...`);
+        reconnectTimer = setTimeout(() => connectBot(options), delay);
       } else {
         console.log('🛑 Sessão encerrada (Logout). Apague a pasta src/auth e reinicie para novo login.');
       }
     } else if (connection === 'open') {
+      reconnectAttempts = 0;
       console.log('\n====================================================');
       console.log('🚀 BOT CONECTADO COM SUCESSO AO WHATSAPP!');
       console.log(`🏷️  ID: ${sock.user?.id || 'Desconhecido'}`);

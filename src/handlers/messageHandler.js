@@ -35,14 +35,27 @@ function extractText(message) {
 
 /**
  * Pipeline principal de tratamento de mensagens
+ * Processa todas as mensagens do batch para garantir zero perda de mensagens sob tráfego intenso.
  * @param {object} sock Instância do Baileys
  * @param {object} m Objeto do evento messages.upsert
  */
 async function handleMessage(sock, m) {
-  if (!m || !m.messages || m.type !== 'notify') return;
+  if (!m || !Array.isArray(m.messages) || m.type !== 'notify') return;
 
-  const msg = m.messages[0];
+  for (const msg of m.messages) {
+    try {
+      await processSingleMessage(sock, msg);
+    } catch (err) {
+      logger.error({ err, remoteJid: msg?.key?.remoteJid }, 'Erro ao processar mensagem individual');
+    }
+  }
+}
+
+async function processSingleMessage(sock, msg) {
   if (!msg || !msg.message) return;
+
+  // Ignora mensagens internas de protocolo do WhatsApp (status de entrega, exclusão remota, etc.)
+  if (msg.message.protocolMessage) return;
 
   // Ignora mensagens enviadas pelo próprio bot ou broadcasts de status
   if (msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
