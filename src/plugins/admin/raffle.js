@@ -1,4 +1,5 @@
-const { getGroupMetadata, cleanJid } = require('../../utils/jidResolver');
+const { getGroupMetadata, cleanJid, resolveParticipant } = require('../../utils/jidResolver');
+const { groupCache } = require('../../utils/cache');
 
 module.exports = {
   name: 'sortear',
@@ -11,7 +12,15 @@ module.exports = {
   async execute({ sock, from, args, text, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
-    const metadata = await getGroupMetadata(sock, from);
+    // Busca metadados atualizados com fallback direto para a API do WhatsApp
+    let metadata = await getGroupMetadata(sock, from);
+    if (!metadata || !Array.isArray(metadata.participants) || metadata.participants.length <= 1) {
+      try {
+        metadata = await sock.groupMetadata(from);
+        if (metadata) groupCache.set(from, metadata);
+      } catch (_) {}
+    }
+
     if (!metadata || !Array.isArray(metadata.participants)) {
       return reply(t('common.error'));
     }
@@ -21,8 +30,8 @@ module.exports = {
     const botLid = sock?.user?.lid ? cleanJid(sock.user.lid) : '';
     const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
-    // Filtra apenas membros comuns (exclui bot e admins por padrão para sorteios justos)
-    const eligibleMembers = metadata.participants.filter(p => {
+    // 1. Tenta filtrar apenas membros comuns (exclui o bot e administradores para sorteios normais)
+    let pool = metadata.participants.filter(p => {
       const pId = cleanJid(p.id);
       const pLid = p.lid ? cleanJid(p.lid) : '';
       const pJid = p.jid ? cleanJid(p.jid) : '';
@@ -33,19 +42,35 @@ module.exports = {
       return true;
     });
 
-    if (eligibleMembers.length === 0) {
+    // 2. Se todos no grupo forem administradores (ex: grupo de equipe ou grupo de testes),
+    // sorteia entre todos os participantes reais do grupo, excluindo apenas o próprio bot!
+    if (pool.length === 0) {
+      pool = metadata.participants.filter(p => {
+        const pId = cleanJid(p.id);
+        const pLid = p.lid ? cleanJid(p.lid) : '';
+        const pJid = p.jid ? cleanJid(p.jid) : '';
+        const pNum = pJid.replace(/@.*$/, '').replace(/\D/g, '') || pId.replace(/@.*$/, '').replace(/\D/g, '');
+        if (pId === botJid || pLid === botLid || (botNum && pNum === botNum)) return false;
+        return true;
+      });
+    }
+
+    if (pool.length === 0) {
       return reply(t('raffle.not_enough'));
     }
 
     // Parsing da quantidade e do prêmio
     let count = 1;
-    let prize = text;
+    let prize = 'Prêmio do Grupo';
 
     if (args.length > 0) {
       const firstArgNum = parseInt(args[0], 10);
       if (!isNaN(firstArgNum) && firstArgNum > 0) {
-        count = Math.min(firstArgNum, eligibleMembers.length);
-        prize = args.slice(1).join(' ').trim();
+        count = Math.min(firstArgNum, pool.length);
+        const prizePart = args.slice(1).join(' ').trim();
+        if (prizePart) prize = prizePart;
+      } else {
+        prize = args.join(' ').trim();
       }
     }
 
@@ -54,7 +79,7 @@ module.exports = {
     }
 
     // Embaralha com algoritmo Fisher-Yates
-    const shuffled = [...eligibleMembers];
+    const shuffled = [...pool];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -64,16 +89,23 @@ module.exports = {
     const mentionsSet = new Set();
     let winnersText = '';
 
-    winners.forEach((w, idx) => {
-      if (w.id) mentionsSet.add(w.id);
-      if (w.jid) mentionsSet.add(w.jid);
-      if (w.lid) mentionsSet.add(w.lid);
+    for (let idx = 0; idx < winners.length; idx++) {
+      const w = winners[idx];
+      let displayNum = '';
+      const resolved = await resolveParticipant(sock, from, w.id);
 
-      const realPhone = w.jid || (w.id?.endsWith('@s.whatsapp.net') ? w.id : null);
-      const displayNum = realPhone ? realPhone.replace(/@.*$/, '').replace(/\D/g, '') : w.id.replace(/@.*$/, '');
+      const phoneJid = resolved?.phoneJid || (w.id?.endsWith('@s.whatsapp.net') ? cleanJid(w.id) : null);
+      const groupJidTarget = resolved?.groupJid || cleanJid(w.id);
+
+      if (groupJidTarget) mentionsSet.add(groupJidTarget);
+      if (phoneJid) mentionsSet.add(phoneJid);
+      if (w.lid) mentionsSet.add(cleanJid(w.lid));
+      if (w.jid) mentionsSet.add(cleanJid(w.jid));
+
+      displayNum = resolved?.displayNum || (phoneJid ? phoneJid.replace(/@.*$/, '').replace(/\D/g, '') : cleanJid(w.id).replace(/@.*$/, ''));
 
       winnersText += `🏅 *${idx + 1}º Lugar:* @${displayNum}\n`;
-    });
+    }
 
     let result = `${t('raffle.title')}\n\n`;
     result += `${t('raffle.prize', { prize })}\n\n`;

@@ -25,7 +25,7 @@ class WizardEngine {
     const existingConfig = configManager.getPluginConfig(from, pluginName) || {};
     const sessionKey = `${from}:${sender}`;
 
-    // Se uma etapa específica foi solicitada diretamente:
+    // Se uma etapa específica foi solicitada diretamente via parâmetro:
     if (targetFieldIndex !== null && typeof targetFieldIndex === 'number') {
       const session = {
         type: 'wizard',
@@ -43,9 +43,11 @@ class WizardEngine {
       return true;
     }
 
-    // Se o módulo tem mais de 1 etapa e já possui configurações salvas,
-    // exibe o menu para o usuário escolher exatamente qual etapa deseja alterar!
-    if (schema.fields.length > 1 && (existingConfig.configured || Object.keys(existingConfig).length > 1)) {
+    // Se JÁ FOI CONFIGURADO ANTERIORMENTE (configured === true) e possui mais de 1 etapa:
+    // Exibe o menu para o usuário escolher qual etapa deseja alterar ou [T] para todas.
+    const isAlreadyConfigured = existingConfig.configured === true;
+
+    if (isAlreadyConfigured && schema.fields.length > 1) {
       const session = {
         type: 'wizard_select_field',
         pluginName: pluginName.toLowerCase(),
@@ -59,7 +61,8 @@ class WizardEngine {
       return true;
     }
 
-    // Caso padrão (1 etapa ou primeiro setup): inicia do passo 0
+    // ROTEIRO PADRÃO (Primeira configuração OU módulo de apenas 1 etapa):
+    // Segue o roteiro passo a passo sequencial desde o início (Passo 1 -> Passo 2 -> ...)
     const session = {
       type: 'wizard',
       pluginName: pluginName.toLowerCase(),
