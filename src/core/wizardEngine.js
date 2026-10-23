@@ -13,8 +13,9 @@ class WizardEngine {
    * @param {string} from 
    * @param {string} sender 
    * @param {string} pluginName 
+   * @param {number|null} targetFieldIndex Se especificado, edita apenas a etapa solicitada
    */
-  async startWizard(sock, msg, from, sender, pluginName) {
+  async startWizard(sock, msg, from, sender, pluginName, targetFieldIndex = null) {
     const schema = pluginLoader.schemas.get(pluginName.toLowerCase());
     if (!schema || !Array.isArray(schema.fields) || schema.fields.length === 0) {
       return false;
@@ -22,11 +23,48 @@ class WizardEngine {
 
     const lang = configManager.getGroupLang(from);
     const existingConfig = configManager.getPluginConfig(from, pluginName) || {};
+    const sessionKey = `${from}:${sender}`;
 
+    // Se uma etapa específica foi solicitada diretamente:
+    if (targetFieldIndex !== null && typeof targetFieldIndex === 'number') {
+      const session = {
+        type: 'wizard',
+        pluginName: pluginName.toLowerCase(),
+        stepIndex: targetFieldIndex,
+        singleStep: true,
+        answers: {},
+        existingConfig,
+        schema,
+        groupJid: from,
+        sender
+      };
+      wizardCache.set(sessionKey, session);
+      await this._sendStepPrompt(sock, msg, from, sender, session, lang);
+      return true;
+    }
+
+    // Se o módulo tem mais de 1 etapa e já possui configurações salvas,
+    // exibe o menu para o usuário escolher exatamente qual etapa deseja alterar!
+    if (schema.fields.length > 1 && (existingConfig.configured || Object.keys(existingConfig).length > 1)) {
+      const session = {
+        type: 'wizard_select_field',
+        pluginName: pluginName.toLowerCase(),
+        existingConfig,
+        schema,
+        groupJid: from,
+        sender
+      };
+      wizardCache.set(sessionKey, session);
+      await this._sendFieldSelectionPrompt(sock, msg, from, sender, session, lang);
+      return true;
+    }
+
+    // Caso padrão (1 etapa ou primeiro setup): inicia do passo 0
     const session = {
       type: 'wizard',
       pluginName: pluginName.toLowerCase(),
       stepIndex: 0,
+      singleStep: false,
       answers: {},
       existingConfig,
       schema,
@@ -34,9 +72,7 @@ class WizardEngine {
       sender
     };
 
-    const sessionKey = `${from}:${sender}`;
     wizardCache.set(sessionKey, session);
-
     await this._sendStepPrompt(sock, msg, from, sender, session, lang);
     return true;
   }
@@ -226,6 +262,7 @@ class WizardEngine {
     // ==========================================
     const isChoiceStep = session.type === 'config_menu' || 
       session.type === 'lang_selection' ||
+      session.type === 'wizard_select_field' ||
       (session.type === 'wizard' && ['choice', 'boolean'].includes(session.schema?.fields?.[session.stepIndex]?.type));
     
     const hasMentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0;
@@ -242,6 +279,10 @@ class WizardEngine {
 
     if (session.type === 'lang_selection') {
       return await this._handleLangSelectionInput(sock, msg, from, sender, text, session, lang);
+    }
+
+    if (session.type === 'wizard_select_field') {
+      return await this._handleFieldSelectionInput(sock, msg, from, sender, text, session, lang);
     }
 
     if (session.type === 'wizard') {
@@ -376,99 +417,202 @@ class WizardEngine {
     return true;
   }
 
+  async _sendFieldSelectionPrompt(sock, msg, from, sender, session, lang) {
+    const sessionKey = `${from}:${sender}`;
+    const pTitle = resolveSchemaText(session.schema.title || session.pluginName, lang);
+
+    let text = `🧙‍♂️ *CONFIGURAÇÃO: ${pTitle.toUpperCase()}*\n\n`;
+    text += `Escolha qual etapa você deseja alterar:\n\n`;
+
+    session.schema.fields.forEach((field, idx) => {
+      const qText = resolveSchemaText(field.question, lang).split('\n')[0].replace(/[?:]/g, '');
+      const currentVal = session.existingConfig[field.name];
+      let displayVal = 'Padrão';
+      if (currentVal !== undefined) {
+        if (field.type === 'choice' && Array.isArray(field.choices)) {
+          const matchChoice = field.choices.find(c => c.value === currentVal);
+          displayVal = matchChoice ? resolveSchemaText(matchChoice.label, lang) : String(currentVal);
+        } else if (Array.isArray(currentVal)) {
+          displayVal = currentVal.join(', ') || 'Nenhum';
+        } else {
+          displayVal = String(currentVal);
+        }
+      }
+      text += `*[${idx + 1}]* 📝 *${qText}*\n`;
+      text += `    📌 _Atual: \`${displayVal}\`_\n\n`;
+    });
+
+    text += `*[T]* 🔄 *Reconfigurar Todas as Etapas*\n`;
+    text += `*[X]* ❌ *Cancelar e Fechar*\n\n`;
+    text += `👉 Responda com o *NÚMERO* da etapa que deseja alterar.`;
+
+    const sent = await sendSafeMessage(sock, from, { text }, { quoted: msg });
+    if (sent?.key) {
+      session.menuMsgKey = sent.key;
+      session.promptKeys = session.promptKeys || [];
+      session.promptKeys.push(sent.key);
+      wizardCache.set(sessionKey, session);
+    }
+  }
+
+  async _handleFieldSelectionInput(sock, msg, from, sender, text, session, lang) {
+    const sessionKey = `${from}:${sender}`;
+    const lower = text.toLowerCase().trim();
+
+    // Reconfigurar todas as etapas sequencialmente
+    if (['t', 'todos', 'all', 'tudo', 'todas'].includes(lower)) {
+      session.type = 'wizard';
+      session.stepIndex = 0;
+      session.singleStep = false;
+      session.answers = {};
+      wizardCache.set(sessionKey, session);
+      await this._sendStepPrompt(sock, msg, from, sender, session, lang);
+      return true;
+    }
+
+    // Seleção de etapa específica por número
+    const selectedNum = parseInt(text, 10);
+    if (!isNaN(selectedNum) && selectedNum >= 1 && selectedNum <= session.schema.fields.length) {
+      const targetIndex = selectedNum - 1;
+      session.type = 'wizard';
+      session.stepIndex = targetIndex;
+      session.singleStep = true;
+      session.answers = {};
+      wizardCache.set(sessionKey, session);
+      await this._sendStepPrompt(sock, msg, from, sender, session, lang);
+      return true;
+    }
+
+    await sendSafeMessage(sock, from, {
+      text: `⚠️ Opção inválida. Escolha o número da etapa (1 a ${session.schema.fields.length}), *T* para todas ou *X* para cancelar.`
+    }, { quoted: msg });
+    return true;
+  }
+
   async _handleWizardStepInput(sock, msg, from, sender, text, session, lang) {
     const sessionKey = `${from}:${sender}`;
     const currentField = session.schema.fields[session.stepIndex];
     if (!currentField) return false;
 
     let finalValue = null;
+    const trimmed = text.trim();
+    const isKeepCurrent = ['.', 'manter', 'keep', 'pular', 'skip', 'ok', 'atual'].includes(trimmed.toLowerCase());
 
-    // Validação por tipo de campo (sem atalho de ponto)
-    switch (currentField.type) {
-      case 'choice': {
-        const choiceIndex = parseInt(text, 10);
-        if (!isNaN(choiceIndex) && choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
-          finalValue = currentField.choices[choiceIndex - 1].value;
-        } else {
-          // Tenta match direto por string do valor
-          const found = currentField.choices.find(c => String(c.value).toLowerCase() === text.toLowerCase());
-          if (found) finalValue = found.value;
-        }
-        break;
+    // 1. Manter valor atual sem alterar
+    if (isKeepCurrent) {
+      if (session.existingConfig[currentField.name] !== undefined) {
+        finalValue = session.existingConfig[currentField.name];
+      } else if (currentField.default !== undefined) {
+        finalValue = currentField.default;
+      } else {
+        finalValue = currentField.type === 'choice' ? currentField.choices?.[0]?.value : '';
       }
-
-      case 'boolean': {
-        const lower = text.toLowerCase().trim();
-        if (['sim', 's', 'yes', 'y', 'true', 'on', 'ativo', 'ativar', '1'].includes(lower)) {
-          finalValue = true;
-        } else if (['não', 'nao', 'n', 'no', 'false', 'off', 'inativo', 'desativar', '2'].includes(lower)) {
-          finalValue = false;
-        }
-        break;
-      }
-
-      case 'number': {
-        // Aceita formatos: "10m", "2h", "180" ou número bare
-        let parsed = NaN;
-        const lower = text.toLowerCase().trim();
-        if (/^\d+h$/i.test(lower)) {
-          parsed = parseInt(lower) * 60; // horas → minutos
-        } else if (/^\d+m$/i.test(lower)) {
-          parsed = parseInt(lower);
-        } else {
-          parsed = parseInt(text, 10);
-        }
-        if (!isNaN(parsed)) {
-          const min = currentField.min !== undefined ? currentField.min : -Infinity;
-          const max = currentField.max !== undefined ? currentField.max : Infinity;
-          if (parsed >= min && parsed <= max) {
-            finalValue = parsed;
+    } else {
+      // 2. Validação por tipo de campo
+      switch (currentField.type) {
+        case 'choice': {
+          const choiceIndex = parseInt(text, 10);
+          if (!isNaN(choiceIndex) && choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
+            finalValue = currentField.choices[choiceIndex - 1].value;
           } else {
-            // Fora do range — informa e permanece no passo
-            const rangeInfo = (currentField.min !== undefined || currentField.max !== undefined)
-              ? ` (mínimo: ${currentField.min || 0}, máximo: ${currentField.max || '∞'})`
-              : '';
-            await sendSafeMessage(sock, from, {
-              text: `⚠️ Valor fora do intervalo permitido${rangeInfo}. Tente novamente.`
-            }, { quoted: msg });
-            return true;
+            // Suporte inteligente a tempo se as choices forem de tempo (ex: 1m, 2m, 30s)
+            const lowText = text.toLowerCase().trim();
+            if (['1m', '1 min', '1 minuto', '60s', '60'].includes(lowText)) {
+              const c = currentField.choices.find(c => c.value === 60);
+              if (c) finalValue = c.value;
+            } else if (['30s', '30 seg', '30 segundos', '30'].includes(lowText)) {
+              const c = currentField.choices.find(c => c.value === 30);
+              if (c) finalValue = c.value;
+            } else if (['2m', '2 min', '2 minutos', '120s', '120'].includes(lowText)) {
+              const c = currentField.choices.find(c => c.value === 120);
+              if (c) finalValue = c.value;
+            } else if (['5m', '5 min', '5 minutos', '300s', '300'].includes(lowText)) {
+              const c = currentField.choices.find(c => c.value === 300);
+              if (c) finalValue = c.value;
+            } else if (['0', 'nao', 'não', 'nunca', 'desativado', 'desativar', 'permanente'].includes(lowText)) {
+              const c = currentField.choices.find(c => c.value === 0);
+              if (c) finalValue = c.value;
+            }
+
+            if (finalValue === null) {
+              // Tenta match direto por string do valor
+              const found = currentField.choices.find(c => String(c.value).toLowerCase() === text.toLowerCase());
+              if (found) finalValue = found.value;
+            }
           }
+          break;
         }
-        break;
-      }
 
-      case 'string': {
-        if (text.length > 0) {
-          finalValue = text;
+        case 'boolean': {
+          const lower = text.toLowerCase().trim();
+          if (['sim', 's', 'yes', 'y', 'true', 'on', 'ativo', 'ativar', '1'].includes(lower)) {
+            finalValue = true;
+          } else if (['não', 'nao', 'n', 'no', 'false', 'off', 'inativo', 'desativar', '2'].includes(lower)) {
+            finalValue = false;
+          }
+          break;
         }
-        break;
-      }
 
-      case 'domain_list': {
-        // "nenhum", "todos", "bloquear" ou "bloqueartodos" → lista vazia (bloqueia tudo)
-        if (['nenhum', 'todos', 'bloquear', 'bloqueartodos', 'none', 'all'].includes(text.toLowerCase().trim())) {
-          finalValue = [];
-        } else {
+        case 'number': {
+          let parsed = NaN;
+          const lower = text.toLowerCase().trim();
+          if (/^\d+h$/i.test(lower)) {
+            parsed = parseInt(lower) * 60; // horas → minutos
+          } else if (/^\d+m$/i.test(lower)) {
+            parsed = parseInt(lower);
+          } else {
+            parsed = parseInt(text, 10);
+          }
+          if (!isNaN(parsed)) {
+            const min = currentField.min !== undefined ? currentField.min : -Infinity;
+            const max = currentField.max !== undefined ? currentField.max : Infinity;
+            if (parsed >= min && parsed <= max) {
+              finalValue = parsed;
+            } else {
+              const rangeInfo = (currentField.min !== undefined || currentField.max !== undefined)
+                ? ` (mínimo: ${currentField.min || 0}, máximo: ${currentField.max || '∞'})`
+                : '';
+              await sendSafeMessage(sock, from, {
+                text: `⚠️ Valor fora do intervalo permitido${rangeInfo}. Tente novamente.`
+              }, { quoted: msg });
+              return true;
+            }
+          }
+          break;
+        }
+
+        case 'string': {
+          if (text.length > 0) {
+            finalValue = text;
+          }
+          break;
+        }
+
+        case 'domain_list': {
+          if (['nenhum', 'todos', 'bloquear', 'bloqueartodos', 'none', 'all'].includes(text.toLowerCase().trim())) {
+            finalValue = [];
+          } else {
+            finalValue = text.split(/[\s,;]+/)
+              .map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim())
+              .filter(d => d.length > 0 && d.includes('.'));
+            if (finalValue.length === 0) {
+              finalValue = null;
+            }
+          }
+          break;
+        }
+
+        case 'string_list': {
           finalValue = text.split(/[\s,;]+/)
-            .map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim())
-            .filter(d => d.length > 0 && d.includes('.'));
-          if (finalValue.length === 0) {
-            finalValue = null; // Entrada inválida
-          }
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+          break;
         }
-        break;
-      }
 
-      case 'string_list': {
-        finalValue = text.split(/[\s,;]+/)
-          .map(s => s.trim())
-          .filter(s => s.length > 0);
-        break;
+        default:
+          finalValue = text;
+          break;
       }
-
-      default:
-        finalValue = text;
-        break;
     }
 
     // Se a entrada foi inválida
@@ -481,6 +625,22 @@ class WizardEngine {
 
     // Salva resposta do campo
     session.answers[currentField.name] = finalValue;
+
+    // Se era apenas uma única etapa selecionada pelo menu de etapas:
+    if (session.singleStep) {
+      configManager.updatePluginConfig(from, session.pluginName, session.answers);
+      wizardCache.del(sessionKey);
+
+      let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
+      summaryText += `📋 *Configuração atualizada com sucesso:*\n`;
+      const valDisplay = Array.isArray(finalValue) ? (finalValue.length ? finalValue.join(', ') : 'Nenhum') : String(finalValue);
+      summaryText += `• *${currentField.name}:* \`${valDisplay}\`\n\n`;
+      summaryText += `${t(lang, 'common.saved')}`;
+
+      await sendSafeMessage(sock, from, { text: summaryText }, { quoted: msg });
+      return true;
+    }
+
     session.stepIndex += 1;
 
     // Próximo passo ou conclusão
@@ -529,11 +689,21 @@ class WizardEngine {
 
     const currentVal = session.existingConfig[field.name];
     if (currentVal !== undefined) {
-      const displayVal = Array.isArray(currentVal) ? (currentVal.join(', ') || 'Nenhum') : String(currentVal);
+      let displayVal = Array.isArray(currentVal) ? (currentVal.join(', ') || 'Nenhum') : String(currentVal);
+      if (field.type === 'choice' && Array.isArray(field.choices)) {
+        const matchChoice = field.choices.find(c => c.value === currentVal);
+        if (matchChoice) displayVal = resolveSchemaText(matchChoice.label, lang);
+      }
       prompt += `${t(lang, 'wizard.current_val', { current: displayVal })}\n`;
+      prompt += `💡 *Dica:* Envie *.* (ponto) para MANTER o valor atual.\n\n`;
     } else if (field.default !== undefined) {
-      const displayDef = Array.isArray(field.default) ? (field.default.join(', ') || 'Nenhum') : String(field.default);
+      let displayDef = Array.isArray(field.default) ? (field.default.join(', ') || 'Nenhum') : String(field.default);
+      if (field.type === 'choice' && Array.isArray(field.choices)) {
+        const matchDef = field.choices.find(c => c.value === field.default);
+        if (matchDef) displayDef = resolveSchemaText(matchDef.label, lang);
+      }
       prompt += `📌 *Valor padrão:* \`${displayDef}\`\n`;
+      prompt += `💡 *Dica:* Envie *.* (ponto) para USAR o valor padrão.\n\n`;
     }
 
     prompt += `❌ Envie *X* a qualquer momento para cancelar.`;

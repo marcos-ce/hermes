@@ -33,15 +33,20 @@ module.exports = {
       },
       {
         name: 'autoDeleteSeconds',
-        type: 'number',
+        type: 'choice',
         question: {
-          pt: 'Após quantos segundos a mensagem deve ser apagada automaticamente? (Digite 0 para não apagar):',
-          es: '¿Después de cuántos segundos debe borrarse automáticamente el mensaje? (Escribe 0 para no borrar):',
-          en: 'After how many seconds should the message be auto-deleted? (Enter 0 to not delete):'
+          pt: 'Após quanto tempo a mensagem de boas-vindas deve ser apagada automaticamente?',
+          es: '¿Después de cuánto tiempo debe borrarse automáticamente el mensaje de bienvenida?',
+          en: 'After how long should the welcome message be automatically deleted?'
         },
-        default: 0,
-        min: 0,
-        max: 3600
+        choices: [
+          { value: 0, label: { pt: 'Não apagar (Permanente)', es: 'No borrar (Permanente)', en: 'Do not delete (Permanent)' } },
+          { value: 30, label: { pt: '30 segundos', es: '30 segundos', en: '30 seconds' } },
+          { value: 60, label: { pt: '1 minuto (Recomendado)', es: '1 minuto (Recomendado)', en: '1 minute (Recommended)' } },
+          { value: 120, label: { pt: '2 minutos', es: '2 minutos', en: '2 minutes' } },
+          { value: 300, label: { pt: '5 minutos', es: '5 minutos', en: '5 minutes' } }
+        ],
+        default: 0
       }
     ]
   },
@@ -72,13 +77,29 @@ module.exports = {
     }
 
     // Configuração direta de tempo de auto-delete
-    if (['tempo', 'time', 'segundos', 'secs', 'seg'].includes(sub)) {
-      const parsedSecs = parseInt(args[1], 10);
-      if (isNaN(parsedSecs) || parsedSecs < 0) {
-        return reply('⚠️ Digite os segundos de auto-delete. Ex: `/bemvindo tempo 15` (ou 0 para não apagar).');
+    if (['tempo', 'time', 'segundos', 'secs', 'seg', 'min', 'minutos'].includes(sub)) {
+      const rawArg = (args[1] || '').toLowerCase().trim();
+      let parsedSecs = 0;
+
+      if (rawArg.endsWith('m') || rawArg.endsWith('min')) {
+        parsedSecs = parseInt(rawArg, 10) * 60;
+      } else if (rawArg.endsWith('s')) {
+        parsedSecs = parseInt(rawArg, 10);
+      } else {
+        const num = parseInt(rawArg, 10);
+        if (!isNaN(num)) {
+          // Se digitou entre 1 e 10 sem unidade, assume minutos (ex: 1 -> 60s, 2 -> 120s)
+          parsedSecs = (num > 0 && num <= 10) ? num * 60 : num;
+        }
       }
+
+      if (isNaN(parsedSecs) || parsedSecs < 0) {
+        return reply('⚠️ Digite o tempo de auto-delete. Ex: `/bemvindo tempo 1m` (1 minuto), `/bemvindo tempo 30s` ou `0` para permanente.');
+      }
+
       configManager.updatePluginConfig(from, 'welcome', { autoDeleteSeconds: parsedSecs, enabled: true });
-      return reply(`💾 *Boas-Vindas atualizado:* Auto-delete definido para *${parsedSecs} segundos*.`);
+      const displayTime = parsedSecs === 0 ? 'Desativado (Permanente)' : (parsedSecs >= 60 ? `${Math.round(parsedSecs / 60)} minuto(s)` : `${parsedSecs} segundos`);
+      return reply(`💾 *Boas-Vindas atualizado:* Auto-delete definido para *${displayTime}*.`);
     }
 
     // Resetar para mensagem padrão

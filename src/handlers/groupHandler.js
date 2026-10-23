@@ -117,8 +117,12 @@ async function handleParticipantsUpdate(sock, update) {
           const sentMsg = await sendSafeMessage(sock, groupJid, messagePayload);
 
           // Auto-delete configurável em segundos
-          const autoDeleteSecs = parseInt(welcomeCfg.autoDeleteSeconds, 10);
+          let autoDeleteSecs = parseInt(welcomeCfg.autoDeleteSeconds, 10);
           if (autoDeleteSecs > 0 && sentMsg?.key) {
+            // Proteção contra exclusão instantânea acidental (se configurado como 1s ou 2s acidentalmente, assume 1 minuto)
+            if (autoDeleteSecs < 5) {
+              autoDeleteSecs = 60;
+            }
             setTimeout(async () => {
               await safeDelete(sock, groupJid, sentMsg.key);
             }, autoDeleteSecs * 1000);
