@@ -106,7 +106,7 @@ async function connectBot(options = {}) {
     // Exibição do QR Code no terminal se conexão for via QR
     if (qr && !isPairingCode) {
       if (process.stdout.isTTY) console.clear();
-      console.log('\n⚡ Escaneie o QR Code abaixo com o seu WhatsApp:\n');
+      console.log('\n Escaneie o QR Code abaixo com o seu WhatsApp:\n');
       qrcode.generate(qr, { small: true });
       console.log('\nAguardando leitura do QR Code...\n');
     }
@@ -133,7 +133,7 @@ async function connectBot(options = {}) {
       if (sock.user?.lid) {
         console.log(`🔒 LID: ${sock.user.lid}`);
       }
-      console.log(`🛡️  Modo Furtivo Anti-Ban: ATIVO (Presença Desconectada/Invisível)`);
+      console.log(`🛡️Anti-Ban: ATIVO`);
       console.log('====================================================\n');
 
       // Registra identidade do bot no mapa LID <-> Telefone
