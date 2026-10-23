@@ -1,6 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, safeDelete } = require('../utils/antiBan');
-const { cleanJid } = require('../utils/jidResolver');
+const { cleanJid, getGroupMetadata } = require('../utils/jidResolver');
 const { t, resolveSchemaText } = require('../utils/i18n');
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
@@ -91,7 +91,18 @@ class WizardEngine {
     const lang = configManager.getGroupLang(from);
     const currentPrefix = configManager.getGroupPrefix(from);
 
+    let groupName = 'Grupo';
+    let membersCount = 0;
+    if (from.endsWith('@g.us')) {
+      try {
+        const meta = await getGroupMetadata(sock, from);
+        groupName = meta?.subject || 'Grupo';
+        membersCount = meta?.participants?.length || 0;
+      } catch (_) {}
+    }
+
     // Lista plugins que possuem schema ou são configuráveis
+    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'automsg', 'ban', 'schedule', 'warn', 'welcome'];
     const modules = [];
     for (const [name, schema] of pluginLoader.schemas.entries()) {
       const isEnabled = configManager.isPluginEnabled(from, name);
@@ -105,6 +116,12 @@ class WizardEngine {
         schema
       });
     }
+
+    modules.sort((a, b) => {
+      const indexA = preferredOrder.indexOf(a.name);
+      const indexB = preferredOrder.indexOf(b.name);
+      return (indexA !== -1 ? indexA : 99) - (indexB !== -1 ? indexB : 99);
+    });
 
     const localizedModuleNames = {
       pt: {
@@ -139,26 +156,33 @@ class WizardEngine {
       }
     };
 
-    let menuText = `${t(lang, 'config.panel_title')}\n\n`;
-    menuText += `${t(lang, 'config.panel_desc')}\n\n`;
-    menuText += `📌 *Prefixo atual:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\`\n`;
-    menuText += `─────────────────────────\n`;
+    let menuText = `⚙️ PAINEL DE CONFIGURAÇÕES - HERMES\n\n`;
+    menuText += `Responda com o NÚMERO do módulo para ativar/desativar ou configurar:\n`;
+    menuText += `Ou digite:\n`;
+    menuText += `* [P] [novo_prefixo] para trocar o prefixo (Ex: P /)\n`;
+    menuText += `* [L] para trocar o idioma\n`;
+    menuText += `* [X] para apagar e fechar o menu\n\n`;
+    menuText += `📌 Prefixo atual: ${currentPrefix} | 🌐 Idioma: ${lang.toUpperCase()}\n`;
+    if (from.endsWith('@g.us')) {
+      menuText += `👥 *Grupo:* ${groupName} (${membersCount} membros)\n`;
+    }
+    menuText += `\n─────────────────────────\n`;
 
     const nameMap = localizedModuleNames[lang] || localizedModuleNames.pt;
 
     modules.forEach((mod, index) => {
       const statusIcon = mod.enabled ? '🟢 [ON]' : '🔴 [OFF]';
       const displayName = nameMap[mod.name] || mod.name.toUpperCase();
-      menuText += `*[${index + 1}]* ${statusIcon} *${displayName}*\n`;
-      if (mod.desc) menuText += `    _${mod.desc}_\n`;
+      menuText += `[${index + 1}] ${statusIcon} ${displayName}\n`;
+      if (mod.desc) menuText += `    ${mod.desc}\n`;
     });
 
     menuText += `─────────────────────────\n`;
-    menuText += `💡 *Exemplos rápidos:*\n`;
-    menuText += `• Digite *1* para ativar/desativar ou configurar o módulo 1\n`;
-    menuText += `• Digite *P /* para mudar o prefixo para /\n`;
-    menuText += `• Digite *L* para mudar o idioma\n`;
-    menuText += `• Digite *X* para apagar e fechar o menu`;
+    menuText += `💡 Exemplos rápidos:\n`;
+    menuText += `* Digite 1 para ativar/desativar ou configurar o módulo 1\n`;
+    menuText += `* Digite P / para mudar o prefixo para /\n`;
+    menuText += `* Digite L para mudar o idioma\n`;
+    menuText += `* Digite X para apagar e fechar o menu`;
 
     const session = {
       type: 'config_menu',
