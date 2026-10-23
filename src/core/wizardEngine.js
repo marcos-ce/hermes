@@ -198,8 +198,10 @@ class WizardEngine {
         ? (plugin.description[lang] || plugin.description.pt) 
         : (plugin.description || '');
 
+      const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
       directCommands.push({
         name,
+        num: cmdNum,
         usage: `${currentPrefix}${usage}`,
         desc
       });
@@ -215,17 +217,19 @@ class WizardEngine {
       menuText += `─────────────────────────\n`;
       menuText += `${otherTitle}\n`;
       directCommands.forEach(cmd => {
-        menuText += `* *${cmd.usage}* - ${cmd.desc}\n`;
+        const numLabel = cmd.num ? `[${cmd.num}] ` : '';
+        menuText += `* ${numLabel}*${cmd.usage}* - ${cmd.desc}\n`;
       });
     }
 
     menuText += `─────────────────────────\n`;
     menuText += `💡 Exemplos rápidos:\n`;
-    menuText += `* Digite 1 para ativar/desativar ou configurar o módulo 1\n`;
+    menuText += `* Digite 1 a 8 para ativar/desativar ou configurar os módulos no painel\n`;
+    menuText += `* Use os números com a barra direto no chat (Ex: /5 @user dá ban, /9 aviso marca todos, /10 @user dá adm, /17 dá ping)\n`;
     menuText += `* Digite P / para mudar o prefixo para /\n`;
     menuText += `* Digite L para mudar o idioma\n`;
     menuText += `* Digite X para apagar e fechar o menu\n`;
-    menuText += `* Ou mencione o bot para enviar comandos (Ex: @bot menu ou @bot ping)`;
+    menuText += `* Ou mencione o bot para enviar comandos (Ex: @bot 5 @user ou @bot menu)`;
 
     const session = {
       type: 'config_menu',
@@ -566,7 +570,7 @@ class WizardEngine {
 
     let finalValue = null;
     const trimmed = text.trim();
-    const isKeepCurrent = ['.', 'manter', 'keep', 'pular', 'skip', 'ok', 'atual'].includes(trimmed.toLowerCase());
+    const isKeepCurrent = ['.', 'padrao', 'padrão', 'default', 'todos', 'manter', 'keep', 'pular', 'skip', 'ok', 'atual'].includes(trimmed.toLowerCase());
 
     // 1. Manter valor atual sem alterar
     if (isKeepCurrent) {

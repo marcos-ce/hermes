@@ -45,8 +45,11 @@ module.exports = {
             ? (plugin.description[l] || plugin.description.pt)
             : (plugin.description || '');
 
+          const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
+
           groupCmds.push({
             name,
+            num: cmdNum,
             usage: `${p}${usage}`,
             desc
           });
@@ -62,17 +65,17 @@ module.exports = {
           pt: {
             title: '🤖 *HERMES BOT - COMANDOS DO GRUPO*',
             sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRAÇÃO 〕━━━╮',
-            tip: `💡 *Dica:* Você pode usar comandos com o prefixo (Ex: \`${p}all\`) ou mencionando o bot (Ex: \`@bot all\`, \`@bot menu\`).`
+            tip: `💡 *Dica:* Use comandos pelo nome (Ex: \`${p}all\`), pelo número atrelado (Ex: \`${p}9 aviso\`, \`${p}5 @user\`, \`${p}10 @user\`, \`${p}17\`) ou mencionando o bot (Ex: \`@bot 9 aviso\`, \`@bot all\`).`
           },
           es: {
             title: '🤖 *HERMES BOT - COMANDOS DEL GRUPO*',
             sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRACIÓN 〕━━━╮',
-            tip: `💡 *Consejo:* Puedes usar comandos con prefijo (Ej: \`${p}all\`) o mencionando al bot (Ej: \`@bot all\`, \`@bot menu\`).`
+            tip: `💡 *Consejo:* Usa comandos por nombre (Ej: \`${p}all\`), por número asignado (Ej: \`${p}9 aviso\`, \`${p}5 @user\`, \`${p}10 @user\`, \`${p}17\`) o mencionando al bot (Ej: \`@bot 9 aviso\`, \`@bot all\`).`
           },
           en: {
             title: '🤖 *HERMES BOT - GROUP COMMANDS*',
             sec: '╭━━━〔 🛡️ ADMINISTRATION COMMANDS 〕━━━╮',
-            tip: `💡 *Tip:* You can send commands with prefix (e.g. \`${p}all\`) or by mentioning the bot (e.g. \`@bot all\`, \`@bot menu\`).`
+            tip: `💡 *Tip:* Use commands by name (e.g. \`${p}all\`), by assigned number (e.g. \`${p}9 notice\`, \`${p}5 @user\`, \`${p}10 @user\`, \`${p}17\`) or by mentioning the bot (e.g. \`@bot 9 notice\`, \`@bot all\`).`
           }
         };
 
@@ -83,7 +86,8 @@ module.exports = {
         output += `${tInfo.sec}\n`;
 
         groupCmds.forEach(cmd => {
-          output += `┃ *${cmd.usage}* - ${cmd.desc}\n`;
+          const numLabel = cmd.num ? `[${cmd.num}] ` : '';
+          output += `┃ *${numLabel}${cmd.usage}* - ${cmd.desc}\n`;
         });
         output += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
         output += `${tInfo.tip}`;
@@ -109,8 +113,11 @@ module.exports = {
             ? (plugin.description[l] || plugin.description.pt)
             : (plugin.description || '');
 
+          const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
+
           ownerCmds.push({
             name,
+            num: cmdNum,
             usage: `${p}${usage}`,
             desc
           });
@@ -128,16 +135,19 @@ module.exports = {
         `─────────────────────────\n`;
 
       ownerCmds.forEach(cmd => {
-        ownerMenu += `🔑 *${cmd.usage}*\n    _${cmd.desc}_\n`;
+        const numLabel = cmd.num ? `[${cmd.num}] ` : '';
+        ownerMenu += `🔑 *${numLabel}${cmd.usage}*\n    _${cmd.desc}_\n`;
       });
 
       const pingPlugin = pluginLoader.commands.get('ping');
       if (pingPlugin) {
-        ownerMenu += `🏓 *${p}${pingPlugin.usage || 'ping'}*\n    _${pingPlugin.description}_\n`;
+        const pingNum = pingPlugin.cmdNumber || pluginLoader.getCommandNumber('ping');
+        const numLabel = pingNum ? `[${pingNum}] ` : '';
+        ownerMenu += `🏓 *${numLabel}${p}${pingPlugin.usage || 'ping'}*\n    _${pingPlugin.description}_\n`;
       }
 
       ownerMenu += `─────────────────────────\n` +
-        `💡 *Dica Anti-Ban:* Gerencie seus grupos e licenças aqui no privado para evitar poluição nos grupos.`;
+        `💡 *Dica Anti-Ban:* Gerencie seus grupos e licenças aqui no privado usando o comando ou o número (Ex: \`${p}19 on 30\`, \`${p}20\`, \`${p}17\`).`;
 
       return reply(ownerMenu);
     }

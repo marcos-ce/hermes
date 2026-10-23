@@ -329,7 +329,8 @@ async function processSingleMessage(sock, msg) {
   const activeSession = wizardCache.get(wizardKey) || (rawSender ? wizardCache.get(`${from}:${rawSender}`) : null);
 
   // Se existe sessão do Wizard ativa e o texto NÃO é um comando com prefixo ou menção
-  if (activeSession && !isMentionPrefix && (!text.startsWith(groupPrefix) || text.length <= 3)) {
+  const isExplicitCommand = text.startsWith(groupPrefix) || isMentionPrefix;
+  if (activeSession && !isExplicitCommand) {
     const intercepted = await wizardEngine.handleInput(sock, msg, from, sender, text);
     if (intercepted) {
       return;

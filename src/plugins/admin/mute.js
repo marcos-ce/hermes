@@ -18,16 +18,30 @@ module.exports = {
     // Comandos explícitos de abrir
     const isExplicitOpen = ['abrir', 'unlock', 'unmute', 'desmutar'].includes(cmd);
 
-    // Fechamento: comando direto ou !mute on / !mute 1 / !mute fechar
-    if (isExplicitClose || (['mute', 'mutar', 'grupo'].includes(cmd) && ['on', 'fechar', 'cerrar', 'lock', '1'].includes(arg))) {
+    // Fechamento: comando direto ou !mute on / !mute 1 / !mute fechar / !12 fechar
+    if (isExplicitClose || (['mute', 'mutar', 'grupo', '12'].includes(cmd) && ['on', 'fechar', 'cerrar', 'lock', '1'].includes(arg))) {
       await sock.groupSettingUpdate(from, 'announcement');
       return reply(t('mute.closed'));
     }
 
-    // Abertura: comando direto ou !mute off / !mute 2 / !mute abrir
-    if (isExplicitOpen || (['mute', 'mutar', 'grupo'].includes(cmd) && ['off', 'abrir', 'unlock', 'open', '2'].includes(arg))) {
+    // Abertura: comando direto ou !mute off / !mute 2 / !mute abrir / !12 abrir
+    if (isExplicitOpen || (['mute', 'mutar', 'grupo', '12'].includes(cmd) && ['off', 'abrir', 'unlock', 'open', '2'].includes(arg))) {
       await sock.groupSettingUpdate(from, 'not_announcement');
       return reply(t('mute.opened'));
+    }
+
+    // Se chamado como /12 sem argumentos, faz o toggle inteligente do grupo
+    if (cmd === '12' && !arg) {
+      const { getGroupMetadata } = require('../../utils/jidResolver');
+      const meta = await getGroupMetadata(sock, from);
+      const isClosed = meta?.announce === true || meta?.announce === 'true';
+      if (isClosed) {
+        await sock.groupSettingUpdate(from, 'not_announcement');
+        return reply(t('mute.opened'));
+      } else {
+        await sock.groupSettingUpdate(from, 'announcement');
+        return reply(t('mute.closed'));
+      }
     }
 
     // Se chamado apenas como !mute ou !grupo sem argumentos (ou escolha interativa)
