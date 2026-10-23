@@ -13,17 +13,18 @@ module.exports = {
   async execute({ sock, _msg, from, sender, args, command, reply, t, isOwner, isAdmin, isGroup }) {
     const cmd = (command || '').toLowerCase();
     const isDirectActivate = ['ativar', 'activar', 'activate'].includes(cmd);
+    const isPvDirect = ['pv', 'dm'].includes(cmd);
     const sub = isDirectActivate ? (args[0] ? args[0].toLowerCase() : 'on') : (args[0] || 'status').toLowerCase();
     const canManageGroup = isOwner || (settings.authMode === 'admin' && isAdmin);
 
     // ==========================================
-    // Gestão de Comandos Privados (!pv on / !pv off)
+    // Gestão de Comandos Privados (!pv on / !pv off ou !bot pv on / !bot pv off)
     // ==========================================
-    if (sub === 'pv' || sub === 'dm') {
+    if (isPvDirect || sub === 'pv' || sub === 'dm') {
       if (!isOwner) {
         return reply(t('common.no_permission_owner'));
       }
-      const state = (args[1] || '').toLowerCase();
+      const state = (isPvDirect ? (args[0] || '') : (args[1] || '')).toLowerCase();
       if (state === 'on' || state === '1' || state === 'ativar') {
         configManager.setPrivateEnabled(true);
         return reply(t('saas.pv_on'));
@@ -32,7 +33,7 @@ module.exports = {
         return reply(t('saas.pv_off'));
       } else {
         const current = configManager.isPrivateEnabled() ? t('common.enabled') : t('common.disabled');
-        return reply(`🔒 *Privado (DM):* ${current}\nUse: \`!pv on\` ou \`!pv off\``);
+        return reply(`🔒 *Privado (DM):* ${current}\nUse: \`/pv on\` ou \`/pv off\``);
       }
     }
 
