@@ -343,7 +343,7 @@ class WizardEngine {
     return true;
   }
 
-  async _handleLangSelectionInput(sock, msg, from, sender, text, session, lang) {
+  async _handleLangSelectionInput(sock, msg, from, sender, text, session, _lang) {
     const sessionKey = `${from}:${sender}`;
     const lower = text.toLowerCase().trim();
 

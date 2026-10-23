@@ -52,7 +52,7 @@ module.exports = {
       if (msg.key) {
         await safeDelete(sock, from, msg.key);
       }
-    } catch (err) {
+    } catch (_err) {
       return reply(t('common.error'));
     }
   }

@@ -1,7 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
-const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
-const { extractTarget, resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
+const { safeKick } = require('../../utils/antiBan');
+const { resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 
 module.exports = {

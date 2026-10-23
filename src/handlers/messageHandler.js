@@ -1,6 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
-const { cleanJid, extractSender, resolveSender, checkAdminStatus } = require('../utils/jidResolver');
+const { extractSender, resolveSender, checkAdminStatus } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');

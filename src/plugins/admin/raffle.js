@@ -1,5 +1,4 @@
 const { getGroupMetadata, cleanJid } = require('../../utils/jidResolver');
-const settings = require('../../config/settings');
 
 module.exports = {
   name: 'sortear',

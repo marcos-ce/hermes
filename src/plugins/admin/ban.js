@@ -1,5 +1,5 @@
 const { safeKick, safeDelete } = require('../../utils/antiBan');
-const { extractTarget, resolveTarget, checkAdminStatus, cleanJid } = require('../../utils/jidResolver');
+const { resolveTarget, checkAdminStatus, cleanJid } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');

@@ -1,5 +1,5 @@
 const configManager = require('../../core/configManager');
-const { extractTarget, resolveTarget, getGroupMetadata } = require('../../utils/jidResolver');
+const { resolveTarget } = require('../../utils/jidResolver');
 const { safeKick } = require('../../utils/antiBan');
 const settings = require('../../config/settings');
 
@@ -11,7 +11,7 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: true,
 
-  async execute({ sock, msg, from, sender, args, text, reply, t, isOwner, isGroup }) {
+  async execute({ sock, msg, from, _sender, args, _text, reply, t, isOwner, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
     const sub = (args[0] || 'list').toLowerCase();

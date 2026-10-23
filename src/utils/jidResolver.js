@@ -311,7 +311,7 @@ async function getGroupMetadata(sock, groupJid) {
       }
     }
     return metadata;
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 }

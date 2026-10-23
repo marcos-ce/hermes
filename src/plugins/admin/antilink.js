@@ -225,7 +225,7 @@ module.exports = {
   /**
    * Hook passivo: monitora mensagens em tempo real
    */
-  async onMessage({ sock, msg, from, sender, text, lang }) {
+  async onMessage({ sock, msg, from, sender, _text, lang }) {
     if (!configManager.isPluginEnabled(from, 'antilink')) return false;
 
     // Extrai TODOS os textos relevantes (incluindo link previews e legendas de mídia)

@@ -29,7 +29,7 @@ module.exports = {
       return reply(t('promote.success', { user: targetData.displayNum }), {
         mentions: [targetData.groupJid, targetData.phoneJid]
       });
-    } catch (err) {
+    } catch (_err) {
       return reply(t('common.error'));
     }
   }

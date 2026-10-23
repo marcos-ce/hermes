@@ -106,13 +106,14 @@ async function safeDelete(sock, jid, key) {
   }
 
   // 1. Tenta deletar normalmente com a chave preparada
+  let deleted = false;
   try {
     await sock.sendMessage(jid, { delete: cleanKey });
+    deleted = true;
   } catch (_) {}
 
-  // 2. Se for em grupo, como o bot é admin, reforça com admin revoke (edit = '8')
-  // No Baileys, edit='8' garante que o WhatsApp apague mensagens mesmo quando edit='7' falha no servidor
-  if (isGroup) {
+  // 2. Se for em grupo e mensagem de terceiros, reforça com admin revoke caso necessário
+  if (!deleted && isGroup && !cleanKey.fromMe) {
     try {
       const adminRevokeKey = {
         remoteJid: jid,

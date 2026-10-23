@@ -1,7 +1,4 @@
 const configManager = require('../../core/configManager');
-const settings = require('../../config/settings');
-const { cleanJid } = require('../../utils/jidResolver');
-const { t } = require('../../utils/i18n');
 
 module.exports = {
   name: 'bangrupo',
@@ -27,7 +24,7 @@ module.exports = {
   adminOnly: false,
   botAdminRequired: false,
 
-  async execute({ sock, msg, from, sender, args, command, reply, t: translate, isGroup }) {
+  async execute({ _sock, _msg, from, _sender, args, command, reply, t: translate, isGroup }) {
     const cmd = (command || '').toLowerCase();
     const isUnbanAction = [
       'desbangp',

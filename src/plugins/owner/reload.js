@@ -10,7 +10,7 @@ module.exports = {
 
   async execute({ reply, t }) {
     try {
-      const stats = pluginLoader.reloadPlugins();
+      pluginLoader.reloadPlugins();
       return reply(t('reload.success'));
     } catch (err) {
       return reply(t('reload.error', { error: err.message }));

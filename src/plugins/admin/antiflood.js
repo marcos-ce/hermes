@@ -3,6 +3,7 @@ const wizardEngine = require('../../core/wizardEngine');
 const { floodCache } = require('../../utils/cache');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
 const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
+const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
 
 module.exports = {

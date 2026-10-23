@@ -10,7 +10,7 @@ module.exports = {
   adminOnly: false,
   botAdminRequired: false,
 
-  async execute({ sock, msg, from, sender, args, command, reply, t, isOwner, isAdmin, isGroup }) {
+  async execute({ sock, _msg, from, sender, args, command, reply, t, isOwner, isAdmin, isGroup }) {
     const cmd = (command || '').toLowerCase();
     const isDirectActivate = ['ativar', 'activar', 'activate'].includes(cmd);
     const sub = isDirectActivate ? (args[0] ? args[0].toLowerCase() : 'on') : (args[0] || 'status').toLowerCase();
