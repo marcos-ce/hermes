@@ -1,7 +1,9 @@
+const dotenv = require('dotenv');
+const path = require('path');
 const logger = require('../utils/logger');
 
 /**
- * Serviço de integração com a API da DeepSeek e Fallback Gratuito OpenRouter
+ * Serviço de integração com a API da DeepSeek e Fallbacks Gratuitos (OpenRouter / Groq)
  * Estritamente confinado em src/services/
  */
 class AIService {
@@ -10,6 +12,10 @@ class AIService {
   }
 
   reloadConfig() {
+    try {
+      dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+    } catch (_) {}
+
     this.enabled = process.env.AI_ENABLED !== 'false';
     this.provider = (process.env.AI_PROVIDER || 'deepseek').toLowerCase();
     this.baseUrl = (process.env.AI_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '');
@@ -21,14 +27,20 @@ class AIService {
     // Configurações do OpenRouter (Fallback / Backup Gratuito)
     this.openRouterKey = (process.env.OPENROUTER_API_KEY || process.env.AI_OPENROUTER_KEY || '').replace(/^["']|["']$/g, '').trim();
     this.openRouterBaseUrl = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-    this.openRouterModel = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat:free';
+    // Modelo padrão ativo verificado no OpenRouter gratuito (evita modelos extintos como deepseek/deepseek-chat:free)
+    this.openRouterModel = process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
+
+    // Configurações do Groq (Alternativa Gratuita de Alta Velocidade)
+    this.groqKey = (process.env.GROQ_API_KEY || '').replace(/^["']|["']$/g, '').trim();
+    this.groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
   }
 
   isConfigured() {
     this.reloadConfig();
     const hasDeepSeek = Boolean(this.apiKey && this.apiKey.length > 0);
     const hasOpenRouter = Boolean(this.openRouterKey && this.openRouterKey.length > 0);
-    return Boolean(this.enabled && (hasDeepSeek || hasOpenRouter));
+    const hasGroq = Boolean(this.groqKey && this.groqKey.length > 0);
+    return Boolean(this.enabled && (hasDeepSeek || hasOpenRouter || hasGroq));
   }
 
   /**
@@ -154,44 +166,70 @@ class AIService {
   }
 
   /**
-   * Executa chamada ao endpoint do OpenRouter com retries inteligentes
+   * Executa chamada ao OpenRouter testando modelos gratuitos ativos com fallback inteligente
    */
-  async callOpenRouter(messages, tools) {
+  async callOpenRouter(messages, tools = null) {
     const url = `${this.openRouterBaseUrl}/chat/completions`;
     const extraHeaders = {
       'HTTP-Referer': 'https://github.com/marcos-ce/hermes',
       'X-Title': 'Hermes Bot WhatsApp'
     };
 
-    let result = await this._requestCompletion({
-      url,
-      apiKey: this.openRouterKey,
-      model: this.openRouterModel,
-      messages,
-      tools,
-      extraHeaders,
-      timeoutMs: 20000 // 20s para modelos gratuitos
-    });
+    // Lista de modelos gratuitos ativos no OpenRouter
+    const freeCandidates = [
+      this.openRouterModel,
+      'google/gemma-4-31b-it:free',
+      'google/gemma-4-26b-a4b-it:free',
+      'nvidia/nemotron-3.5-lightning:free',
+      'dots-studio/dots-3-note-preview:free'
+    ];
 
-    // Se o modelo gratuito retornar erro 400 por não suportar tools, tenta novamente sem tools
-    if (!result.ok && tools && (result.status === 400 || String(result.errorText).toLowerCase().includes('tool'))) {
-      logger.warn({ model: this.openRouterModel }, 'Modelo gratuito OpenRouter rejeitou parâmetro de ferramentas. Tentando sem tools...');
-      result = await this._requestCompletion({
+    // Remove duplicados e modelos que já não existem como free (ex: deepseek/deepseek-chat:free)
+    const modelsToTry = [...new Set(freeCandidates)].filter(m => m && m !== 'deepseek/deepseek-chat:free');
+
+    let lastError = null;
+
+    for (const model of modelsToTry) {
+      logger.info({ model }, 'Tentando modelo gratuito no OpenRouter...');
+      const result = await this._requestCompletion({
         url,
         apiKey: this.openRouterKey,
-        model: this.openRouterModel,
+        model,
         messages,
-        tools: null,
+        tools: null, // Modelos gratuitos rejeitam parâmetro tools; mantemos prompt textual
         extraHeaders,
         timeoutMs: 20000
       });
+
+      if (result.ok) {
+        logger.info({ model }, 'Resposta obtida com sucesso via OpenRouter gratuito!');
+        return { ...result, usedModel: model };
+      }
+
+      logger.warn({ model, status: result.status, error: result.errorText }, 'Modelo falhou no OpenRouter, tentando próximo...');
+      lastError = result;
     }
 
-    return result;
+    return lastError || { ok: false, status: 500, errorText: 'Todos os modelos gratuitos falharam' };
   }
 
   /**
-   * Envia uma requisição de completação de chat com suporte a DeepSeek e Fallback OpenRouter
+   * Executa chamada à API gratuita do Groq (Llama 3.3 70B de altíssima velocidade)
+   */
+  async callGroq(messages) {
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
+    return await this._requestCompletion({
+      url,
+      apiKey: this.groqKey,
+      model: this.groqModel,
+      messages,
+      tools: null,
+      timeoutMs: 15000
+    });
+  }
+
+  /**
+   * Envia uma requisição de completação de chat com suporte a DeepSeek e Fallback OpenRouter/Groq
    * @param {object} params
    * @param {Array<object>} params.messages Lista de mensagens no padrão OpenAI
    * @param {Array<object>} [params.tools] Lista de ferramentas disponíveis
@@ -210,8 +248,9 @@ class AIService {
 
     const hasDeepSeek = Boolean(this.apiKey && this.apiKey.length > 0);
     const hasOpenRouter = Boolean(this.openRouterKey && this.openRouterKey.length > 0);
+    const hasGroq = Boolean(this.groqKey && this.groqKey.length > 0);
 
-    if (!hasDeepSeek && !hasOpenRouter) {
+    if (!hasDeepSeek && !hasOpenRouter && !hasGroq) {
       return { success: false, error: 'API_KEY_MISSING' };
     }
 
@@ -221,7 +260,38 @@ class AIService {
       ...messages
     ];
 
-    // 1. Se DeepSeek está configurada, tenta primeiro
+    // Se o usuário configurou explicitamente AI_PROVIDER=openrouter
+    if (this.provider === 'openrouter' && hasOpenRouter) {
+      const res = await this.callOpenRouter(fullMessages, tools);
+      if (res.ok) {
+        return {
+          success: true,
+          content: res.content,
+          toolCalls: res.toolCalls,
+          rawMessage: res.rawMessage,
+          provider: 'openrouter',
+          fallbackUsed: false
+        };
+      }
+      return { success: false, error: `OPENROUTER_${res.status}: ${res.errorText}` };
+    }
+
+    // Se o usuário configurou explicitamente AI_PROVIDER=groq
+    if (this.provider === 'groq' && hasGroq) {
+      const res = await this.callGroq(fullMessages);
+      if (res.ok) {
+        return {
+          success: true,
+          content: res.content,
+          rawMessage: res.rawMessage,
+          provider: 'groq',
+          fallbackUsed: false
+        };
+      }
+      return { success: false, error: `GROQ_${res.status}: ${res.errorText}` };
+    }
+
+    // 1. Tenta DeepSeek primária se configurada
     if (hasDeepSeek) {
       try {
         const primaryUrl = `${this.baseUrl}/chat/completions`;
@@ -248,7 +318,7 @@ class AIService {
 
         // Se DeepSeek falhou (402 Saldo Insuficiente, 401, 429, 5xx) E temos chave OpenRouter configurada
         if (hasOpenRouter) {
-          logger.info({ fallbackModel: this.openRouterModel, primaryStatus: res.status }, '🔄 Acionando Fallback para OpenRouter gratuito...');
+          logger.info('🔄 Acionando Fallback para OpenRouter gratuito...');
           const fallbackRes = await this.callOpenRouter(fullMessages, tools);
           if (fallbackRes.ok) {
             return {
@@ -261,19 +331,29 @@ class AIService {
             };
           }
           logger.error({ status: fallbackRes.status, error: fallbackRes.errorText }, 'Falha também no fallback OpenRouter');
-          return {
-            success: false,
-            error: `DEEPSEEK_${res.status}: ${res.errorText} | OPENROUTER_${fallbackRes.status}: ${fallbackRes.errorText}`
-          };
         }
 
-        // Sem OpenRouter configurado: retorna o erro da DeepSeek
+        // Se OpenRouter falhou ou não tem chave, mas tem Groq
+        if (hasGroq) {
+          logger.info('🔄 Acionando Fallback para Groq gratuito...');
+          const groqRes = await this.callGroq(fullMessages);
+          if (groqRes.ok) {
+            return {
+              success: true,
+              content: groqRes.content,
+              rawMessage: groqRes.rawMessage,
+              provider: 'groq',
+              fallbackUsed: true
+            };
+          }
+        }
+
+        // Sem fallback funcional: retorna o erro da DeepSeek
         return { success: false, error: `HTTP_${res.status}: ${res.errorText}` };
       } catch (err) {
         logger.warn({ err }, 'Exceção ao chamar DeepSeek API');
 
         if (hasOpenRouter) {
-          logger.info({ fallbackModel: this.openRouterModel }, '🔄 Acionando Fallback para OpenRouter após exceção no DeepSeek...');
           try {
             const fallbackRes = await this.callOpenRouter(fullMessages, tools);
             if (fallbackRes.ok) {
@@ -286,9 +366,22 @@ class AIService {
                 fallbackUsed: true
               };
             }
-          } catch (fErr) {
-            logger.error({ fErr }, 'Erro no fallback OpenRouter');
-          }
+          } catch (_) {}
+        }
+
+        if (hasGroq) {
+          try {
+            const groqRes = await this.callGroq(fullMessages);
+            if (groqRes.ok) {
+              return {
+                success: true,
+                content: groqRes.content,
+                rawMessage: groqRes.rawMessage,
+                provider: 'groq',
+                fallbackUsed: true
+              };
+            }
+          } catch (_) {}
         }
 
         if (err.name === 'TimeoutError') {
@@ -313,6 +406,28 @@ class AIService {
           };
         }
         return { success: false, error: `OPENROUTER_${fallbackRes.status}: ${fallbackRes.errorText}` };
+      } catch (err) {
+        if (err.name === 'TimeoutError') {
+          return { success: false, error: 'TIMEOUT' };
+        }
+        return { success: false, error: 'CONNECTION_ERROR' };
+      }
+    }
+
+    // 3. Apenas Groq configurado diretamente
+    if (hasGroq) {
+      try {
+        const groqRes = await this.callGroq(fullMessages);
+        if (groqRes.ok) {
+          return {
+            success: true,
+            content: groqRes.content,
+            rawMessage: groqRes.rawMessage,
+            provider: 'groq',
+            fallbackUsed: false
+          };
+        }
+        return { success: false, error: `GROQ_${groqRes.status}: ${groqRes.errorText}` };
       } catch (err) {
         if (err.name === 'TimeoutError') {
           return { success: false, error: 'TIMEOUT' };

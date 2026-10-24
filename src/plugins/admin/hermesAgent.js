@@ -211,17 +211,24 @@ module.exports = {
       const isConfigured = aiService.isConfigured();
       const hasDeepSeek = Boolean(aiService.apiKey && aiService.apiKey.length > 0);
       const hasOpenRouter = Boolean(aiService.openRouterKey && aiService.openRouterKey.length > 0);
+      const hasGroq = Boolean(aiService.groqKey && aiService.groqKey.length > 0);
 
       let info = `🤖 *STATUS DO HERMES IA*\n\n`;
       info += `🟢 *Estado no grupo:* ${isEnabled ? '✅ ATIVADO' : '❌ DESATIVADO (use ' + groupPrefix + 'hermes on)'}\n`;
       info += `🎭 *Personalidade:* \`${cfg.personality || 'descontraido'}\`\n`;
       info += `🧠 *Buffer de Memória:* ${stats.count} mensagens registradas\n`;
-      info += `🔌 *Provedor Primário:* DeepSeek (\`${aiService.model}\`) - ${hasDeepSeek ? '🔑 Configurado' : '⚠️ Não configurado'}\n`;
-      info += `🔄 *Fallback Gratuito:* OpenRouter (\`${aiService.openRouterModel}\`) - ${hasOpenRouter ? '✅ Ativo' : '❌ Não configurado'}\n\n`;
+      info += `🔌 *Provedor Ativo:* \`${aiService.provider.toUpperCase()}\`\n\n`;
+      info += `📡 *Provedores Configurados (.env):*\n`;
+      info += `• *DeepSeek:* ${hasDeepSeek ? '🔑 Configurada (`' + aiService.model + '`)' : '❌ Sem chave no .env'}\n`;
+      info += `• *OpenRouter:* ${hasOpenRouter ? '✅ Configurada (`' + aiService.openRouterModel + '`)' : '❌ Sem chave no .env'}\n`;
+      if (hasGroq) {
+        info += `• *Groq:* ✅ Configurada (\`${aiService.groqModel}\`)\n`;
+      }
+      info += `\n`;
       if (!isConfigured) {
         info += `⚠️ *Atenção:* Nenhuma chave de IA configurada no \`.env\`. Adicione \`AI_API_KEY\` ou \`OPENROUTER_API_KEY\`.\n\n`;
       }
-      info += `💡 *Dica:* Se a DeepSeek ficar sem saldo, o OpenRouter assume automaticamente de forma 100% gratuita!`;
+      info += `💡 *Dica:* Se a DeepSeek estiver sem saldo, o OpenRouter gratuito assume automaticamente com múltiplos modelos de reserva!`;
 
       return reply(info);
     }
