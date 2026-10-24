@@ -5,6 +5,7 @@ const {
   fetchLatestBaileysVersion 
 } = require('@whiskeysockets/baileys');
 const path = require('path');
+const NodeCache = require('node-cache');
 const qrcode = require('qrcode-terminal');
 const settings = require('../config/settings');
 const logger = require('../utils/logger');
@@ -17,6 +18,9 @@ const scheduler = require('./scheduler');
 let currentSock = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
+
+// Cache anti-loop de retentativas de decriptografia (Baileys Best Practice)
+const msgRetryCounterCache = new NodeCache({ stdTTL: 300, useClones: false });
 
 /**
  * Inicia e gerencia a conexão do socket Baileys com reconexão automática
@@ -56,6 +60,9 @@ async function connectBot(options = {}) {
     markOnlineOnConnect: false, // MODO FURTIVO ANTI-BAN: Nunca ficar online 24h
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
+    msgRetryCounterCache, // Evita tempestades de retentativas de decriptografia
+    getMessage: async () => undefined,
+    shouldIgnoreJid: (jid) => typeof jid === 'string' && (jid.endsWith('@newsletter') || jid.endsWith('@broadcast')),
     browser: ['Ubuntu', 'Chrome', '20.0.04']
   });
 
@@ -133,7 +140,7 @@ async function connectBot(options = {}) {
       if (sock.user?.lid) {
         console.log(`🔒 LID: ${sock.user.lid}`);
       }
-      console.log(`🛡️Anti-Ban: ATIVO`);
+      console.log(`🛡️ Anti-Ban: ATIVO`);
       console.log('====================================================\n');
 
       // Registra identidade do bot no mapa LID <-> Telefone
