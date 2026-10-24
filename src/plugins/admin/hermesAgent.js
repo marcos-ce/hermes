@@ -35,22 +35,19 @@ async function notifyOwnerAboutAIError({ sock, errorDetails, groupName, from, se
       errorTitle = '💸 *DeepSeek: Saldo Insuficiente (HTTP 402)*';
       actionTip =
         '👉 *Como Resolver:*\n' +
-        '1. Recarregue créditos em: *platform.deepseek.com/top_up*\n' +
-        '2. OU adicione uma chave gratuita do OpenRouter no `.env` da Discloud:\n' +
-        '`OPENROUTER_API_KEY=sk-or-v1-...`\n' +
-        '`OPENROUTER_MODEL=deepseek/deepseek-chat:free`';
+        'Acesse *platform.deepseek.com/top_up* e adicione créditos para reativar as respostas e ações da IA.';
     } else if (errStr.includes('401') || errStr.toLowerCase().includes('unauthorized') || errStr.toLowerCase().includes('invalid')) {
       category = '401_AUTH';
-      errorTitle = '🔑 *Chave de API Inválida (HTTP 401)*';
-      actionTip = '👉 Verifique a chave `AI_API_KEY` ou `OPENROUTER_API_KEY` no arquivo `.env` e reinicie o bot.';
+      errorTitle = '🔑 *DeepSeek: Chave de API Inválida (HTTP 401)*';
+      actionTip = '👉 Verifique a chave `AI_API_KEY` no arquivo `.env` (obtenha em *platform.deepseek.com/api_keys*).';
     } else if (errStr.includes('API_KEY_MISSING')) {
       category = 'KEY_MISSING';
-      errorTitle = '⚠️ *Nenhuma Chave de IA Configurada no .env*';
-      actionTip = '👉 Configure `AI_API_KEY` (DeepSeek) ou `OPENROUTER_API_KEY` (OpenRouter Gratuito) no `.env`.';
+      errorTitle = '⚠️ *Nenhuma Chave da DeepSeek Configurada no .env*';
+      actionTip = '👉 Adicione `AI_API_KEY=sk-...` no seu arquivo `.env`.';
     } else if (errStr.includes('TIMEOUT')) {
       category = 'TIMEOUT';
-      errorTitle = '⏱️ *Timeout na API de IA (> 15s)*';
-      actionTip = '👉 O provedor demorou demais para responder. Pode ser instabilidade temporária na rede.';
+      errorTitle = '⏱️ *Timeout na API da DeepSeek (> 15s)*';
+      actionTip = '👉 A DeepSeek demorou mais de 15 segundos para responder. Pode ser instabilidade temporária na API.';
     }
 
     // Cooldown de 10 minutos (600.000 ms) para não inundar o privado do dono
@@ -209,26 +206,17 @@ module.exports = {
       const isEnabled = configManager.isPluginEnabled(from, 'hermes');
       const stats = memoryEngine.getGroupStats(from);
       const isConfigured = aiService.isConfigured();
-      const hasDeepSeek = Boolean(aiService.apiKey && aiService.apiKey.length > 0);
-      const hasOpenRouter = Boolean(aiService.openRouterKey && aiService.openRouterKey.length > 0);
-      const hasGroq = Boolean(aiService.groqKey && aiService.groqKey.length > 0);
 
       let info = `🤖 *STATUS DO HERMES IA*\n\n`;
       info += `🟢 *Estado no grupo:* ${isEnabled ? '✅ ATIVADO' : '❌ DESATIVADO (use ' + groupPrefix + 'hermes on)'}\n`;
       info += `🎭 *Personalidade:* \`${cfg.personality || 'descontraido'}\`\n`;
       info += `🧠 *Buffer de Memória:* ${stats.count} mensagens registradas\n`;
-      info += `🔌 *Provedor Ativo:* \`${aiService.provider.toUpperCase()}\`\n\n`;
-      info += `📡 *Provedores Configurados (.env):*\n`;
-      info += `• *DeepSeek:* ${hasDeepSeek ? '🔑 Configurada (`' + aiService.model + '`)' : '❌ Sem chave no .env'}\n`;
-      info += `• *OpenRouter:* ${hasOpenRouter ? '✅ Configurada (`' + aiService.openRouterModel + '`)' : '❌ Sem chave no .env'}\n`;
-      if (hasGroq) {
-        info += `• *Groq:* ✅ Configurada (\`${aiService.groqModel}\`)\n`;
-      }
-      info += `\n`;
+      info += `🔌 *Provedor:* DeepSeek Oficial (\`${aiService.model}\`)\n`;
+      info += `🔑 *Chave de API:* ${isConfigured ? '✅ Configurada (.env)' : '❌ Não configurada (.env)'}\n\n`;
       if (!isConfigured) {
-        info += `⚠️ *Atenção:* Nenhuma chave de IA configurada no \`.env\`. Adicione \`AI_API_KEY\` ou \`OPENROUTER_API_KEY\`.\n\n`;
+        info += `⚠️ *Atenção:* Configure \`AI_API_KEY\` no arquivo \`.env\` para ativar as respostas.\n\n`;
       }
-      info += `💡 *Dica:* Se a DeepSeek estiver sem saldo, o OpenRouter gratuito assume automaticamente com múltiplos modelos de reserva!`;
+      info += `💡 *Dica:* Envie *${groupPrefix}hermes on* para ativar ou fale diretamente comigo no chat!`;
 
       return reply(info);
     }
