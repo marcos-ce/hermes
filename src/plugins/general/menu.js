@@ -30,15 +30,14 @@ module.exports = {
         } catch (_) {}
 
         // Coleta dinâmica de todos os plugins utilitários e de moderação direta
-        const directCommandsOrder = ['hidetag', 'promote', 'demote', 'ban', 'mute', 'del', 'warn', 'sortear', 'blacklist', 'idioma', 'ping'];
+        const directCommandsOrder = ['hidetag', 'promote', 'demote', 'ban', 'mute', 'clear', 'warn', 'raffle', 'blacklist', 'lang', 'ping'];
+        const protectionOrder = ['antilink', 'antiflood', 'antifake', 'welcome', 'schedule', 'automsg', 'hermes'];
         const groupCmds = [];
+        const protectionCmds = [];
 
         for (const [name, plugin] of pluginLoader.commands.entries()) {
           if (plugin.category === 'owner' || plugin.ownerOnly) continue; // Nunca expõe comandos de dono em grupos
           if (['menu', 'config'].includes(name)) continue;
-
-          const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name) || plugin.isDirectCommand;
-          if (!isUtility) continue;
 
           const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
           const desc = typeof plugin.description === 'object'
@@ -46,13 +45,19 @@ module.exports = {
             : (plugin.description || '');
 
           const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
-
-          groupCmds.push({
+          const item = {
             name,
             num: cmdNum,
             usage: `${p}${usage}`,
             desc
-          });
+          };
+
+          const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name) || plugin.isDirectCommand;
+          if (isUtility) {
+            groupCmds.push(item);
+          } else {
+            protectionCmds.push(item);
+          }
         }
 
         groupCmds.sort((a, b) => {
@@ -61,21 +66,30 @@ module.exports = {
           return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
         });
 
+        protectionCmds.sort((a, b) => {
+          const idxA = protectionOrder.indexOf(a.name);
+          const idxB = protectionOrder.indexOf(b.name);
+          return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+        });
+
         const titles = {
           pt: {
-            title: '🤖 *HERMES BOT - COMANDOS DO GRUPO*',
-            sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRAÇÃO 〕━━━╮',
-            tip: `💡 *Dica:* Use comandos pelo nome (Ex: \`${p}all\`), pelo número atrelado (Ex: \`${p}9 aviso\`, \`${p}5 @user\`, \`${p}10 @user\`, \`${p}17\`) ou mencionando o bot (Ex: \`@bot 9 aviso\`, \`@bot all\`).`
+            title: '🤖 *HERMES BOT - GUIA DE COMANDOS*',
+            sec: '╭━━━〔 ⚡ AÇÕES RÁPIDAS 〕━━━╮',
+            sec2: '╭━━━〔 🛡️ PROTEÇÕES, AUTOMAÇÃO & IA 〕━━━╮',
+            tip: `💡 *3 Jeitos Fáceis de Usar:*\n1️⃣ *Sem decorar comandos:* Peça em português normal (Ex: _"Hermes, fecha o grupo"_, _"Hermes, muda o horário pra fechar 23:00"_).\n2️⃣ *Painel de Números:* Envie \`${p}config\` e digite apenas os números (1, 2, 3).\n3️⃣ *Comandos diretos:* Use pelo nome (Ex: \`${p}ban @user\`) ou número (Ex: \`${p}5 @user\`).`
           },
           es: {
-            title: '🤖 *HERMES BOT - COMANDOS DEL GRUPO*',
-            sec: '╭━━━〔 🛡️ COMANDOS DE ADMINISTRACIÓN 〕━━━╮',
-            tip: `💡 *Consejo:* Usa comandos por nombre (Ej: \`${p}all\`), por número asignado (Ej: \`${p}9 aviso\`, \`${p}5 @user\`, \`${p}10 @user\`, \`${p}17\`) o mencionando al bot (Ej: \`@bot 9 aviso\`, \`@bot all\`).`
+            title: '🤖 *HERMES BOT - GUÍA DE COMANDOS*',
+            sec: '╭━━━〔 ⚡ ACCIONES RÁPIDAS 〕━━━╮',
+            sec2: '╭━━━〔 🛡️ PROTECCIONES, AUTOMATIZACIÓN E IA 〕━━━╮',
+            tip: `💡 *3 Formas Fáciles de Usar:*\n1️⃣ *Sin memorizar comandos:* Pídelo normalmente a *"Hermes"*.\n2️⃣ *Panel Numérico:* Envía \`${p}config\` y responde con números (1, 2, 3).\n3️⃣ *Comandos directos:* Usa por nombre (Ej: \`${p}ban @user\`) o número (Ej: \`${p}5 @user\`).`
           },
           en: {
-            title: '🤖 *HERMES BOT - GROUP COMMANDS*',
-            sec: '╭━━━〔 🛡️ ADMINISTRATION COMMANDS 〕━━━╮',
-            tip: `💡 *Tip:* Use commands by name (e.g. \`${p}all\`), by assigned number (e.g. \`${p}9 notice\`, \`${p}5 @user\`, \`${p}10 @user\`, \`${p}17\`) or by mentioning the bot (e.g. \`@bot 9 notice\`, \`@bot all\`).`
+            title: '🤖 *HERMES BOT - COMMANDS GUIDE*',
+            sec: '╭━━━〔 ⚡ QUICK ACTIONS 〕━━━╮',
+            sec2: '╭━━━〔 🛡️ PROTECTIONS, AUTOMATION & AI 〕━━━╮',
+            tip: `💡 *3 Easy Ways to Use:*\n1️⃣ *No commands needed:* Just ask *"Hermes"* in plain language.\n2️⃣ *Numbered Panel:* Send \`${p}config\` and reply with numbers (1, 2, 3).\n3️⃣ *Direct commands:* Use by name (e.g. \`${p}ban @user\`) or number (e.g. \`${p}5 @user\`).`
           }
         };
 
@@ -90,6 +104,17 @@ module.exports = {
           output += `┃ *${numLabel}${cmd.usage}* - ${cmd.desc}\n`;
         });
         output += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+
+        if (protectionCmds.length > 0) {
+          output += `${tInfo.sec2}\n`;
+          output += `┃ *${p}config* - Painel interativo passo a passo (por números)\n`;
+          protectionCmds.forEach(cmd => {
+            const numLabel = cmd.num ? `[${cmd.num}] ` : '';
+            output += `┃ *${numLabel}${cmd.usage}* - ${cmd.desc}\n`;
+          });
+          output += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        }
+
         output += `${tInfo.tip}`;
 
         return reply(output);

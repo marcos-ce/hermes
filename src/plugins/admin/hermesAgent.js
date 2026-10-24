@@ -279,12 +279,25 @@ module.exports = {
     const trimmedText = (text || '').trim();
 
     // Proteção 2 (Comandos determinísticos via prefixo ou menção @bot / @hermes):
+    let isUnknownCommandAttempt = false;
     if (trimmedText.startsWith(groupPrefix) || trimmedText.startsWith('/') || trimmedText.startsWith('!')) {
       const prefixLen = trimmedText.startsWith(groupPrefix) ? groupPrefix.length : 1;
-      const firstWord = trimmedText.slice(prefixLen).trim().split(/\s+/)[0]?.toLowerCase();
+      const afterPrefix = trimmedText.slice(prefixLen).trim();
+      const firstWord = afterPrefix.split(/\s+/)[0]?.toLowerCase();
       const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
       if (cmdPlugin && (trimmedText.startsWith(groupPrefix) || cmdPlugin.name !== 'hermes')) {
         return false;
+      }
+      // Se começou com o prefixo do grupo + palavra alfabética (ex: "!trancar", "!como usa", "!tirar @user"),
+      // mas o comando não existe, o Hermes IA (quando ativo) intercepta para executar ou ensinar o comando certo!
+      if (
+        !cmdPlugin &&
+        trimmedText.startsWith(groupPrefix) &&
+        /^[a-zA-ZÀ-ÿ]{2,}/.test(afterPrefix) &&
+        configManager.isPluginEnabled(from, 'hermes') &&
+        aiService.isConfigured()
+      ) {
+        isUnknownCommandAttempt = true;
       }
     } else if (/^@[a-zA-Z0-9_:.-]+\s+/i.test(trimmedText)) {
       let afterMention = trimmedText.replace(/^@[a-zA-Z0-9_:.-]+\s+/i, '').trim();
@@ -340,7 +353,7 @@ module.exports = {
     const hasNameTag = lowerText.includes('@hermes') || lowerText.includes('@bot');
     const startsWithName = /^hermes[\s,.:!?-]/i.test(lowerText) || lowerText === 'hermes';
 
-    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName;
+    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || isUnknownCommandAttempt;
 
     // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
@@ -373,7 +386,11 @@ module.exports = {
     }
 
     // 6. Limpa apenas os prefixos de chamada ao próprio bot (preservando menções a outros membros!)
-    let cleanQuery = text
+    let cleanQuery = text;
+    if (isUnknownCommandAttempt && cleanQuery.trim().startsWith(groupPrefix)) {
+      cleanQuery = cleanQuery.trim().slice(groupPrefix.length).trim();
+    }
+    cleanQuery = cleanQuery
       .replace(/^hermes[\s,.:!?-]*/i, '')
       .replace(/@hermes\b/gi, '')
       .replace(/@bot\b/gi, '');
