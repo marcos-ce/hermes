@@ -318,13 +318,15 @@ module.exports = {
     });
 
     try {
-      // 1ª Chamada à API da DeepSeek
+      // 1ª Chamada à API da DeepSeek com prefixo do grupo
+      const prefix = configManager.getGroupPrefix(from) || '!';
       const aiResponse = await aiService.chatCompletion({
         messages,
         tools: toolRegistry.getTools(),
         personality,
         lang,
-        groupName
+        groupName,
+        prefix
       });
 
       if (!aiResponse.success) {

@@ -24,13 +24,14 @@ class AIService {
   }
 
   /**
-   * Constrói o Prompt de Sistema com framing estrito de WhatsApp e humanização
+   * Constrói o Prompt de Sistema com framing estrito de WhatsApp, suporte a comandos e humanização
    * @param {string} personality 'descontraido' | 'formal'
    * @param {string} lang 'pt' | 'es' | 'en'
    * @param {string} groupName Nome do grupo
+   * @param {string} prefix Prefixo atual do grupo
    * @returns {string}
    */
-  buildSystemPrompt(personality = 'descontraido', lang = 'pt', groupName = '') {
+  buildSystemPrompt(personality = 'descontraido', lang = 'pt', groupName = '', prefix = '/') {
     const isFormal = personality === 'formal';
     const langInstructions = {
       pt: 'Responda sempre em Português do Brasil.',
@@ -42,16 +43,36 @@ class AIService {
       ? 'Tom: profissional, educado, objetivo e sucinto.'
       : 'Tom: descontraído, informal, rápido e amigável, como um usuário real de WhatsApp no Brasil.';
 
+    const commandsHelp = [
+      `COMANDOS DO BOT (Prefixo do grupo: "${prefix}"):`,
+      `• ${prefix}painel ou ${prefix}config : Painel geral de configurações.`,
+      `• ${prefix}fechar / ${prefix}abrir : Tranca ou abre o grupo para mensagens.`,
+      `• ${prefix}ban @user : Remove participante (ou responda a mensagem com ${prefix}ban).`,
+      `• ${prefix}warn @user : Aplica advertência (ou ${prefix}unwarn para perdoar).`,
+      `• ${prefix}antilink on/off/config : Proteção contra links não autorizados.`,
+      `• ${prefix}antiflood on/off : Proteção contra spam de mensagens e travas.`,
+      `• ${prefix}antifake on/off : Bloqueia números estrangeiros por DDI.`,
+      `• ${prefix}bemvindo : Boas-vindas automáticas para novos membros.`,
+      `• ${prefix}horarios : Agenda horários automáticos para abrir e fechar o grupo.`,
+      `• ${prefix}automsg : Mensagens/anúncios periódicos programados.`,
+      `• ${prefix}hidetag [texto] : Marca todos os membros com comunicado oculto.`,
+      `• ${prefix}del : Apaga a mensagem respondida.`,
+      `• ${prefix}adm @user / ${prefix}rebaixar @user : Promove ou rebaixa administradores.`,
+      `• ${prefix}sortear [qtd] [prêmio] : Sorteio aleatório entre membros.`,
+      `• ${prefix}menu : Menu de ajuda rápida.`
+    ].join('\n');
+
     return [
-      `Você é o Hermes, o assistente inteligente de administração e moderação do grupo de WhatsApp${groupName ? ` "${groupName}"` : ''}.`,
+      `Você é o Hermes, o copiloto e assistente inteligente de administração do grupo de WhatsApp${groupName ? ` "${groupName}"` : ''}.`,
       personaInstructions,
       langInstructions,
       'REGRAS ABSOLUTAS DE MENSAGEM:',
       '1. Seja ultra direto: responda em no máximo 1 ou 2 frases curtas (limite de 40 palavras).',
       '2. PROIBIDO usar preâmbulos ou enrolação ("Certamente!", "Compreendi sua dúvida", "Olá!", "Como posso ajudar?").',
       '3. PROIBIDO usar despedidas de telemarketing ("Qualquer dúvida estou à disposição!", "Espero ter ajudado!").',
-      '4. Nunca invente dados que você não sabe. Se não souber algo, diga em poucas palavras.',
-      '5. Se um administrador pedir para executar uma ação no grupo (como banir membro, fechar/abrir grupo, advertir, sortear ou apagar mensagem), utilize as ferramentas (tool calls) fornecidas para executar a ordem.'
+      '4. SUPORTE A DÚVIDAS DE COMANDOS: Se qualquer membro ou admin perguntar como usar o bot, tiver dificuldade com comandos ou pedir ajuda, ensine de forma simples e direta o comando exato com o prefixo correto.',
+      '5. Se um administrador pedir para você mesmo executar uma ação no grupo (como banir membro, fechar/abrir grupo, advertir, sortear ou apagar mensagem), utilize as ferramentas (tool calls) disponíveis.',
+      commandsHelp
     ].join('\n');
   }
 
@@ -63,9 +84,10 @@ class AIService {
    * @param {string} [params.personality] Personalidade ('descontraido' | 'formal')
    * @param {string} [params.lang] Idioma ('pt' | 'es' | 'en')
    * @param {string} [params.groupName] Nome do grupo
+   * @param {string} [params.prefix] Prefixo atual do grupo
    * @returns {Promise<{ success: boolean, content?: string, toolCalls?: Array, error?: string }>}
    */
-  async chatCompletion({ messages, tools = null, personality = 'descontraido', lang = 'pt', groupName = '' }) {
+  async chatCompletion({ messages, tools = null, personality = 'descontraido', lang = 'pt', groupName = '', prefix = '/' }) {
     if (!this.enabled) {
       return { success: false, error: 'AI_DISABLED' };
     }
@@ -74,7 +96,7 @@ class AIService {
       return { success: false, error: 'API_KEY_MISSING' };
     }
 
-    const systemPrompt = this.buildSystemPrompt(personality, lang, groupName);
+    const systemPrompt = this.buildSystemPrompt(personality, lang, groupName, prefix);
     const fullMessages = [
       { role: 'system', content: systemPrompt },
       ...messages
