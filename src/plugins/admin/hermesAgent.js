@@ -223,7 +223,6 @@ module.exports = {
     const groupPrefix = configManager.getGroupPrefix(from) || '!';
 
     // 3. Se foi chamado expressamente MAS o plugin está desativado no grupo:
-    // Não fica mudo! Informa o usuário claramente sobre como ativar:
     if (!configManager.isPluginEnabled(from, 'hermes')) {
       await reply(
         `🤖 *Hermes IA está desativado neste grupo.*\n\n` +
@@ -296,8 +295,8 @@ module.exports = {
       groupName = meta?.subject || '';
     } catch (_) {}
 
-    // Monta mensagens de contexto
-    const messages = [];
+    // Monta o prompt do usuário com contexto e histórico limpos em uma única mensagem de diálogo
+    const userPromptParts = [];
 
     // Se a mensagem cita outra mensagem anterior, adiciona o trecho citado
     if (contextInfo?.quotedMessage) {
@@ -307,38 +306,36 @@ module.exports = {
                             qm.imageMessage?.caption ||
                             qm.videoMessage?.caption || '';
       if (quotedContent) {
-        messages.push({
-          role: 'user',
-          content: `[Mensagem anterior respondida]: "${quotedContent}"`
-        });
+        userPromptParts.push(`[Mensagem citada/respondida]: "${quotedContent}"`);
       }
     }
 
     // Se a memória local estiver ativada, adiciona o histórico recente
     if (memoryEnabled) {
-      const history = memoryEngine.getRecentMessages(from, 20);
+      const history = memoryEngine.getRecentMessages(from, 15);
       if (history.length > 0) {
         const historyText = history
           .map(h => `${h.name}: ${h.text}`)
           .join('\n');
-        messages.push({
-          role: 'user',
-          content: `[Histórico recente de mensagens do grupo]:\n${historyText}`
-        });
+        userPromptParts.push(`[Histórico recente de conversas]:\n${historyText}`);
       }
     }
 
     // Mensagem atual do usuário com identificador
     const senderDisplay = msg.pushName || sender.replace(/@.*$/, '').replace(/\D/g, '');
-    messages.push({
-      role: 'user',
-      content: `${senderDisplay}: ${queryText}`
-    });
+    userPromptParts.push(`${senderDisplay}: ${queryText}`);
+
+    const messages = [
+      {
+        role: 'user',
+        content: userPromptParts.join('\n\n')
+      }
+    ];
 
     try {
       // 1ª Chamada à API da DeepSeek com prefixo do grupo
       const prefix = configManager.getGroupPrefix(from) || '!';
-      const aiResponse = await aiService.chatCompletion({
+      let aiResponse = await aiService.chatCompletion({
         messages,
         tools: toolRegistry.getTools(),
         personality,
@@ -347,9 +344,44 @@ module.exports = {
         prefix
       });
 
+      // Se falhar e o erro for HTTP 400 (ex: formato de tools), tenta fallback sem tools
+      if (!aiResponse.success && String(aiResponse.error).includes('400')) {
+        logger.warn('DeepSeek retornou 400 com tools. Tentando fallback sem tools...');
+        aiResponse = await aiService.chatCompletion({
+          messages,
+          tools: null,
+          personality,
+          lang,
+          groupName,
+          prefix
+        });
+      }
+
       if (!aiResponse.success) {
         logger.warn({ error: aiResponse.error }, 'Falha na resposta da DeepSeek');
-        return reply('Ops, tive uma oscilação na resposta da IA. Tenta de novo em instantes!');
+        const err = String(aiResponse.error || '');
+
+        if (err.includes('402') || err.toLowerCase().includes('insufficient') || err.toLowerCase().includes('balance')) {
+          return reply(
+            '⚠️ *DeepSeek API (402): Saldo Insuficiente!*\n\n' +
+            'A sua conta na plataforma da DeepSeek precisa de recarga de créditos.\n' +
+            '👉 Acesse *platform.deepseek.com/top_up* e adicione saldo para liberar as respostas da IA.'
+          );
+        }
+
+        if (err.includes('401') || err.toLowerCase().includes('unauthorized') || err.toLowerCase().includes('invalid')) {
+          return reply(
+            '⚠️ *DeepSeek API (401): Chave Inválida!*\n\n' +
+            'A chave `AI_API_KEY` configurada no `.env` foi rejeitada pela DeepSeek.\n' +
+            '👉 Verifique se copiou a chave corretamente em *platform.deepseek.com/api_keys*.'
+          );
+        }
+
+        if (err.includes('TIMEOUT')) {
+          return reply('⏱️ A DeepSeek demorou mais de 15 segundos para responder (Timeout). Tente novamente!');
+        }
+
+        return reply(`⚠️ *Falha na DeepSeek:* ${err.slice(0, 150)}`);
       }
 
       // Se o modelo solicitou Tool Calls (ações no grupo)

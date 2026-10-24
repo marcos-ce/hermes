@@ -81,7 +81,8 @@ const TOOLS = [
             type: 'string',
             description: 'ID da mensagem a ser apagada, ou omita para apagar a mensagem respondida.'
           }
-        }
+        },
+        required: []
       }
     }
   },
@@ -152,7 +153,8 @@ const TOOLS = [
             type: 'string',
             description: 'Nome do prêmio do sorteio.'
           }
-        }
+        },
+        required: []
       }
     }
   }
