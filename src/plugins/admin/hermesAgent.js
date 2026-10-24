@@ -123,15 +123,19 @@ module.exports = {
       const isEnabled = configManager.isPluginEnabled(from, 'hermes');
       const stats = memoryEngine.getGroupStats(from);
       const isConfigured = aiService.isConfigured();
+      const hasDeepSeek = Boolean(aiService.apiKey && aiService.apiKey.length > 0);
+      const hasOpenRouter = Boolean(aiService.openRouterKey && aiService.openRouterKey.length > 0);
 
       let info = `🤖 *STATUS DO HERMES IA*\n\n`;
       info += `🟢 *Estado no grupo:* ${isEnabled ? '✅ ATIVADO' : '❌ DESATIVADO (use ' + groupPrefix + 'hermes on)'}\n`;
       info += `🎭 *Personalidade:* \`${cfg.personality || 'descontraido'}\`\n`;
       info += `🧠 *Buffer de Memória:* ${stats.count} mensagens registradas\n`;
-      info += `🔌 *Provedor:* \`${aiService.provider.toUpperCase()}\`\n`;
-      info += `🧠 *Modelo:* \`${aiService.model}\`\n`;
-      info += `🔑 *Chave de API:* ${isConfigured ? '✅ Configurada' : '❌ Não Configurada (.env)'}\n\n`;
-      info += `💡 *Dica:* Envie *${groupPrefix}hermes on* para ativar ou *${groupPrefix}hermes config* para configurar.`;
+      info += `🔌 *Provedor Primário:* DeepSeek (\`${aiService.model}\`) - ${hasDeepSeek ? '🔑 Configurado' : '⚠️ Não configurado'}\n`;
+      info += `🔄 *Fallback Gratuito:* OpenRouter (\`${aiService.openRouterModel}\`) - ${hasOpenRouter ? '✅ Ativo' : '❌ Não configurado'}\n\n`;
+      if (!isConfigured) {
+        info += `⚠️ *Atenção:* Nenhuma chave de IA configurada no \`.env\`. Adicione \`AI_API_KEY\` ou \`OPENROUTER_API_KEY\`.\n\n`;
+      }
+      info += `💡 *Dica:* Se a DeepSeek ficar sem saldo, o OpenRouter assume automaticamente de forma 100% gratuita!`;
 
       return reply(info);
     }
@@ -358,30 +362,39 @@ module.exports = {
       }
 
       if (!aiResponse.success) {
-        logger.warn({ error: aiResponse.error }, 'Falha na resposta da DeepSeek');
+        logger.warn({ error: aiResponse.error }, 'Falha na resposta da IA');
         const err = String(aiResponse.error || '');
+
+        if (err.includes('API_KEY_MISSING')) {
+          return reply(
+            '⚠️ *Nenhuma chave de IA configurada no .env!*\n\n' +
+            'Configure `AI_API_KEY` (DeepSeek) ou adicione `OPENROUTER_API_KEY` (gratuita em openrouter.ai) no arquivo `.env`.'
+          );
+        }
 
         if (err.includes('402') || err.toLowerCase().includes('insufficient') || err.toLowerCase().includes('balance')) {
           return reply(
             '⚠️ *DeepSeek API (402): Saldo Insuficiente!*\n\n' +
-            'A sua conta na plataforma da DeepSeek precisa de recarga de créditos.\n' +
-            '👉 Acesse *platform.deepseek.com/top_up* e adicione saldo para liberar as respostas da IA.'
+            'A sua conta na plataforma da DeepSeek está sem saldo.\n\n' +
+            '💡 *Opção 100% Gratuita:* Adicione uma chave gratuita do OpenRouter no `.env`:\n' +
+            '`OPENROUTER_API_KEY=sk-or-v1-...`\n\n' +
+            '👉 Ou recarregue sua conta DeepSeek em *platform.deepseek.com/top_up*.'
           );
         }
 
         if (err.includes('401') || err.toLowerCase().includes('unauthorized') || err.toLowerCase().includes('invalid')) {
           return reply(
-            '⚠️ *DeepSeek API (401): Chave Inválida!*\n\n' +
-            'A chave `AI_API_KEY` configurada no `.env` foi rejeitada pela DeepSeek.\n' +
-            '👉 Verifique se copiou a chave corretamente em *platform.deepseek.com/api_keys*.'
+            '⚠️ *Chave de API Inválida (401)!*\n\n' +
+            'A chave de IA configurada no `.env` foi rejeitada.\n' +
+            '👉 Verifique se copiou a chave corretamente no `.env`.'
           );
         }
 
         if (err.includes('TIMEOUT')) {
-          return reply('⏱️ A DeepSeek demorou mais de 15 segundos para responder (Timeout). Tente novamente!');
+          return reply('⏱️ A IA demorou para responder (Timeout). Tente novamente!');
         }
 
-        return reply(`⚠️ *Falha na DeepSeek:* ${err.slice(0, 150)}`);
+        return reply(`⚠️ *Falha na IA:* ${err.slice(0, 150)}`);
       }
 
       // Se o modelo solicitou Tool Calls (ações no grupo)
