@@ -172,18 +172,65 @@ class MemoryEngine {
   }
 
   /**
-   * Converte o histórico recente em formato de diálogo legível para o prompt do modelo
+   * Converte o histórico recente em formato de diálogo legível para o prompt do modelo,
+   * incluindo nome e @numero para que a IA correlacione quem disse o quê e possa agir por nome.
    * @param {string} groupJid 
    * @param {number} limit 
    * @returns {string}
    */
-  getFormattedHistory(groupJid, limit = 30) {
+  getFormattedHistory(groupJid, limit = 25) {
     const list = this.getRecentMessages(groupJid, limit);
     if (!list || list.length === 0) return '';
 
     return list
-      .map(m => `${m.name}: ${m.text}`)
+      .map(m => {
+        if (m.sender === 'hermes@bot') {
+          return `Hermes (Você): ${m.text}`;
+        }
+        const num = (m.sender || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const label = m.name && num && m.name !== num
+          ? `${m.name} (@${num})`
+          : (m.name || (num ? `@${num}` : 'Membro'));
+        return `${label}: ${m.text}`;
+      })
       .join('\n');
+  }
+
+  /**
+   * Busca no histórico recente do grupo o JID de um participante pelo nome (pushName)
+   * Permite que o admin diga "Hermes, adverte o João pelo que ele falou" sem precisar marcar com @
+   * @param {string} groupJid
+   * @param {string} nameQuery
+   * @returns {string|null}
+   */
+  findParticipantByName(groupJid, nameQuery) {
+    if (!groupJid || !nameQuery) return null;
+    const normalize = (str) => String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+    const targetName = normalize(nameQuery.replace(/^@/, ''));
+    if (targetName.length < 2) return null;
+
+    const recent = this.getRecentMessages(groupJid, 50);
+    // Percorre do mais recente para o mais antigo
+    for (let i = recent.length - 1; i >= 0; i--) {
+      const msg = recent[i];
+      if (!msg.sender || msg.sender === 'hermes@bot') continue;
+      const senderNameNorm = normalize(msg.name);
+      if (!senderNameNorm) continue;
+
+      if (
+        senderNameNorm === targetName ||
+        senderNameNorm.includes(targetName) ||
+        targetName.includes(senderNameNorm)
+      ) {
+        return msg.sender;
+      }
+    }
+    return null;
   }
 
   /**

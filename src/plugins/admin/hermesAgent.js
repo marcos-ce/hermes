@@ -264,9 +264,7 @@ module.exports = {
   async onMessage({ sock, msg, from, sender, text, reply, lang }) {
     if (!from || !from.endsWith('@g.us')) return false;
 
-    // 1. Grava no buffer deslizante local silenciosamente (já passa pelo filtro anti-ruído)
     const senderName = msg.pushName || '';
-    memoryEngine.saveMessage(from, sender, text, msg.messageTimestamp, senderName);
 
     // Proteção 1 (Wizard ativo): Se o remetente possuir sessão ativa no wizardCache, entrega ao wizardEngine
     const rawSender = msg?.key?.participant || msg?.participant;
@@ -344,8 +342,9 @@ module.exports = {
 
     const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName;
 
-    // Se o bot não foi expressamente chamado, silêncio absoluto (não interfere nas conversas)
+    // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
+      memoryEngine.saveMessage(from, sender, text, msg.messageTimestamp, senderName);
       return false;
     }
 
@@ -471,17 +470,38 @@ module.exports = {
       }
     }
 
-    // Se a memória local estiver ativada, adiciona o histórico recente
+    // Se a memória local estiver ativada, adiciona o histórico recente (25 mensagens anteriores)
+    // ANTES de gravar a pergunta atual, evitando duplicação da mesma mensagem no final do histórico
     if (memoryEnabled) {
-      const historyText = memoryEngine.getFormattedHistory(from, 15);
+      const historyText = memoryEngine.getFormattedHistory(from, 25);
       if (historyText) {
-        userPromptParts.push(`[Histórico recente de conversas]:\n${historyText}`);
+        userPromptParts.push(`[Histórico recente de conversas do grupo]:\n${historyText}`);
       }
     }
 
-    // Mensagem atual do usuário com identificador
-    const senderDisplay = msg.pushName || sender.replace(/@.*$/, '').replace(/\D/g, '');
-    userPromptParts.push(`${senderDisplay}: ${queryText}`);
+    // Grava a mensagem atual do usuário na memória para as interações seguintes
+    if (queryText) {
+      memoryEngine.saveMessage(from, sender, queryText, msg.messageTimestamp, msg.pushName || '');
+    }
+
+    // Estado real das configurações do grupo (para responder dúvidas como "que horas o grupo fecha?" ou "o antilink tá ativo?")
+    const schedCfg = configManager.getPluginConfig(from, 'schedule') || {};
+    const schedActive = configManager.isPluginEnabled(from, 'schedule');
+    const activeMods = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule']
+      .filter(m => configManager.isPluginEnabled(from, m));
+    const schedSummary = schedActive
+      ? `Ativo (Fecha: ${schedCfg.closeTime || '23:00'}, Abre: ${schedCfg.openTime || '07:00'})`
+      : 'Desativado';
+    userPromptParts.push(
+      `[Estado atual do grupo]: Horários automáticos: ${schedSummary} | Proteções ativas: ${activeMods.length > 0 ? activeMods.join(', ') : 'nenhuma'}`
+    );
+
+    // Mensagem atual do usuário com identificador e @numero
+    const senderNum = (sender || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const senderDisplay = msg.pushName
+      ? `${msg.pushName}${senderNum ? ` (@${senderNum})` : ''}`
+      : (senderNum ? `@${senderNum}` : 'Membro');
+    userPromptParts.push(`[Mensagem atual para você responder ou executar]:\n${senderDisplay}: ${queryText}`);
 
     const messages = [
       {
@@ -552,6 +572,7 @@ module.exports = {
               ? { mentions: execResult.mentions }
               : {};
             await reply(execResult.message, mentionOpts);
+            memoryEngine.saveMessage(from, 'hermes@bot', execResult.message, null, 'Hermes');
           } else if (execResult.error) {
             await reply(execResult.error);
           }
@@ -561,7 +582,9 @@ module.exports = {
 
       // Se o modelo gerou texto direto
       if (aiResponse.content && aiResponse.content.trim().length > 0) {
-        await reply(aiResponse.content.trim());
+        const finalReply = aiResponse.content.trim();
+        await reply(finalReply);
+        memoryEngine.saveMessage(from, 'hermes@bot', finalReply, null, 'Hermes');
       }
     } catch (err) {
       logger.error({ err }, 'Erro inesperado na interação do Hermes IA');

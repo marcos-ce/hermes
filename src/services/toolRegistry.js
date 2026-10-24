@@ -5,6 +5,7 @@ const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
 const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid } = require('../utils/jidResolver');
 const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
+const memoryEngine = require('./memoryEngine');
 
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
@@ -345,7 +346,18 @@ class ToolRegistry {
       return await resolveParticipant(sock, from, cleanJid(quotedParticipant));
     }
 
-    // 4. Fallback padrão
+    // 4. Busca por nome no histórico de conversas do grupo (ex: "Hermes, adverte o João")
+    if (targetArg && typeof targetArg === 'string') {
+      const cleanedArg = targetArg.trim().toLowerCase();
+      if (cleanedArg && cleanedArg !== 'quoted' && cleanedArg !== 'mentioned') {
+        const jidByName = memoryEngine.findParticipantByName(from, targetArg);
+        if (jidByName && !isBotIdentity(jidByName)) {
+          return await resolveParticipant(sock, from, cleanJid(jidByName));
+        }
+      }
+    }
+
+    // 5. Fallback padrão
     return await resolveTarget(sock, msg, from, targetArg);
   }
 
