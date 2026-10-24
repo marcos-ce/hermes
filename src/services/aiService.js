@@ -13,18 +13,19 @@ class AIService {
     this.enabled = process.env.AI_ENABLED !== 'false';
     this.provider = (process.env.AI_PROVIDER || 'deepseek').toLowerCase();
     this.baseUrl = (process.env.AI_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '');
-    this.apiKey = process.env.AI_API_KEY || '';
+    this.apiKey = (process.env.AI_API_KEY || '').replace(/^["']|["']$/g, '').trim();
     this.model = process.env.AI_MODEL || 'deepseek-chat';
     this.maxTokens = parseInt(process.env.AI_MAX_TOKENS, 10) || 60;
     this.temperature = parseFloat(process.env.AI_TEMPERATURE) || 0.6;
   }
 
   isConfigured() {
-    return Boolean(this.enabled && this.apiKey && this.apiKey.trim().length > 0);
+    this.reloadConfig();
+    return Boolean(this.enabled && this.apiKey && this.apiKey.length > 0);
   }
 
   /**
-   * Constrói o Prompt de Sistema com framing estrito de WhatsApp, suporte a comandos e humanização
+   * Constrói o Prompt de Sistema com framing estrito de WhatsApp, comandos e humanização
    * @param {string} personality 'descontraido' | 'formal'
    * @param {string} lang 'pt' | 'es' | 'en'
    * @param {string} groupName Nome do grupo
@@ -88,11 +89,13 @@ class AIService {
    * @returns {Promise<{ success: boolean, content?: string, toolCalls?: Array, error?: string }>}
    */
   async chatCompletion({ messages, tools = null, personality = 'descontraido', lang = 'pt', groupName = '', prefix = '/' }) {
+    this.reloadConfig();
+
     if (!this.enabled) {
       return { success: false, error: 'AI_DISABLED' };
     }
 
-    if (!this.apiKey || this.apiKey.trim().length === 0) {
+    if (!this.apiKey || this.apiKey.length === 0) {
       return { success: false, error: 'API_KEY_MISSING' };
     }
 
@@ -121,7 +124,7 @@ class AIService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey.trim()}`
+          'Authorization': `Bearer ${this.apiKey}`
         },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(15000) // 15s timeout
@@ -130,7 +133,7 @@ class AIService {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error({ status: response.status, body: errorText }, 'Erro na resposta da DeepSeek API');
-        return { success: false, error: `HTTP_${response.status}` };
+        return { success: false, error: `HTTP_${response.status}: ${errorText}` };
       }
 
       const data = await response.json();

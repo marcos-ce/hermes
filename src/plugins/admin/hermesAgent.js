@@ -14,7 +14,7 @@ module.exports = {
   usage: 'hermes [on|off|config|status|pergunta]',
   description: 'Agente de Inteligência Artificial oficial DeepSeek para auxílio e moderação',
   ownerOnly: false,
-  adminOnly: true,
+  adminOnly: false, // Permite perguntas via /ia <pergunta>; subcomandos de config checam admin internamente
   botAdminRequired: false,
 
   configSchema: {
@@ -80,14 +80,11 @@ module.exports = {
 
     const sub = (args[0] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'hermes') || {};
+    const groupPrefix = configManager.getGroupPrefix(from) || '!';
 
-    // 1. Abrir o assistente interativo: /hermes config ou sem argumentos
-    if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
-      return await wizardEngine.startWizard(sock, msg, from, sender, 'hermes');
-    }
-
-    // 2. Ativar o Hermes no grupo: /hermes on
-    if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
+    // 1. Subcomandos restritos a administradores
+    if (['on', 'ativar', 'activar'].includes(sub)) {
+      if (!isAdmin && !isOwner) return reply(t('common.no_permission_admin'));
       configManager.setPluginEnabled(from, 'hermes', true);
       if (!cfg.configured) {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'hermes');
@@ -97,46 +94,55 @@ module.exports = {
       const memStatus = cfg.memoryEnabled !== false ? 'Ativa' : 'Desativada';
 
       return reply(
-        `🤖 *Hermes IA:* ATIVADO\n` +
+        `🤖 *Hermes IA:* ATIVADO com sucesso!\n` +
         `🎭 *Personalidade:* \`${personality}\`\n` +
         `🧠 *Memória Local:* \`${memStatus}\`\n\n` +
-        `👉 Marque *@hermes* em qualquer mensagem ou responda a uma mensagem minha para interagir!`
+        `👉 Para conversar, envie *@hermes*, chame por *hermes* ou responda a qualquer mensagem minha!`
       );
     }
 
-    // 3. Desativar o Hermes no grupo: /hermes off (Soft toggle - preserva configurações)
-    if (sub === 'off' || sub === 'desativar') {
+    if (['off', 'desativar'].includes(sub)) {
+      if (!isAdmin && !isOwner) return reply(t('common.no_permission_admin'));
       configManager.setPluginEnabled(from, 'hermes', false);
       return reply('🛑 *Hermes IA:* DESATIVADO neste grupo.\nAs configurações foram preservadas.');
     }
 
-    // 4. Limpar memória de contexto do grupo: /hermes limpar
+    if (['config', 'wizard', 'setup'].includes(sub) || (!sub && (isAdmin || isOwner))) {
+      if (!isAdmin && !isOwner) return reply(t('common.no_permission_admin'));
+      return await wizardEngine.startWizard(sock, msg, from, sender, 'hermes');
+    }
+
     if (['limpar', 'clear', 'reset', 'zerar'].includes(sub)) {
+      if (!isAdmin && !isOwner) return reply(t('common.no_permission_admin'));
       memoryEngine.clearGroupMemory(from);
       return reply('🧹 *Memória limpa:* O histórico de contexto deste grupo foi zerado.');
     }
 
-    // 5. Exibir status detalhado: /hermes status
+    // 2. Exibir status detalhado: /hermes status
     if (sub === 'status' || sub === 'info') {
       const isEnabled = configManager.isPluginEnabled(from, 'hermes');
       const stats = memoryEngine.getGroupStats(from);
       const isConfigured = aiService.isConfigured();
 
       let info = `🤖 *STATUS DO HERMES IA*\n\n`;
-      info += `🟢 *Estado no grupo:* ${isEnabled ? 'ATIVADO' : 'DESATIVADO'}\n`;
+      info += `🟢 *Estado no grupo:* ${isEnabled ? '✅ ATIVADO' : '❌ DESATIVADO (use ' + groupPrefix + 'hermes on)'}\n`;
       info += `🎭 *Personalidade:* \`${cfg.personality || 'descontraido'}\`\n`;
       info += `🧠 *Buffer de Memória:* ${stats.count} mensagens registradas\n`;
       info += `🔌 *Provedor:* \`${aiService.provider.toUpperCase()}\`\n`;
       info += `🧠 *Modelo:* \`${aiService.model}\`\n`;
       info += `🔑 *Chave de API:* ${isConfigured ? '✅ Configurada' : '❌ Não Configurada (.env)'}\n\n`;
-      info += `💡 *Dica:* Envie *${t('common.prefix') || '/'}hermes config* para alterar a personalidade.`;
+      info += `💡 *Dica:* Envie *${groupPrefix}hermes on* para ativar ou *${groupPrefix}hermes config* para configurar.`;
 
       return reply(info);
     }
 
-    // 6. Se o usuário enviou uma pergunta direta como comando: /hermes <pergunta>
+    // 3. Se o usuário enviou uma pergunta direta como comando: /hermes <pergunta> ou /ia <pergunta>
     const question = text.trim();
     if (question.length > 0) {
+      if (!configManager.isPluginEnabled(from, 'hermes')) {
+        return reply(`⚠️ O Hermes IA está desativado neste grupo.\n👉 Peça a um administrador para ativar enviando: *${groupPrefix}hermes on*`);
+      }
+
       await this.processAIInteraction({
         sock,
         msg,
@@ -150,27 +156,22 @@ module.exports = {
       return;
     }
 
-    return reply('👉 Use `/hermes on` para ativar, `/hermes off` para desativar ou `/hermes config` para configurar.');
+    return reply(`👉 Para falar comigo, mencione *@hermes*, digite *hermes [pergunta]* ou use *${groupPrefix}hermes status*.`);
   },
 
   /**
    * Hook passivo: monitora mensagens em tempo real no grupo
    * 1. Salva mensagens no buffer de memória local (R$ 0,00)
-   * 2. Intercepta menções a @hermes ou respostas ao bot
+   * 2. Intercepta menções a @hermes, nome hermes ou respostas ao bot
    */
   async onMessage({ sock, msg, from, sender, text, reply, lang }) {
     if (!from || !from.endsWith('@g.us')) return false;
 
-    // 1. Grava no buffer deslizante local silenciosamente
+    // 1. Grava no buffer deslizante local silenciosamente (já passa pelo filtro anti-ruído)
     const senderName = msg.pushName || '';
     memoryEngine.saveMessage(from, sender, text, msg.messageTimestamp, senderName);
 
-    // 2. Se o plugin estiver desativado no grupo, encerra silenciosamente
-    if (!configManager.isPluginEnabled(from, 'hermes')) {
-      return false;
-    }
-
-    // 3. Verificação de endereçamento ao bot (Silêncio Absoluto por Padrão)
+    // 2. Verificação ampla de endereçamento ao bot
     const botJid = cleanJid(sock?.user?.id || '');
     const botLid = cleanJid(sock?.user?.lid || '');
     const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
@@ -187,7 +188,7 @@ module.exports = {
                         realMsg?.videoMessage?.contextInfo ||
                         realMsg?.documentMessage?.contextInfo;
 
-    // A. É resposta direta (quote) a uma mensagem do bot?
+    // A. Resposta direta (quote) a uma mensagem do bot:
     const quotedParticipant = cleanJid(contextInfo?.participant || '');
     const quotedNum = quotedParticipant.replace(/@.*$/, '').replace(/\D/g, '');
     const isReplyToBot = Boolean(
@@ -199,11 +200,7 @@ module.exports = {
       )
     );
 
-    // B. É menção expressa a @hermes?
-    const lowerText = (text || '').toLowerCase();
-    const hasHermesMention = lowerText.includes('@hermes');
-
-    // C. O bot foi mencionado nos metadados e o texto chama "hermes" ou "bot"?
+    // B. Menção nos metadados do WhatsApp (quando o usuário clica no contato do bot na lista)
     const mentionedJids = contextInfo?.mentionedJid || [];
     const isBotMentionedMeta = Array.isArray(mentionedJids) && mentionedJids.some(j => {
       const clean = cleanJid(j);
@@ -211,30 +208,58 @@ module.exports = {
       return clean === botJid || clean === botLid || (botNum && num === botNum);
     });
 
-    const isAddressed = isReplyToBot || hasHermesMention || (isBotMentionedMeta && (lowerText.includes('hermes') || lowerText.includes('bot')));
+    // C. Menção no texto por nome: "@hermes", "@bot", ou iniciando por "hermes"
+    const lowerText = (text || '').toLowerCase().trim();
+    const hasNameTag = lowerText.includes('@hermes') || lowerText.includes('@bot');
+    const startsWithName = /^hermes[\s,.:!?-]/i.test(lowerText) || lowerText === 'hermes';
+
+    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName;
 
     // Se o bot não foi expressamente chamado, silêncio absoluto (não interfere nas conversas)
     if (!isAddressed) {
       return false;
     }
 
-    // Anti-Spam / Rate Limit de 2s por usuário
+    const groupPrefix = configManager.getGroupPrefix(from) || '!';
+
+    // 3. Se foi chamado expressamente MAS o plugin está desativado no grupo:
+    // Não fica mudo! Informa o usuário claramente sobre como ativar:
+    if (!configManager.isPluginEnabled(from, 'hermes')) {
+      await reply(
+        `🤖 *Hermes IA está desativado neste grupo.*\n\n` +
+        `👉 Para ativá-lo, um administrador deve enviar:\n` +
+        `*${groupPrefix}hermes on* (ou *${groupPrefix}ia on*)`
+      );
+      return true;
+    }
+
+    // 4. Se a chave da API não estiver configurada no .env:
+    if (!aiService.isConfigured()) {
+      await reply(
+        '⚠️ *Hermes IA:* A chave da DeepSeek não foi detectada no arquivo `.env` (`AI_API_KEY`).\n\n' +
+        '👉 Adicione sua chave em `AI_API_KEY=sk-...` no `.env` e reinicie a aplicação na hospedagem.'
+      );
+      return true;
+    }
+
+    // 5. Anti-Spam / Rate Limit de 2s por usuário
     if (checkCooldown(sender, 2000)) {
       return true;
     }
 
-    // Remove a tag de menção para extrair apenas a consulta real
+    // 6. Limpa prefixos de chamada para enviar apenas a dúvida real ao modelo
     let cleanQuery = text
+      .replace(/^hermes[\s,.:!?-]*/i, '')
       .replace(/@hermes\b/gi, '')
       .replace(/@bot\b/gi, '')
       .replace(/@\d{8,15}\b/g, '')
       .trim();
 
-    // Se o usuário apenas marcou "@hermes" sem escrever nada
+    // Se o usuário apenas chamou "hermes" ou "@hermes" sem escrever nada
     if (cleanQuery.length === 0 && !contextInfo?.quotedMessage) {
       const cfg = configManager.getPluginConfig(from, 'hermes') || {};
       const greeting = cfg.personality === 'formal'
-        ? 'Olá! Como posso ajudar você na moderação ou no grupo?'
+        ? 'Olá! Como posso ajudar você ou o grupo agora?'
         : 'E aí! Fala comigo, como posso ajudar?';
       await reply(greeting);
       return true;
@@ -261,13 +286,6 @@ module.exports = {
    * Processa a consulta com IA, contexto recente e execução de ferramentas
    */
   async processAIInteraction({ sock, msg, from, sender, queryText, reply, lang, cfg, contextInfo = null }) {
-    if (!aiService.isConfigured()) {
-      return reply(
-        '⚠️ *Hermes IA:* Nenhuma chave de API configurada no `.env` (`AI_API_KEY`).\n' +
-        'Cadastre sua chave gratuita da DeepSeek no arquivo `.env` para ativar as respostas de IA.'
-      );
-    }
-
     const personality = cfg?.personality || 'descontraido';
     const memoryEnabled = cfg?.memoryEnabled !== false;
 
@@ -331,7 +349,7 @@ module.exports = {
 
       if (!aiResponse.success) {
         logger.warn({ error: aiResponse.error }, 'Falha na resposta da DeepSeek');
-        return reply('Ops, tive um imprevisto ao processar sua resposta agora. Tenta de novo!');
+        return reply('Ops, tive uma oscilação na resposta da IA. Tenta de novo em instantes!');
       }
 
       // Se o modelo solicitou Tool Calls (ações no grupo)
