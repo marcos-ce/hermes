@@ -20,6 +20,8 @@ class ConfigManager {
 
     this.saveTimeout = null;
     this.isDirty = false;
+    this.isSaving = false;
+    this.pendingSave = false;
   }
 
   /**
@@ -109,7 +111,13 @@ class ConfigManager {
    * Gravação atômica assíncrona: .tmp -> .bak -> .json
    */
   async saveAsync() {
+    if (this.isSaving) {
+      this.pendingSave = true;
+      return;
+    }
     if (!this.isDirty) return;
+
+    this.isSaving = true;
     this.isDirty = false;
 
     try {
@@ -127,6 +135,13 @@ class ConfigManager {
     } catch (err) {
       logger.error({ err }, 'Erro ao salvar atomicamente data/groups.json');
       this.isDirty = true;
+    } finally {
+      this.isSaving = false;
+      if (this.pendingSave) {
+        this.pendingSave = false;
+        this.isDirty = true;
+        await this.saveAsync();
+      }
     }
   }
 

@@ -13,9 +13,29 @@ module.exports = {
   async execute({ sock, msg, from, text, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
-    const quotedText = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
-                       msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text ||
-                       msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage?.caption ||
+    const realMsg = msg?.message?.ephemeralMessage?.message ||
+                    msg?.message?.viewOnceMessage?.message ||
+                    msg?.message?.viewOnceMessageV2?.message ||
+                    msg?.message?.documentWithCaptionMessage?.message ||
+                    msg?.message;
+
+    const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                        realMsg?.imageMessage?.contextInfo ||
+                        realMsg?.videoMessage?.contextInfo ||
+                        realMsg?.documentMessage?.contextInfo ||
+                        msg?.message?.extendedTextMessage?.contextInfo;
+
+    const quotedMsg = contextInfo?.quotedMessage?.ephemeralMessage?.message ||
+                      contextInfo?.quotedMessage?.viewOnceMessage?.message ||
+                      contextInfo?.quotedMessage?.viewOnceMessageV2?.message ||
+                      contextInfo?.quotedMessage?.documentWithCaptionMessage?.message ||
+                      contextInfo?.quotedMessage;
+
+    const quotedText = quotedMsg?.conversation ||
+                       quotedMsg?.extendedTextMessage?.text ||
+                       quotedMsg?.imageMessage?.caption ||
+                       quotedMsg?.videoMessage?.caption ||
+                       quotedMsg?.documentMessage?.caption ||
                        '';
 
     const messageToSend = text || quotedText;

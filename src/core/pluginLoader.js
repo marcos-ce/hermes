@@ -89,7 +89,13 @@ class PluginLoader {
       }
     }
 
-    // Ordena os hooks de atualização de participantes por prioridade declarada (menor número = roda primeiro)
+    // Ordena os hooks de mensagem e atualização de participantes por prioridade declarada (menor número = roda primeiro)
+    this.onMessageHooks.sort((a, b) => {
+      const prioA = typeof a.priority === 'number' ? a.priority : 100;
+      const prioB = typeof b.priority === 'number' ? b.priority : 100;
+      return prioA - prioB;
+    });
+
     this.onParticipantsUpdateHooks.sort((a, b) => {
       const prioA = typeof a.priority === 'number' ? a.priority : 100;
       const prioB = typeof b.priority === 'number' ? b.priority : 100;
@@ -217,6 +223,15 @@ class PluginLoader {
    * Limpa o cache do require e recarrega todos os plugins a quente
    */
   reloadPlugins() {
+    // Dispara hook opcional de pré-reload para que cada plugin gerencie seus próprios recursos satélites
+    for (const [, plugin] of this.commands.entries()) {
+      if (typeof plugin.onReload === 'function') {
+        try {
+          plugin.onReload();
+        } catch (_) {}
+      }
+    }
+
     const categories = ['admin', 'owner', 'general'];
 
     for (const cat of categories) {
@@ -230,10 +245,15 @@ class PluginLoader {
       }
     }
 
-    // Recarrega também o dicionário i18n
+    // Recarrega também o dicionário i18n sincronizando a referência em memória
     const i18nPath = path.resolve(process.cwd(), 'src', 'utils', 'i18n.js');
     if (fs.existsSync(i18nPath)) {
+      const currentI18n = require('../utils/i18n');
       delete require.cache[require.resolve(i18nPath)];
+      const freshI18n = require('../utils/i18n');
+      if (currentI18n.dictionaries && freshI18n.dictionaries) {
+        Object.assign(currentI18n.dictionaries, freshI18n.dictionaries);
+      }
     }
 
     this.init();

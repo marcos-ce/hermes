@@ -388,18 +388,38 @@ class WizardEngine {
    */
   async startLangSelection(sock, msg, from, sender) {
     const sessionKey = `${from}:${sender}`;
+    const lang = configManager.getGroupLang(from);
 
-    const promptText = `🌐 *SELEÇÃO DE IDIOMA - HERMES*\n\n` +
-      `Escolha o novo idioma do grupo:\n\n` +
-      `*[1]* 🇧🇷 Português\n` +
-      `*[2]* 🇪🇸 Español\n` +
-      `*[3]* 🇺🇸 English\n\n` +
-      `Responda com *1*, *2* ou *3* (ou *X* para cancelar).`;
-
+    const promptText = t(lang, 'lang.prompt');
     const sent = await sendSafeMessage(sock, from, { text: promptText }, { quoted: msg });
 
     const session = {
       type: 'lang_selection',
+      groupJid: from,
+      sender,
+      menuMsgKey: sent?.key,
+      promptKeys: sent?.key ? [sent.key] : []
+    };
+
+    wizardCache.set(sessionKey, session);
+    return true;
+  }
+
+  /**
+   * Inicia o fluxo interativo de abrir/fechar grupo (!mute / !grupo sem argumentos)
+   * @param {object} sock 
+   * @param {object} msg 
+   * @param {string} from 
+   * @param {string} sender 
+   */
+  async startMuteSelection(sock, msg, from, sender) {
+    const sessionKey = `${from}:${sender}`;
+    const lang = configManager.getGroupLang(from);
+
+    const sent = await sendSafeMessage(sock, from, { text: t(lang, 'mute.prompt') }, { quoted: msg });
+
+    const session = {
+      type: 'mute_selection',
       groupJid: from,
       sender,
       menuMsgKey: sent?.key,
@@ -465,12 +485,13 @@ class WizardEngine {
     // ==========================================
     const isChoiceStep = session.type === 'config_menu' || 
       session.type === 'lang_selection' ||
+      session.type === 'mute_selection' ||
       session.type === 'wizard_select_field' ||
       (session.type === 'wizard' && ['choice', 'boolean'].includes(session.schema?.fields?.[session.stepIndex]?.type));
     
     const hasMentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0;
 
-    if (isChoiceStep && (text.length > 20 || hasMentions)) {
+    if (isChoiceStep && (text.length > 15 || hasMentions)) {
       // Ignora silenciosamente conversa paralela do admin no grupo sem poluir o chat
       return true;
     }
@@ -482,6 +503,10 @@ class WizardEngine {
 
     if (session.type === 'lang_selection') {
       return await this._handleLangSelectionInput(sock, msg, from, sender, text, session, lang);
+    }
+
+    if (session.type === 'mute_selection') {
+      return await this._handleMuteSelectionInput(sock, msg, from, sender, text, session, lang);
     }
 
     if (session.type === 'wizard_select_field') {
@@ -534,12 +559,7 @@ class WizardEngine {
 
       // Transiciona a sessão para seleção de idioma interativa sem perder o contexto
       session.type = 'lang_selection';
-      const promptText = `🌐 *SELEÇÃO DE IDIOMA - HERMES*\n\n` +
-        `Escolha o novo idioma do grupo:\n\n` +
-        `*[1]* 🇧🇷 Português\n` +
-        `*[2]* 🇪🇸 Español\n` +
-        `*[3]* 🇺🇸 English\n\n` +
-        `Responda com *1*, *2* ou *3* (ou *X* para cancelar).`;
+      const promptText = t(lang, 'lang.prompt');
 
       const sent = await sendSafeMessage(sock, from, { text: promptText }, { quoted: msg });
       if (sent?.key) {
@@ -562,7 +582,7 @@ class WizardEngine {
         configManager.setPluginEnabled(from, mod.name, true);
         wizardCache.del(sessionKey);
         await sendSafeMessage(sock, from, { 
-          text: `🟢 *${mod.name.toUpperCase()}* foi *ATIVADO* no grupo.` 
+          text: t(lang, 'config.module_toggled_on', { module: mod.name.toUpperCase() }) 
         }, { quoted: msg });
         return true;
       }
@@ -571,7 +591,7 @@ class WizardEngine {
         configManager.setPluginEnabled(from, mod.name, false);
         wizardCache.del(sessionKey);
         await sendSafeMessage(sock, from, { 
-          text: `🔴 *${mod.name.toUpperCase()}* foi *DESATIVADO* no grupo.` 
+          text: t(lang, 'config.module_toggled_off', { module: mod.name.toUpperCase() }) 
         }, { quoted: msg });
         return true;
       }
@@ -587,7 +607,7 @@ class WizardEngine {
     return true;
   }
 
-  async _handleLangSelectionInput(sock, msg, from, sender, text, session, _lang) {
+  async _handleLangSelectionInput(sock, msg, from, sender, text, session, lang) {
     const sessionKey = `${from}:${sender}`;
     const lower = text.toLowerCase().trim();
 
@@ -598,7 +618,7 @@ class WizardEngine {
 
     if (!targetLang) {
       await sendSafeMessage(sock, from, {
-        text: `⚠️ Opção inválida.\nEscolha *1* (Português), *2* (Español), *3* (English) ou envie *X* para cancelar.`
+        text: t(lang, 'lang.invalid_option')
       }, { quoted: msg });
       return true;
     }
@@ -620,24 +640,53 @@ class WizardEngine {
     return true;
   }
 
+  async _handleMuteSelectionInput(sock, msg, from, sender, text, session, lang) {
+    const sessionKey = `${from}:${sender}`;
+    const lower = text.toLowerCase().trim().replace(/^\[|\]$/g, '').trim();
+
+    if (['1', 'fechar', 'cerrar', 'lock', 'on'].includes(lower)) {
+      await sock.groupSettingUpdate(from, 'announcement');
+      wizardCache.del(sessionKey);
+      if (session.menuMsgKey) {
+        try {
+          await safeDelete(sock, from, session.menuMsgKey);
+        } catch (_) {}
+      }
+      await sendSafeMessage(sock, from, { text: t(lang, 'mute.closed') }, { quoted: msg });
+      return true;
+    }
+
+    if (['2', 'abrir', 'open', 'unlock', 'off'].includes(lower)) {
+      await sock.groupSettingUpdate(from, 'not_announcement');
+      wizardCache.del(sessionKey);
+      if (session.menuMsgKey) {
+        try {
+          await safeDelete(sock, from, session.menuMsgKey);
+        } catch (_) {}
+      }
+      await sendSafeMessage(sock, from, { text: t(lang, 'mute.opened') }, { quoted: msg });
+      return true;
+    }
+
+    await sendSafeMessage(sock, from, { text: t(lang, 'config.invalid_option') }, { quoted: msg });
+    return true;
+  }
+
   async _sendFieldSelectionPrompt(sock, msg, from, sender, session, lang) {
     const sessionKey = `${from}:${sender}`;
     const pTitle = resolveSchemaText(session.schema.title || session.pluginName, lang);
 
-    let text = `🧙‍♂️ *CONFIGURAÇÃO: ${pTitle.toUpperCase()}*\n\n`;
-    text += `Escolha qual etapa você deseja alterar:\n\n`;
+    let text = t(lang, 'wizard.select_field_title', { plugin: pTitle.toUpperCase() });
 
     session.schema.fields.forEach((field, idx) => {
       const qText = resolveSchemaText(field.question, lang).split('\n')[0].replace(/[?:]/g, '').trim();
       const currentVal = session.existingConfig[field.name];
       const displayVal = formatFieldValue(currentVal, field, lang);
       text += `*[${idx + 1}]* 📝 *${qText}*\n`;
-      text += `    📌 _Atual: \`${displayVal}\`_\n\n`;
+      text += `    ${t(lang, 'wizard.current_val', { current: displayVal })}\n\n`;
     });
 
-    text += `*[T]* 🔄 *Reconfigurar Todas as Etapas*\n`;
-    text += `*[X]* ❌ *Cancelar e Fechar*\n\n`;
-    text += `👉 Responda com o *NÚMERO* da etapa que deseja alterar.`;
+    text += t(lang, 'wizard.select_field_footer');
 
     const sent = await sendSafeMessage(sock, from, { text }, { quoted: msg });
     if (sent?.key) {
@@ -677,7 +726,7 @@ class WizardEngine {
     }
 
     await sendSafeMessage(sock, from, {
-      text: `⚠️ Opção inválida. Escolha o número da etapa (1 a ${session.schema.fields.length}), *T* para todas ou *X* para cancelar.`
+      text: t(lang, 'wizard.select_field_invalid', { max: session.schema.fields.length })
     }, { quoted: msg });
     return true;
   }
@@ -706,11 +755,13 @@ class WizardEngine {
         case 'choice': {
           const cleanOption = trimmed.replace(/^\[|\]$/g, '').trim();
 
-          // 1. Se digitou APENAS o número da opção (ex: "1", "2", "[1]", "[2]")
+          // 1. Se digitou APENAS o número da opção (ex: "1", "2", "[1]", "[2]") ou valor direto em minutos/segundos
           if (/^\d+$/.test(cleanOption)) {
             const choiceIndex = parseInt(cleanOption, 10);
             if (choiceIndex >= 1 && choiceIndex <= currentField.choices.length) {
               finalValue = currentField.choices[choiceIndex - 1].value;
+            } else if (currentField.unit === 'minutes' || currentField.unit === 'seconds') {
+              finalValue = choiceIndex;
             }
           }
 
@@ -791,10 +842,10 @@ class WizardEngine {
               finalValue = parsed;
             } else {
               const rangeInfo = (currentField.min !== undefined || currentField.max !== undefined)
-                ? ` (mínimo: ${currentField.min || 0}, máximo: ${currentField.max || '∞'})`
+                ? ` (${currentField.min ?? 0} - ${currentField.max ?? '∞'})`
                 : '';
               await sendSafeMessage(sock, from, {
-                text: `⚠️ Valor fora do intervalo permitido${rangeInfo}. Tente novamente.`
+                text: t(lang, 'wizard.out_of_range', { range: rangeInfo })
               }, { quoted: msg });
               return true;
             }
@@ -853,7 +904,7 @@ class WizardEngine {
       wizardCache.del(sessionKey);
 
       let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
-      summaryText += `📋 *Configuração atualizada com sucesso:*\n`;
+      summaryText += `${t(lang, 'wizard.summary_single')}\n`;
       const valDisplay = formatFieldValue(finalValue, currentField, lang);
       const fieldTitle = resolveSchemaText(currentField.question, lang).split('\n')[0].replace(/[?:]/g, '').trim();
       summaryText += `• *${fieldTitle}:* \`${valDisplay}\`\n\n`;
@@ -875,7 +926,7 @@ class WizardEngine {
       wizardCache.del(sessionKey);
 
       let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
-      summaryText += `📋 *Resumo das configurações salvas:*\n`;
+      summaryText += `${t(lang, 'wizard.summary_all')}\n`;
       for (const [key, val] of Object.entries(session.answers)) {
         const fieldObj = session.schema.fields.find(f => f.name === key);
         const valDisplay = fieldObj ? formatFieldValue(val, fieldObj, lang) : String(val);
@@ -915,14 +966,13 @@ class WizardEngine {
     if (currentVal !== undefined) {
       const displayVal = formatFieldValue(currentVal, field, lang);
       prompt += `${t(lang, 'wizard.current_val', { current: displayVal })}\n`;
-      prompt += `💡 *Dica:* Envie *.* (ponto) para MANTER o valor atual.\n\n`;
+      prompt += `${t(lang, 'wizard.tip_keep')}\n\n`;
     } else if (field.default !== undefined) {
       const displayDef = formatFieldValue(field.default, field, lang);
-      prompt += `📌 *Valor padrão:* \`${displayDef}\`\n`;
-      prompt += `💡 *Dica:* Envie *.* (ponto) para USAR o valor padrão.\n\n`;
+      prompt += `${t(lang, 'wizard.tip_default', { default: displayDef })}\n\n`;
     }
 
-    prompt += `❌ Envie *X* a qualquer momento para cancelar.`;
+    prompt += `${t(lang, 'wizard.cancel_hint')}`;
 
     const sentPrompt = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
     if (sentPrompt?.key) {

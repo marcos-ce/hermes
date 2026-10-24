@@ -173,14 +173,6 @@ async function processSingleMessage(sock, msg) {
     if (rawBody.startsWith(groupPrefix) || rawBody.startsWith('/') || rawBody.startsWith('!')) {
       rawBody = rawBody.slice(1).trim();
     }
-    // Se o usuário apenas mencionou o bot sem comando ("@bot")
-    if (!rawBody && isGroup) {
-      const adminStatus = await checkAdminStatus(sock, from, sender);
-      if (adminStatus.isAdmin || isSenderOwner) {
-        await reply(`🤖 *Hermes Bot*\n📌 *Prefixo atual:* \`${groupPrefix}\`\n👉 Envie *${groupPrefix}menu* ou *@bot menu* para abrir o painel de configurações e comandos!`);
-      }
-      return;
-    }
   } else if (text.startsWith(groupPrefix)) {
     effectivePrefix = groupPrefix;
     rawBody = text.slice(groupPrefix.length).trim();
@@ -242,7 +234,7 @@ async function processSingleMessage(sock, msg) {
           // Se alguém tentar usar comandos comuns em um grupo não ativado, orienta como ativar
           const adminStatus = await checkAdminStatus(sock, from, sender);
           if (isSenderOwner || adminStatus.isAdmin) {
-            await reply(`⚠️ *Grupo Não Ativado*\nO bot está conectado ao grupo, mas ainda não foi ativado.\n\n👉 Para ativar o bot neste grupo, digite:\n*${groupPrefix}bot on* (ou *${groupPrefix}ativar*)`);
+            await reply(translate('saas.inactive_group_hint', { prefix: groupPrefix }));
           }
         }
         return;
@@ -293,6 +285,15 @@ async function processSingleMessage(sock, msg) {
     if (intercepted) {
       return;
     }
+  }
+
+  // Se o usuário apenas mencionou o bot sem comando ("@bot" / "@hermes") e nenhum hook tratou
+  if (isMentionPrefix && !rawBody && isGroup) {
+    const adminStatus = await checkAdminStatus(sock, from, sender);
+    if (adminStatus.isAdmin || isSenderOwner) {
+      await reply(translate('common.mention_greeting', { prefix: groupPrefix }));
+    }
+    return;
   }
 
   // Se não foi identificado comando válido com prefixo ou menção, encerra o pipeline

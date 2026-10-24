@@ -121,6 +121,7 @@ module.exports = {
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
+  priority: 20,
 
   configSchema: {
     title: {
@@ -230,10 +231,9 @@ module.exports = {
 
     // Extrai TODOS os textos relevantes (incluindo link previews e legendas de mídia)
     const fullText = extractAllTextForLinks(msg.message);
-    if (!fullText || !URL_REGEX.test(fullText)) return false;
-
-    // Reseta o lastIndex pois URL_REGEX tem flag /g
     URL_REGEX.lastIndex = 0;
+    const matches = fullText ? fullText.match(URL_REGEX) : null;
+    if (!matches || matches.length === 0) return false;
 
     // Ignora se quem enviou for Dono ou Administrador
     if (settings.isOwner(sender, sock)) return false;
@@ -242,13 +242,6 @@ module.exports = {
 
     const cfg = configManager.getPluginConfig(from, 'antilink') || {};
     const allowed = Array.isArray(cfg.allowedDomains) ? cfg.allowedDomains : [];
-
-    // Extrai todos os links encontrados no texto completo
-    URL_REGEX.lastIndex = 0;
-    const matches = fullText.match(URL_REGEX) || [];
-
-    // Se não achou nenhum link real, não faz nada
-    if (matches.length === 0) return false;
 
     // Verifica se TODOS os links estão na whitelist
     let isAllAllowed = allowed.length > 0; // Só "todos permitidos" se whitelist não for vazia

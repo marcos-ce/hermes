@@ -13,6 +13,7 @@ module.exports = {
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
+  priority: 10,
 
   configSchema: {
     title: {

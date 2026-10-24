@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
 const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid } = require('../utils/jidResolver');
 const { groupCache } = require('../utils/cache');
+const { t } = require('../utils/i18n');
 
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
@@ -186,6 +187,8 @@ class ToolRegistry {
       return { success: false, error: 'Ferramentas de moderação só podem ser executadas dentro de grupos.' };
     }
 
+    const lang = configManager.getGroupLang(from);
+
     // ========================================================
     // REGRA 2: VALIDAÇÃO DETERMINÍSTICA ANTI-PROMPT INJECTION
     // O Node.js valida obrigatoriamente se o remetente original é administrador.
@@ -209,12 +212,12 @@ class ToolRegistry {
     switch (toolName) {
       case 'ban_member': {
         if (!isBotAdmin) {
-          return { success: false, error: 'Não posso banir membros porque não sou administrador do grupo.' };
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
         const targetData = await resolveTarget(sock, msg, from, args.target || '');
         if (!targetData) {
-          return { success: false, error: 'Não consegui identificar o membro alvo para expulsão.' };
+          return { success: false, error: t(lang, 'common.not_found_target') };
         }
 
         const botJid = cleanJid(sock?.user?.id || '');
@@ -222,28 +225,55 @@ class ToolRegistry {
         const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
         if (targetData.groupJid === botJid || targetData.groupJid === botLid || (botNum && targetData.displayNum === botNum)) {
-          return { success: false, error: 'Não posso banir a mim mesmo.' };
+          return { success: false, error: t(lang, 'ban.cannot_ban_bot') };
         }
 
         if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
-          return { success: false, error: 'Não é permitido banir o Dono do bot.' };
+          return { success: false, error: t(lang, 'ban.cannot_ban_owner') };
         }
 
         const targetAdminCheck = await checkAdminStatus(sock, from, targetData.phoneJid);
         if (targetAdminCheck.isAdmin) {
-          return { success: false, error: 'Não é permitido banir administradores do grupo.' };
+          return { success: false, error: t(lang, 'ban.cannot_ban_admin') };
+        }
+
+        const banCfg = configManager.getPluginConfig(from, 'ban') || {};
+        if (banCfg.deleteMessage !== false) {
+          const realMsg = msg?.message?.ephemeralMessage?.message ||
+                          msg?.message?.viewOnceMessage?.message ||
+                          msg?.message;
+
+          const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                              realMsg?.imageMessage?.contextInfo ||
+                              msg?.message?.extendedTextMessage?.contextInfo;
+
+          const quotedStanzaId = contextInfo?.stanzaId;
+          const quotedParticipant = contextInfo?.participant;
+          if (quotedStanzaId) {
+            await safeDelete(sock, from, {
+              remoteJid: from,
+              id: quotedStanzaId,
+              participant: quotedParticipant
+            });
+          }
         }
 
         await safeKick(sock, from, targetData.groupJid);
+
+        const banMessage =
+          banCfg.customMessage && String(banCfg.customMessage).trim().length > 0 && banCfg.customMessage !== '.'
+            ? String(banCfg.customMessage).replace(/\{user\}/gi, `@${targetData.displayNum}`)
+            : t(lang, 'ban.success', { user: targetData.displayNum });
+
         return {
           success: true,
-          message: `O membro @${targetData.displayNum} foi expulso do grupo com sucesso.`
+          message: banMessage
         };
       }
 
       case 'set_group_mute': {
         if (!isBotAdmin) {
-          return { success: false, error: 'Não posso alterar as configurações do grupo porque não sou administrador.' };
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
         const action = args.action === 'close' ? 'announcement' : 'not_announcement';
@@ -252,28 +282,28 @@ class ToolRegistry {
         return {
           success: true,
           message: action === 'announcement'
-            ? 'Grupo fechado com sucesso. Apenas administradores podem enviar mensagens agora.'
-            : 'Grupo aberto com sucesso. Todos os membros podem enviar mensagens agora.'
+            ? t(lang, 'mute.closed')
+            : t(lang, 'mute.opened')
         };
       }
 
       case 'warn_member': {
         if (!isBotAdmin) {
-          return { success: false, error: 'Não sou administrador do grupo para aplicar advertências e eventuais punições.' };
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
         const targetData = await resolveTarget(sock, msg, from, args.target || '');
         if (!targetData) {
-          return { success: false, error: 'Membro alvo para advertência não encontrado.' };
+          return { success: false, error: t(lang, 'common.not_found_target') };
         }
 
         if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
-          return { success: false, error: 'Não é permitido advertir o Dono do bot.' };
+          return { success: false, error: t(lang, 'warn.cannot_warn_admin') };
         }
 
         const targetAdminCheck = await checkAdminStatus(sock, from, targetData.phoneJid);
         if (targetAdminCheck.isAdmin) {
-          return { success: false, error: 'Não é permitido aplicar advertências a administradores.' };
+          return { success: false, error: t(lang, 'warn.cannot_warn_admin') };
         }
 
         const reason = args.reason || 'Comportamento inadequado';
@@ -286,19 +316,19 @@ class ToolRegistry {
           configManager.resetWarns(from, targetData.phoneJid);
           return {
             success: true,
-            message: `@${targetData.displayNum} atingiu o limite de ${maxWarns} advertências e foi expulso do grupo.`
+            message: t(lang, 'warn.max_reached', { user: targetData.displayNum, max: maxWarns })
           };
         }
 
         return {
           success: true,
-          message: `@${targetData.displayNum} recebeu uma advertência (${count}/${maxWarns}). Motivo: ${reason}`
+          message: t(lang, 'warn.added', { user: targetData.displayNum, reason, warns: count, max: maxWarns })
         };
       }
 
       case 'delete_message': {
         if (!isBotAdmin) {
-          return { success: false, error: 'Preciso ser administrador do grupo para apagar mensagens de outros membros.' };
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
         const realMsg = msg?.message?.ephemeralMessage?.message ||
@@ -313,7 +343,7 @@ class ToolRegistry {
         const quotedParticipant = contextInfo?.participant;
 
         if (!quotedStanzaId) {
-          return { success: false, error: 'Nenhuma mensagem respondida ou ID fornecido para apagar.' };
+          return { success: false, error: t(lang, 'clear.reply_required') };
         }
 
         await safeDelete(sock, from, {
@@ -322,18 +352,18 @@ class ToolRegistry {
           participant: quotedParticipant
         });
 
-        return { success: true, message: 'Mensagem apagada com sucesso.' };
+        return { success: true, message: t(lang, 'clear.success') };
       }
 
       case 'hidetag_announcement': {
         const text = args.message;
         if (!text || text.trim().length === 0) {
-          return { success: false, error: 'Mensagem do comunicado não informada.' };
+          return { success: false, error: t(lang, 'hidetag.empty') };
         }
 
         const metadata = await getGroupMetadata(sock, from);
         if (!metadata || !Array.isArray(metadata.participants)) {
-          return { success: false, error: 'Falha ao buscar participantes do grupo.' };
+          return { success: false, error: t(lang, 'common.error') };
         }
 
         const allMembers = new Set();
@@ -353,17 +383,17 @@ class ToolRegistry {
 
       case 'promote_member': {
         if (!isBotAdmin) {
-          return { success: false, error: 'Preciso ser administrador do grupo para promover membros.' };
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
         const targetData = await resolveTarget(sock, msg, from, args.target || '');
         if (!targetData) {
-          return { success: false, error: 'Membro alvo para promoção não encontrado.' };
+          return { success: false, error: t(lang, 'common.not_found_target') };
         }
 
         const check = await checkAdminStatus(sock, from, targetData.phoneJid);
         if (check.isAdmin) {
-          return { success: false, error: `@${targetData.displayNum} já é um administrador.` };
+          return { success: false, error: t(lang, 'promote.already_admin') };
         }
 
         await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
@@ -371,27 +401,27 @@ class ToolRegistry {
 
         return {
           success: true,
-          message: `@${targetData.displayNum} promovido a Administrador com sucesso.`
+          message: t(lang, 'promote.success', { user: targetData.displayNum })
         };
       }
 
       case 'demote_member': {
         if (!isBotAdmin) {
-          return { success: false, error: 'Preciso ser administrador do grupo para rebaixar administradores.' };
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
         const targetData = await resolveTarget(sock, msg, from, args.target || '');
         if (!targetData) {
-          return { success: false, error: 'Membro alvo para rebaixamento não encontrado.' };
+          return { success: false, error: t(lang, 'common.not_found_target') };
         }
 
         if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
-          return { success: false, error: 'Não é permitido rebaixar o Dono do bot.' };
+          return { success: false, error: t(lang, 'demote.cannot_demote_owner') };
         }
 
         const check = await checkAdminStatus(sock, from, targetData.phoneJid);
         if (!check.isAdmin) {
-          return { success: false, error: `@${targetData.displayNum} já é um membro comum.` };
+          return { success: false, error: t(lang, 'demote.already_member') };
         }
 
         await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'demote');
@@ -399,7 +429,7 @@ class ToolRegistry {
 
         return {
           success: true,
-          message: `@${targetData.displayNum} rebaixado a membro comum.`
+          message: t(lang, 'demote.success', { user: targetData.displayNum })
         };
       }
 
@@ -412,7 +442,7 @@ class ToolRegistry {
         }
 
         if (!metadata || !Array.isArray(metadata.participants) || metadata.participants.length <= 1) {
-          return { success: false, error: 'Não há membros suficientes no grupo para realizar um sorteio.' };
+          return { success: false, error: t(lang, 'raffle.not_enough') };
         }
 
         const botJid = sock?.user?.id ? cleanJid(sock.user.id) : '';
@@ -442,7 +472,7 @@ class ToolRegistry {
         }
 
         if (pool.length === 0) {
-          return { success: false, error: 'Nenhum membro elegível para o sorteio.' };
+          return { success: false, error: t(lang, 'raffle.not_enough') };
         }
 
         const count = Math.min(Math.max(parseInt(args.quantity, 10) || 1, 1), pool.length);
@@ -467,7 +497,7 @@ class ToolRegistry {
           winnersText += `🏅 *${i + 1}º Lugar:* @${displayNum}\n`;
         }
 
-        const resultMsg = `🎉 *RESULTADO DO SORTEIO* 🎉\n🎁 *Prêmio:* ${prize}\n\n🏆 *Ganhador(es):*\n${winnersText}`;
+        const resultMsg = `${t(lang, 'raffle.title')}\n${t(lang, 'raffle.prize', { prize })}\n\n${t(lang, 'raffle.winners', { winners: winnersText })}`;
         await sendSafeMessage(sock, from, { text: resultMsg, mentions });
 
         return { success: true, message: `Sorteio de ${count} ganhador(es) realizado com sucesso.` };

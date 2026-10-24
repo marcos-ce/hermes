@@ -133,8 +133,10 @@ module.exports = {
       return reply(t('warn.cannot_warn_admin'));
     }
 
-    // Extrai o motivo
-    const reasonParts = text.replace(/@?\d{8,15}/, '').trim();
+    // Extrai o motivo preservando números legítimos no meio do texto
+    const reasonParts = /^\s*(@[a-zA-Z0-9_.:-]+|\d{8,15})\b/.test(text)
+      ? text.replace(/^\s*@?[a-zA-Z0-9_.:-]+\s*/, '').trim()
+      : text.trim();
     const reason = reasonParts || 'Comportamento inadequado';
 
     const count = configManager.addWarn(from, targetPhone, reason);

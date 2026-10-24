@@ -1,10 +1,12 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const pluginLoader = require('../../core/pluginLoader');
 const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
 const { cleanJid, getGroupMetadata } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
+const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
 const logger = require('../../utils/logger');
 
@@ -81,6 +83,7 @@ async function notifyOwnerAboutAIError({ sock, errorDetails, groupName, from, se
 
 module.exports = {
   name: 'hermes',
+  priority: 100,
   cmdNumber: 23,
   aliases: ['hermes', 'ia', 'ai', 'agente', 'agent'],
   usage: 'hermes [on|off|config|status|pergunta]',
@@ -88,6 +91,17 @@ module.exports = {
   ownerOnly: false,
   adminOnly: false, // Permite perguntas via /ia <pergunta>; subcomandos de config checam admin internamente
   botAdminRequired: false,
+
+  /**
+   * Hook acionado no !reload para limpar o cache dos serviços satélites da IA
+   * mantendo 100% de isolamento sem sujar o núcleo (pluginLoader.js)
+   */
+  onReload() {
+    try {
+      delete require.cache[require.resolve('../../services/aiService')];
+      delete require.cache[require.resolve('../../services/toolRegistry')];
+    } catch (_) {}
+  },
 
   configSchema: {
     title: {
@@ -247,6 +261,38 @@ module.exports = {
     const senderName = msg.pushName || '';
     memoryEngine.saveMessage(from, sender, text, msg.messageTimestamp, senderName);
 
+    // Proteção 1 (Wizard ativo): Se o remetente possuir sessão ativa no wizardCache, entrega ao wizardEngine
+    const rawSender = msg?.key?.participant || msg?.participant;
+    if (
+      wizardCache.get(`${from}:${sender}`) ||
+      (rawSender && (wizardCache.get(`${from}:${cleanJid(rawSender)}`) || wizardCache.get(`${from}:${rawSender}`)))
+    ) {
+      return false;
+    }
+
+    const groupPrefix = configManager.getGroupPrefix(from) || '!';
+    const trimmedText = (text || '').trim();
+
+    // Proteção 2 (Comandos determinísticos via prefixo ou menção @bot / @hermes):
+    if (trimmedText.startsWith(groupPrefix) || trimmedText.startsWith('/') || trimmedText.startsWith('!')) {
+      const prefixLen = trimmedText.startsWith(groupPrefix) ? groupPrefix.length : 1;
+      const firstWord = trimmedText.slice(prefixLen).trim().split(/\s+/)[0]?.toLowerCase();
+      const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
+      if (cmdPlugin && (trimmedText.startsWith(groupPrefix) || cmdPlugin.name !== 'hermes')) {
+        return false;
+      }
+    } else if (/^@[a-zA-Z0-9_:.-]+\s+/i.test(trimmedText)) {
+      let afterMention = trimmedText.replace(/^@[a-zA-Z0-9_:.-]+\s+/i, '').trim();
+      if (afterMention.startsWith(groupPrefix) || afterMention.startsWith('/') || afterMention.startsWith('!')) {
+        afterMention = afterMention.slice(1).trim();
+      }
+      const firstWord = afterMention.split(/\s+/)[0]?.toLowerCase();
+      const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
+      if (cmdPlugin && cmdPlugin.name !== 'hermes') {
+        return false;
+      }
+    }
+
     // 2. Verificação ampla de endereçamento ao bot
     const botJid = cleanJid(sock?.user?.id || '');
     const botLid = cleanJid(sock?.user?.lid || '');
@@ -295,8 +341,6 @@ module.exports = {
     if (!isAddressed) {
       return false;
     }
-
-    const groupPrefix = configManager.getGroupPrefix(from) || '!';
 
     // 3. Se foi chamado expressamente MAS o plugin está desativado no grupo:
     if (!configManager.isPluginEnabled(from, 'hermes')) {
@@ -388,11 +432,8 @@ module.exports = {
 
     // Se a memória local estiver ativada, adiciona o histórico recente
     if (memoryEnabled) {
-      const history = memoryEngine.getRecentMessages(from, 15);
-      if (history.length > 0) {
-        const historyText = history
-          .map(h => `${h.name}: ${h.text}`)
-          .join('\n');
+      const historyText = memoryEngine.getFormattedHistory(from, 15);
+      if (historyText) {
         userPromptParts.push(`[Histórico recente de conversas]:\n${historyText}`);
       }
     }

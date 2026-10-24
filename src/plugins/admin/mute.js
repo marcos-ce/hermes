@@ -1,3 +1,5 @@
+const wizardEngine = require('../../core/wizardEngine');
+
 module.exports = {
   name: 'mute',
   cmdNumber: 12,
@@ -8,7 +10,7 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: true,
 
-  async execute({ sock, _msg, from, args, command, reply, t, isGroup }) {
+  async execute({ sock, msg, from, sender, args, command, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
     const cmd = (command || '').toLowerCase();
@@ -47,7 +49,7 @@ module.exports = {
       }
     }
 
-    // Se chamado apenas como !mute ou !grupo sem argumentos (ou escolha interativa)
-    return reply(t('mute.prompt'));
+    // Se chamado apenas como !mute ou !grupo sem argumentos (abre sessão interativa)
+    return await wizardEngine.startMuteSelection(sock, msg, from, sender);
   }
 };

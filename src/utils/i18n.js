@@ -25,9 +25,11 @@ const dictionaries = {
     'common.no': 'Não',
     'common.days': 'dias',
     'common.lifetime': 'Vitalício',
+    'common.mention_greeting': '🤖 *Hermes Bot*\n📌 *Prefixo atual:* `{prefix}`\n👉 Envie *{prefix}menu* ou *@bot menu* para abrir o painel de configurações e comandos!',
 
     // Licença / SaaS
     'saas.group_not_active': '⛔ Este grupo não possui uma licença ativa do bot.',
+    'saas.inactive_group_hint': '⚠️ *Grupo Não Ativado*\nO bot está conectado ao grupo, mas ainda não foi ativado.\n\n👉 Para ativar o bot neste grupo, digite:\n*{prefix}bot on* (ou *{prefix}ativar*)',
     'saas.license_expired': '⚠️ *LICENÇA EXPIRADA*\nA licença deste grupo expirou. Entre em contato com o suporte/dono para renovar o acesso.',
     'saas.activated': '🎉 *GRUPO ATIVADO COM SUCESSO!*\nValidade: *{expiry}*\nConfigs anteriores restauradas.',
     'saas.days_added': '📅 Foram adicionados *{days} dias* à licença deste grupo.\nNova validade: *{expiry}*.',
@@ -57,11 +59,14 @@ const dictionaries = {
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ Prefixo deste grupo alterado com sucesso para: *{prefix}*',
     'config.invalid_option': '⚠️ Opção inválida. Escolha um número do menu ou [X] para fechar.',
+    'config.module_toggled_on': '🟢 *{module}* foi *ATIVADO* no grupo.',
+    'config.module_toggled_off': '🔴 *{module}* foi *DESATIVADO* no grupo.',
 
     // Idioma (!idioma)
     'lang.prompt': '🌐 *SELEÇÃO DE IDIOMA*\nEscolha o idioma do grupo:\n[1] 🇧🇷 Português\n[2] 🇪🇸 Español\n[3] 🇺🇸 English\n\nResponda com 1, 2 ou 3.',
     'lang.changed': '🌐 Idioma do grupo alterado para: *Português (Brasil)*.',
     'lang.invalid': '⚠️ Idioma inválido. Use: !idioma pt, !idioma es ou !idioma en.',
+    'lang.invalid_option': '⚠️ Opção inválida.\nEscolha *1* (Português), *2* (Español), *3* (English) ou envie *X* para cancelar.',
 
     // AntiLink
     'antilink.detected': '🚫 @{user}, links não são permitidos neste grupo!',
@@ -156,7 +161,16 @@ const dictionaries = {
     'wizard.invalid_input': '⚠️ Resposta inválida. Por favor, leia a pergunta e tente novamente.',
     'wizard.finished': '🎉 *Configuração de {plugin} concluída com sucesso!*',
     'wizard.choice_prompt': 'Escolha uma das opções abaixo:\n{choices}',
-    'wizard.boolean_prompt': '*[1]* ✅ Sim (Ativado)\n*[2]* ❌ Não (Desativado)\n\n👉 Responda com *1* (Sim) ou *2* (Não)'
+    'wizard.boolean_prompt': '*[1]* ✅ Sim (Ativado)\n*[2]* ❌ Não (Desativado)\n\n👉 Responda com *1* (Sim) ou *2* (Não)',
+    'wizard.select_field_title': '🧙‍♂️ *CONFIGURAÇÃO: {plugin}*\n\nEscolha qual etapa você deseja alterar:\n\n',
+    'wizard.select_field_footer': '*[T]* 🔄 *Reconfigurar Todas as Etapas*\n*[X]* ❌ *Cancelar e Fechar*\n\n👉 Responda com o *NÚMERO* da etapa que deseja alterar.',
+    'wizard.select_field_invalid': '⚠️ Opção inválida. Escolha o número da etapa (1 a {max}), *T* para todas ou *X* para cancelar.',
+    'wizard.summary_single': '📋 *Configuração atualizada com sucesso:*',
+    'wizard.summary_all': '📋 *Resumo das configurações salvas:*',
+    'wizard.tip_keep': '💡 *Dica:* Envie *.* (ponto) para MANTER o valor atual.',
+    'wizard.tip_default': '📌 *Valor padrão:* `{default}`\n💡 *Dica:* Envie *.* (ponto) para USAR o valor padrão.',
+    'wizard.cancel_hint': '❌ Envie *X* a qualquer momento para cancelar.',
+    'wizard.out_of_range': '⚠️ Valor fora do intervalo permitido{range}. Tente novamente.'
   },
 
   es: {
@@ -179,9 +193,11 @@ const dictionaries = {
     'common.no': 'No',
     'common.days': 'días',
     'common.lifetime': 'Vitalicio',
+    'common.mention_greeting': '🤖 *Hermes Bot*\n📌 *Prefijo actual:* `{prefix}`\n👉 ¡Envía *{prefix}menu* o *@bot menu* para abrir el panel de configuraciones y comandos!',
 
     // Licença / SaaS
     'saas.group_not_active': '⛔ Este grupo no tiene una licencia activa del bot.',
+    'saas.inactive_group_hint': '⚠️ *Grupo No Activado*\nEl bot está conectado al grupo, pero aún no ha sido activado.\n\n👉 Para activar el bot en este grupo, escribe:\n*{prefix}bot on* (o *{prefix}activar*)',
     'saas.license_expired': '⚠️ *LICENCIA EXPIRADA*\nLa licencia de este grupo ha expirado. Contacta al soporte/dueño para renovar el acceso.',
     'saas.activated': '🎉 *¡GRUPO ACTIVADO CON ÉXITO!*\nValidez: *{expiry}*\nConfiguraciones anteriores restauradas.',
     'saas.days_added': '📅 Se han añadido *{days} días* a la licencia de este grupo.\nNueva validez: *{expiry}*.',
@@ -211,11 +227,14 @@ const dictionaries = {
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ Prefijo de este grupo cambiado con éxito a: *{prefix}*',
     'config.invalid_option': '⚠️ Opción inválida. Elige un número del menú o [X] para cerrar.',
+    'config.module_toggled_on': '🟢 *{module}* fue *ACTIVADO* en el grupo.',
+    'config.module_toggled_off': '🔴 *{module}* fue *DESACTIVADO* en el grupo.',
 
     // Idioma (!idioma)
     'lang.prompt': '🌐 *SELECCIÓN DE IDIOMA*\nElige el idioma del grupo:\n[1] 🇧🇷 Português\n[2] 🇪🇸 Español\n[3] 🇺🇸 English\n\nResponde con 1, 2 o 3.',
     'lang.changed': '🌐 Idioma del grupo cambiado a: *Español*.',
     'lang.invalid': '⚠️ Idioma inválido. Usa: !idioma pt, !idioma es o !idioma en.',
+    'lang.invalid_option': '⚠️ Opción inválida.\nElige *1* (Português), *2* (Español), *3* (English) o envía *X* para cancelar.',
 
     // AntiLink
     'antilink.detected': '🚫 @{user}, ¡los enlaces no están permitidos en este grupo!',
@@ -310,7 +329,16 @@ const dictionaries = {
     'wizard.invalid_input': '⚠️ Respuesta inválida. Por favor, lee la pregunta e inténtalo de nuevo.',
     'wizard.finished': '🎉 *¡Configuración de {plugin} finalizada con éxito!*',
     'wizard.choice_prompt': 'Elige una de las siguientes opciones:\n{choices}',
-    'wizard.boolean_prompt': '*[1]* ✅ Sí (Activado)\n*[2]* ❌ No (Desactivado)\n\n👉 Responde con *1* (Sí) o *2* (No)'
+    'wizard.boolean_prompt': '*[1]* ✅ Sí (Activado)\n*[2]* ❌ No (Desactivado)\n\n👉 Responde con *1* (Sí) o *2* (No)',
+    'wizard.select_field_title': '🧙‍♂️ *CONFIGURACIÓN: {plugin}*\n\nElige qué paso deseas modificar:\n\n',
+    'wizard.select_field_footer': '*[T]* 🔄 *Reconfigurar Todos los Pasos*\n*[X]* ❌ *Cancelar y Cerrar*\n\n👉 Responde con el *NÚMERO* del paso que deseas modificar.',
+    'wizard.select_field_invalid': '⚠️ Opción inválida. Elige el número del paso (1 a {max}), *T* para todos o *X* para cancelar.',
+    'wizard.summary_single': '📋 *Configuración actualizada con éxito:*',
+    'wizard.summary_all': '📋 *Resumen de configuraciones guardadas:*',
+    'wizard.tip_keep': '💡 *Consejo:* Envía *.* (punto) para MANTENER el valor actual.',
+    'wizard.tip_default': '📌 *Valor predeterminado:* `{default}`\n💡 *Consejo:* Envía *.* (punto) para USAR el valor predeterminado.',
+    'wizard.cancel_hint': '❌ Envía *X* en cualquier momento para cancelar.',
+    'wizard.out_of_range': '⚠️ Valor fuera del rango permitido{range}. Inténtalo de nuevo.'
   },
 
   en: {
@@ -333,9 +361,11 @@ const dictionaries = {
     'common.no': 'No',
     'common.days': 'days',
     'common.lifetime': 'Lifetime',
+    'common.mention_greeting': '🤖 *Hermes Bot*\n📌 *Current prefix:* `{prefix}`\n👉 Send *{prefix}menu* or *@bot menu* to open the settings and commands panel!',
 
     // Licença / SaaS
     'saas.group_not_active': '⛔ This group does not have an active bot license.',
+    'saas.inactive_group_hint': '⚠️ *Group Not Activated*\nThe bot is in the group, but has not been activated yet.\n\n👉 To activate the bot in this group, type:\n*{prefix}bot on* (or *{prefix}activate*)',
     'saas.license_expired': '⚠️ *LICENSE EXPIRED*\nThis group\'s license has expired. Please contact support/owner to renew access.',
     'saas.activated': '🎉 *GROUP ACTIVATED SUCCESSFULLY!*\nExpires: *{expiry}*\nPrevious settings restored.',
     'saas.days_added': '📅 Added *{days} days* to this group\'s license.\nNew expiry: *{expiry}*.',
@@ -365,11 +395,14 @@ const dictionaries = {
     'config.panel_item': '[{num}] {status} *{name}* - {desc}',
     'config.prefix_changed': '✅ This group\'s prefix has been successfully changed to: *{prefix}*',
     'config.invalid_option': '⚠️ Invalid option. Choose a number from the menu or [X] to close.',
+    'config.module_toggled_on': '🟢 *{module}* has been *ENABLED* in the group.',
+    'config.module_toggled_off': '🔴 *{module}* has been *DISABLED* in the group.',
 
     // Idioma (!idioma)
     'lang.prompt': '🌐 *LANGUAGE SELECTION*\nChoose group language:\n[1] 🇧🇷 Português\n[2] 🇪🇸 Español\n[3] 🇺🇸 English\n\nReply with 1, 2, or 3.',
     'lang.changed': '🌐 Group language changed to: *English*.',
     'lang.invalid': '⚠️ Invalid language. Use: !idioma pt, !idioma es, or !idioma en.',
+    'lang.invalid_option': '⚠️ Invalid option.\nChoose *1* (Português), *2* (Español), *3* (English) or send *X* to cancel.',
 
     // AntiLink
     'antilink.detected': '🚫 @{user}, links are not allowed in this group!',
@@ -464,7 +497,16 @@ const dictionaries = {
     'wizard.invalid_input': '⚠️ Invalid response. Please read the prompt and try again.',
     'wizard.finished': '🎉 *Configuration for {plugin} completed successfully!*',
     'wizard.choice_prompt': 'Choose one of the options below:\n{choices}',
-    'wizard.boolean_prompt': '*[1]* ✅ Yes (Enabled)\n*[2]* ❌ No (Disabled)\n\n👉 Reply with *1* (Yes) or *2* (No)'
+    'wizard.boolean_prompt': '*[1]* ✅ Yes (Enabled)\n*[2]* ❌ No (Disabled)\n\n👉 Reply with *1* (Yes) or *2* (No)',
+    'wizard.select_field_title': '🧙‍♂️ *CONFIGURATION: {plugin}*\n\nChoose which step you want to edit:\n\n',
+    'wizard.select_field_footer': '*[T]* 🔄 *Reconfigure All Steps*\n*[X]* ❌ *Cancel and Close*\n\n👉 Reply with the *NUMBER* of the step you want to edit.',
+    'wizard.select_field_invalid': '⚠️ Invalid option. Choose the step number (1 to {max}), *T* for all, or *X* to cancel.',
+    'wizard.summary_single': '📋 *Configuration updated successfully:*',
+    'wizard.summary_all': '📋 *Saved settings summary:*',
+    'wizard.tip_keep': '💡 *Tip:* Send *.* (dot) to KEEP the current value.',
+    'wizard.tip_default': '📌 *Default value:* `{default}`\n💡 *Tip:* Send *.* (dot) to USE the default value.',
+    'wizard.cancel_hint': '❌ Send *X* at any time to cancel.',
+    'wizard.out_of_range': '⚠️ Value out of allowed range{range}. Please try again.'
   }
 };
 

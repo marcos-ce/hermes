@@ -1,9 +1,30 @@
 const { groupCache } = require('./cache');
 const settings = require('../config/settings');
+const { getBr } = settings;
 
 // Mapas bidirecionais em memória para resolução instantânea de @lid <-> @s.whatsapp.net
 const lidToPhoneMap = new Map();
 const phoneToLidMap = new Map();
+const MAX_LID_CACHE = 10000;
+
+/**
+ * Registra mapeamento bidirecional LID <-> Phone com limite máximo em RAM (FIFO eviction)
+ * @param {string} lid 
+ * @param {string} phoneJid 
+ */
+function setLidMapping(lid, phoneJid) {
+  if (!lid || !phoneJid) return;
+  if (!lidToPhoneMap.has(lid) && lidToPhoneMap.size >= MAX_LID_CACHE) {
+    const oldestLid = lidToPhoneMap.keys().next().value;
+    if (oldestLid) {
+      const oldestPhone = lidToPhoneMap.get(oldestLid);
+      lidToPhoneMap.delete(oldestLid);
+      if (oldestPhone) phoneToLidMap.delete(oldestPhone);
+    }
+  }
+  lidToPhoneMap.set(lid, phoneJid);
+  phoneToLidMap.set(phoneJid, lid);
+}
 
 /**
  * Normaliza um JID removendo sufixos de dispositivo (:1@s.whatsapp.net -> @s.whatsapp.net)
@@ -43,8 +64,7 @@ function registerParticipantLid(p) {
   }
 
   if (pJid && pLid) {
-    lidToPhoneMap.set(pLid, pJid);
-    phoneToLidMap.set(pJid, pLid);
+    setLidMapping(pLid, pJid);
   }
 }
 
@@ -69,8 +89,7 @@ async function resolveSender(sock, msg) {
   if (directPn && directLid) {
     const cleanPn = cleanJid(directPn);
     const cleanL = cleanJid(directLid);
-    lidToPhoneMap.set(cleanL, cleanPn);
-    phoneToLidMap.set(cleanPn, cleanL);
+    setLidMapping(cleanL, cleanPn);
     if (rawSender === cleanL) {
       return cleanPn;
     }
@@ -78,8 +97,7 @@ async function resolveSender(sock, msg) {
 
   if (directPn && rawSender.endsWith('@lid')) {
     const cleanPn = cleanJid(directPn);
-    lidToPhoneMap.set(rawSender, cleanPn);
-    phoneToLidMap.set(cleanPn, rawSender);
+    setLidMapping(rawSender, cleanPn);
     return cleanPn;
   }
 
@@ -137,22 +155,6 @@ function extractSender(msg) {
 }
 
 /**
- * Extrai componentes DDD e últimos 8 dígitos para comparação robusta de números brasileiros (com ou sem 9º dígito)
- * @param {string} num 
- * @returns {{ ddd: string, last8: string }}
- */
-function getBr(num) {
-  const c = (num || '').replace(/\D/g, '');
-  if (c.startsWith('55') && c.length >= 12) {
-    return { ddd: c.slice(2, 4), last8: c.slice(-8) };
-  }
-  if (c.length === 10 || c.length === 11) {
-    return { ddd: c.slice(0, 2), last8: c.slice(-8) };
-  }
-  return { ddd: '', last8: c.slice(-8) };
-}
-
-/**
  * Extrai o JID alvo da mensagem através de:
  * 1. Mensagem respondida (Quoted participant)
  * 2. Menção direta (@5511...)
@@ -165,6 +167,7 @@ function extractTarget(msg, textArgs = '') {
   const realMsg = msg?.message?.ephemeralMessage?.message ||
                   msg?.message?.viewOnceMessage?.message ||
                   msg?.message?.viewOnceMessageV2?.message ||
+                  msg?.message?.documentWithCaptionMessage?.message ||
                   msg?.message;
 
   const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
@@ -278,14 +281,28 @@ async function resolveTarget(sock, msg, groupJid, textArgs = '') {
 function extractAllTargets(msg, textArgs = '') {
   const targets = new Set();
 
-  const quotedParticipant = msg?.message?.extendedTextMessage?.contextInfo?.participant;
+  const realMsg = msg?.message?.ephemeralMessage?.message ||
+                  msg?.message?.viewOnceMessage?.message ||
+                  msg?.message?.viewOnceMessageV2?.message ||
+                  msg?.message?.documentWithCaptionMessage?.message ||
+                  msg?.message;
+
+  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                      realMsg?.imageMessage?.contextInfo ||
+                      realMsg?.videoMessage?.contextInfo ||
+                      realMsg?.documentMessage?.contextInfo ||
+                      msg?.message?.extendedTextMessage?.contextInfo;
+
+  const quotedParticipant = contextInfo?.participant || contextInfo?.quotedMessage?.participant;
   if (quotedParticipant) {
-    targets.add(cleanJid(quotedParticipant));
+    const clean = cleanJid(quotedParticipant);
+    targets.add(lidToPhoneMap.get(clean) || clean);
   }
 
-  const mentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  const mentions = contextInfo?.mentionedJid || [];
   for (const m of mentions) {
-    targets.add(cleanJid(m));
+    const clean = cleanJid(m);
+    targets.add(lidToPhoneMap.get(clean) || clean);
   }
 
   if (textArgs && typeof textArgs === 'string') {

@@ -83,4 +83,5 @@ class Settings {
 }
 
 const settings = new Settings();
+settings.getBr = getBr;
 module.exports = settings;

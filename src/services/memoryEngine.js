@@ -1,6 +1,5 @@
 const path = require('path');
 const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
 const logger = require('../utils/logger');
 
 /**
@@ -13,11 +12,14 @@ class MemoryEngine {
     this.dbPath = path.join(this.dataDir, 'memory.db');
     this.db = null;
     this.writeCounters = new Map();
+    this.fallbackStore = new Map();
     this.init();
   }
 
   init() {
     try {
+      const { DatabaseSync } = require('node:sqlite');
+
       if (!fs.existsSync(this.dataDir)) {
         fs.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -69,7 +71,8 @@ class MemoryEngine {
         DELETE FROM messages WHERE group_jid = ?
       `);
     } catch (err) {
-      logger.error({ err }, 'Erro ao inicializar o banco de memória SQLite local');
+      this.db = null;
+      logger.warn({ err: err.message }, 'Banco de memória SQLite nativo indisponível nesta versão do Node.js. Utilizando fallback em memória (Map).');
     }
   }
 
@@ -83,7 +86,7 @@ class MemoryEngine {
    * @param {string} [senderName] 
    */
   saveMessage(groupJid, senderJid, text, timestamp = null, senderName = '') {
-    if (!this.db || !groupJid || !text) return;
+    if (!groupJid || !text) return;
 
     const cleanText = text.trim();
 
@@ -100,6 +103,25 @@ class MemoryEngine {
     if (/^\[?\d{1,2}\]?$/.test(cleanText)) return;
 
     const ts = timestamp ? Number(timestamp) : Math.floor(Date.now() / 1000);
+
+    if (!this.db) {
+      let list = this.fallbackStore.get(groupJid);
+      if (!list) {
+        list = [];
+        this.fallbackStore.set(groupJid, list);
+      }
+      list.push({
+        id: list.length + 1,
+        sender: senderJid,
+        name: senderName || (senderJid || '').replace(/@.*$/, '').replace(/\D/g, ''),
+        text: cleanText,
+        timestamp: ts
+      });
+      while (list.length > 50) {
+        list.shift();
+      }
+      return;
+    }
 
     try {
       this.insertStmt.run(groupJid, senderJid, senderName || '', cleanText, ts);
@@ -126,7 +148,12 @@ class MemoryEngine {
    * @returns {Array<{ sender: string, name: string, text: string, timestamp: number }>}
    */
   getRecentMessages(groupJid, limit = 30) {
-    if (!this.db || !groupJid) return [];
+    if (!groupJid) return [];
+
+    if (!this.db) {
+      const list = this.fallbackStore.get(groupJid) || [];
+      return list.slice(-limit);
+    }
 
     try {
       const rows = this.selectStmt.all(groupJid, limit);
@@ -155,7 +182,7 @@ class MemoryEngine {
     if (!list || list.length === 0) return '';
 
     return list
-      .map(m => `[${m.name}]: ${m.text}`)
+      .map(m => `${m.name}: ${m.text}`)
       .join('\n');
   }
 
@@ -165,7 +192,10 @@ class MemoryEngine {
    * @returns {{ count: number }}
    */
   getGroupStats(groupJid) {
-    if (!this.db || !groupJid) return { count: 0 };
+    if (!groupJid) return { count: 0 };
+    if (!this.db) {
+      return { count: (this.fallbackStore.get(groupJid) || []).length };
+    }
     try {
       const result = this.countStmt.all(groupJid);
       return { count: result?.[0]?.count || 0 };
@@ -179,7 +209,11 @@ class MemoryEngine {
    * @param {string} groupJid 
    */
   clearGroupMemory(groupJid) {
-    if (!this.db || !groupJid) return false;
+    if (!groupJid) return false;
+    if (!this.db) {
+      this.fallbackStore.delete(groupJid);
+      return true;
+    }
     try {
       this.deleteGroupStmt.run(groupJid);
       this.writeCounters.delete(groupJid);

@@ -34,6 +34,16 @@ module.exports = {
           en: 'Delete the replied message when banning?'
         },
         default: true
+      },
+      {
+        name: 'customMessage',
+        type: 'string',
+        question: {
+          pt: 'Digite a mensagem exibida ao banir um membro (use {user} para marcar) ou envie . para usar a mensagem padrão:',
+          es: 'Escribe el mensaje al expulsar a un miembro (usa {user} para mencionar) o envía . para usar el predeterminado:',
+          en: 'Enter the message shown when banning a member (use {user} to mention) or send . to use the default:'
+        },
+        default: ''
       }
     ]
   },
@@ -98,7 +108,11 @@ module.exports = {
 
     // Remoção Imediata usando o JID exato que o WhatsApp espera no grupo
     await safeKick(sock, from, targetGroup);
-    return reply(t('ban.success', { user: targetNum }), {
+    const customMsg = (banCfg.customMessage && banCfg.customMessage.trim().length > 0)
+      ? banCfg.customMessage.replace(/\{user\}/g, `@${targetNum}`)
+      : t('ban.success', { user: targetNum });
+
+    return reply(customMsg, {
       mentions: [targetGroup, targetPhone]
     });
   }
