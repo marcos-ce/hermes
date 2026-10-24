@@ -21,7 +21,7 @@ class AIService {
     this.baseUrl = (process.env.AI_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '');
     this.apiKey = (process.env.AI_API_KEY || '').replace(/^["']|["']$/g, '').trim();
     this.model = process.env.AI_MODEL || 'deepseek-chat';
-    this.maxTokens = parseInt(process.env.AI_MAX_TOKENS, 10) || 60;
+    this.maxTokens = Math.max(parseInt(process.env.AI_MAX_TOKENS, 10) || 200, 180);
     this.temperature = parseFloat(process.env.AI_TEMPERATURE) || 0.6;
   }
 
@@ -47,21 +47,22 @@ class AIService {
     }[lang] || 'Responda sempre em Português do Brasil.';
 
     const personaInstructions = isFormal
-      ? 'Tom: profissional, educado, objetivo e sucinto.'
-      : 'Tom: descontraído, informal, rápido e amigável, como um usuário real de WhatsApp no Brasil.';
+      ? 'Tom: executivo, educado, preciso e direto ao ponto, sem clichês robóticos.'
+      : 'Tom: natural, humano, parceiro e direto ao ponto, como um admin experiente de WhatsApp no Brasil. Sem enrolação e sem parecer robô.';
 
     const commandsHelp = [
       `COMANDOS DO BOT (Prefixo do grupo: "${prefix}"):`,
       `• ${prefix}painel ou ${prefix}config : Painel geral de configurações.`,
-      `• ${prefix}fechar / ${prefix}abrir : Tranca ou abre o grupo para mensagens.`,
+      `• ${prefix}fechar / ${prefix}abrir : Tranca ou abre o grupo imediatamente.`,
       `• ${prefix}ban @user : Remove participante (ou responda a mensagem com ${prefix}ban).`,
-      `• ${prefix}warn @user : Aplica advertência (ou ${prefix}unwarn para perdoar).`,
+      `• ${prefix}warn @user : Aplica advertência (ou ${prefix}unwarn @user para perdoar).`,
       `• ${prefix}antilink on/off/config : Proteção contra links não autorizados.`,
       `• ${prefix}antiflood on/off : Proteção contra spam de mensagens e travas.`,
       `• ${prefix}antifake on/off : Bloqueia números estrangeiros por DDI.`,
       `• ${prefix}bemvindo : Boas-vindas automáticas para novos membros.`,
       `• ${prefix}horarios : Agenda horários automáticos para abrir e fechar o grupo.`,
       `• ${prefix}automsg : Mensagens/anúncios periódicos programados.`,
+      `• ${prefix}blacklist add/del <numero> : Gerencia a lista negra do grupo.`,
       `• ${prefix}hidetag [texto] : Marca todos os membros com comunicado oculto.`,
       `• ${prefix}del : Apaga a mensagem respondida.`,
       `• ${prefix}adm @user / ${prefix}rebaixar @user : Promove ou rebaixa administradores.`,
@@ -70,15 +71,15 @@ class AIService {
     ].join('\n');
 
     return [
-      `Você é o Hermes, o copiloto e assistente inteligente de administração do grupo de WhatsApp${groupName ? ` "${groupName}"` : ''}.`,
+      `Você é o Hermes, o copiloto e administrador inteligente do grupo de WhatsApp${groupName ? ` "${groupName}"` : ''}.`,
       personaInstructions,
       langInstructions,
-      'REGRAS ABSOLUTAS DE MENSAGEM:',
-      '1. Seja ultra direto: responda em no máximo 1 ou 2 frases curtas (limite de 40 palavras).',
-      '2. PROIBIDO usar preâmbulos ou enrolação ("Certamente!", "Compreendi sua dúvida", "Olá!", "Como posso ajudar?").',
-      '3. PROIBIDO usar despedidas de telemarketing ("Qualquer dúvida estou à disposição!", "Espero ter ajudado!").',
-      '4. SUPORTE A DÚVIDAS DE COMANDOS: Se qualquer membro ou admin perguntar como usar o bot, tiver dificuldade com comandos ou pedir ajuda, ensine de forma simples e direta o comando exato com o prefixo correto.',
-      '5. Se um administrador pedir para você mesmo executar uma ação no grupo (como banir membro, fechar/abrir grupo, advertir, sortear ou apagar mensagem), utilize as ferramentas (tool calls) disponíveis.',
+      'REGRAS ABSOLUTAS DE COMPORTAMENTO E EXECUÇÃO:',
+      '1. Seja humano e direto: ao responder texto, use no máximo 1 ou 2 frases curtas (até 40 palavras). Vá direto à resposta.',
+      '2. PROIBIDO usar preâmbulos ("Certamente!", "Claro!", "Compreendi sua dúvida", "Olá! Como posso ajudar?") ou despedidas de telemarketing ("Qualquer dúvida estou à disposição!", "Espero ter ajudado!").',
+      '3. AÇÃO IMEDIATA VIA TOOLS: Sempre que o usuário pedir para executar uma ação (banir/remover alguém, fechar/abrir o grupo agora, mudar horários de abrir/fechar o grupo, ativar/desativar antilink/antiflood/antifake/bemvindo/automsg, dar ou tirar advertência, colocar na blacklist, apagar mensagem, promover/rebaixar admin, fazer comunicado hidetag ou sortear), ACIONE A FERRAMENTA (tool_calls) IMEDIATAMENTE. Não mande o usuário digitar comando quando você mesmo tem a ferramenta para executar!',
+      '4. Quando houver "[Alvo marcado/mencionado: ...]" ou "[Respondendo ao membro: ...]" no contexto, use esse número/JID ou "quoted" no parâmetro "target" da ferramenta sem pedir confirmação.',
+      '5. Se o usuário apenas perguntar uma dúvida sobre como funciona um comando (sem pedir para executar agora), explique de forma simples e direta com o prefixo correto.',
       commandsHelp
     ].join('\n');
   }
@@ -116,8 +117,7 @@ class AIService {
       model: this.model,
       messages: fullMessages,
       max_tokens: this.maxTokens,
-      temperature: this.temperature,
-      stop: ['\n\n']
+      temperature: this.temperature
     };
 
     if (Array.isArray(tools) && tools.length > 0) {

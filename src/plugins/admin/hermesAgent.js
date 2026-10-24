@@ -228,6 +228,17 @@ module.exports = {
         return reply(`⚠️ O Hermes IA está desativado neste grupo.\n👉 Peça a um administrador para ativar enviando: *${groupPrefix}hermes on*`);
       }
 
+      const realMsg = msg?.message?.ephemeralMessage?.message ||
+                      msg?.message?.viewOnceMessage?.message ||
+                      msg?.message?.viewOnceMessageV2?.message ||
+                      msg?.message?.documentWithCaptionMessage?.message ||
+                      msg?.message;
+
+      const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                          realMsg?.imageMessage?.contextInfo ||
+                          realMsg?.videoMessage?.contextInfo ||
+                          realMsg?.documentMessage?.contextInfo;
+
       await this.processAIInteraction({
         sock,
         msg,
@@ -236,7 +247,8 @@ module.exports = {
         queryText: question,
         reply,
         lang,
-        cfg
+        cfg,
+        contextInfo
       });
       return;
     }
@@ -361,13 +373,19 @@ module.exports = {
       return true;
     }
 
-    // 6. Limpa prefixos de chamada para enviar apenas a dúvida real ao modelo
+    // 6. Limpa apenas os prefixos de chamada ao próprio bot (preservando menções a outros membros!)
     let cleanQuery = text
       .replace(/^hermes[\s,.:!?-]*/i, '')
       .replace(/@hermes\b/gi, '')
-      .replace(/@bot\b/gi, '')
-      .replace(/@\d{8,15}\b/g, '')
-      .trim();
+      .replace(/@bot\b/gi, '');
+
+    if (botNum) {
+      cleanQuery = cleanQuery.replace(new RegExp(`@${botNum}\\b`, 'g'), '');
+    }
+    if (botLidNum) {
+      cleanQuery = cleanQuery.replace(new RegExp(`@${botLidNum}\\b`, 'g'), '');
+    }
+    cleanQuery = cleanQuery.trim();
 
     // Se o usuário apenas chamou "hermes" ou "@hermes" sem escrever nada
     if (cleanQuery.length === 0 && !contextInfo?.quotedMessage) {
@@ -413,7 +431,35 @@ module.exports = {
     // Monta o prompt do usuário com contexto e histórico limpos em uma única mensagem de diálogo
     const userPromptParts = [];
 
-    // Se a mensagem cita outra mensagem anterior, adiciona o trecho citado
+    const botJid = cleanJid(sock?.user?.id || '');
+    const botLid = cleanJid(sock?.user?.lid || '');
+    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+    // Se houver alvos marcados na mensagem (excluindo o próprio bot), informa explicitamente ao modelo
+    const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
+    const targetMentions = rawMentions
+      .map(m => cleanJid(m))
+      .filter(m => {
+        const num = m.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        return m !== botJid && m !== botLid && (!botNum || num !== botNum) && (!botLidNum || num !== botLidNum);
+      });
+
+    if (targetMentions.length > 0) {
+      const formattedTargets = targetMentions.map(m => `@${m.replace(/@.*$/, '')}`).join(', ');
+      userPromptParts.push(`[Alvo marcado/mencionado: ${formattedTargets}]`);
+    }
+
+    // Se a mensagem cita outra mensagem anterior, adiciona o autor citado e o trecho
+    if (contextInfo?.participant) {
+      const qParticipant = cleanJid(contextInfo.participant);
+      const qNum = qParticipant.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      const isQuotingBot = qParticipant === botJid || qParticipant === botLid || (botNum && qNum === botNum) || (botLidNum && qNum === botLidNum);
+      if (!isQuotingBot && qNum) {
+        userPromptParts.push(`[Respondendo ao membro: @${qNum}]`);
+      }
+    }
+
     if (contextInfo?.quotedMessage) {
       const qm = contextInfo.quotedMessage;
       const quotedContent = qm.conversation ||
@@ -502,9 +548,12 @@ module.exports = {
 
           // Se a ferramenta retornou mensagem de sucesso ou erro determinístico
           if (execResult.message) {
-            await reply(`⚡ *Hermes:* ${execResult.message}`);
+            const mentionOpts = Array.isArray(execResult.mentions) && execResult.mentions.length > 0
+              ? { mentions: execResult.mentions }
+              : {};
+            await reply(execResult.message, mentionOpts);
           } else if (execResult.error) {
-            await reply(`⚠️ *Hermes:* ${execResult.error}`);
+            await reply(execResult.error);
           }
         }
         return;

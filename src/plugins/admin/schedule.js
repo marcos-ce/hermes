@@ -116,22 +116,31 @@ module.exports = {
     }
 
     // Configuração direta de horário: /horarios 23:00 07:00
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (timeRegex.test(sub)) {
-      const closeTime = sub;
-      const openTime = args[1] && timeRegex.test(args[1]) ? args[1] : (cfg.openTime || '07:00');
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+    const normalizeTime = (val) => {
+      if (val === '0') return '0';
+      const m = String(val || '').trim().match(timeRegex);
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+    };
+
+    const normFirst = normalizeTime(sub);
+    if (normFirst && sub !== '0') {
+      const closeTime = normFirst;
+      const openTime = (args[1] && normalizeTime(args[1])) || cfg.openTime || '07:00';
       configManager.updatePluginConfig(from, 'schedule', { closeTime, openTime, enabled: true });
       return reply(`💾 *Horários atualizados e ATIVADOS!*\n🔒 *Fechar:* \`${closeTime}\`\n🔓 *Abrir:* \`${openTime}\``);
     }
 
-    if (sub === 'fechar' && args[1] && timeRegex.test(args[1])) {
-      configManager.updatePluginConfig(from, 'schedule', { closeTime: args[1], enabled: true });
-      return reply(`💾 *Horário de fechar atualizado:* \`${args[1]}\``);
+    if (sub === 'fechar' && args[1] && normalizeTime(args[1])) {
+      const closeTime = normalizeTime(args[1]);
+      configManager.updatePluginConfig(from, 'schedule', { closeTime, enabled: true });
+      return reply(`💾 *Horário de fechar atualizado:* \`${closeTime}\``);
     }
 
-    if (sub === 'abrir' && args[1] && timeRegex.test(args[1])) {
-      configManager.updatePluginConfig(from, 'schedule', { openTime: args[1], enabled: true });
-      return reply(`💾 *Horário de abrir atualizado:* \`${args[1]}\``);
+    if (sub === 'abrir' && args[1] && normalizeTime(args[1])) {
+      const openTime = normalizeTime(args[1]);
+      configManager.updatePluginConfig(from, 'schedule', { openTime, enabled: true });
+      return reply(`💾 *Horário de abrir atualizado:* \`${openTime}\``);
     }
 
     const status = configManager.isPluginEnabled(from, 'schedule') ? translate('common.enabled') : translate('common.disabled');
