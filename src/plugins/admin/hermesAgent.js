@@ -4,8 +4,80 @@ const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
 const { cleanJid, getGroupMetadata } = require('../../utils/jidResolver');
-const { checkCooldown } = require('../../utils/antiBan');
+const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
+const settings = require('../../config/settings');
 const logger = require('../../utils/logger');
+
+// Cache em memória para debounce de alertas de erro enviados ao dono (10 min de cooldown)
+const ownerAlertCooldown = new Map();
+
+/**
+ * Notifica o Dono do bot no privado com diagnóstico completo caso ocorra erro na IA
+ * Evita expor falhas técnicas e saldo insuficiente nos grupos
+ */
+async function notifyOwnerAboutAIError({ sock, errorDetails, groupName, from, sender, queryText }) {
+  try {
+    const ownerJid = settings.getOwnerJid();
+    if (!sock || !ownerJid) {
+      logger.warn('Não foi possível notificar o dono sobre erro de IA: OWNER_NUMBER não configurado no .env');
+      return;
+    }
+
+    const errStr = String(errorDetails || '');
+    let category = 'OUTRO';
+    let errorTitle = '⚠️ *Falha na Requisição de IA*';
+    let actionTip = `👉 *Detalhes Técnicos:* \`${errStr.slice(0, 180)}\``;
+
+    if (errStr.includes('402') || errStr.toLowerCase().includes('insufficient') || errStr.toLowerCase().includes('balance')) {
+      category = '402_BALANCE';
+      errorTitle = '💸 *DeepSeek: Saldo Insuficiente (HTTP 402)*';
+      actionTip =
+        '👉 *Como Resolver:*\n' +
+        '1. Recarregue créditos em: *platform.deepseek.com/top_up*\n' +
+        '2. OU adicione uma chave gratuita do OpenRouter no `.env` da Discloud:\n' +
+        '`OPENROUTER_API_KEY=sk-or-v1-...`\n' +
+        '`OPENROUTER_MODEL=deepseek/deepseek-chat:free`';
+    } else if (errStr.includes('401') || errStr.toLowerCase().includes('unauthorized') || errStr.toLowerCase().includes('invalid')) {
+      category = '401_AUTH';
+      errorTitle = '🔑 *Chave de API Inválida (HTTP 401)*';
+      actionTip = '👉 Verifique a chave `AI_API_KEY` ou `OPENROUTER_API_KEY` no arquivo `.env` e reinicie o bot.';
+    } else if (errStr.includes('API_KEY_MISSING')) {
+      category = 'KEY_MISSING';
+      errorTitle = '⚠️ *Nenhuma Chave de IA Configurada no .env*';
+      actionTip = '👉 Configure `AI_API_KEY` (DeepSeek) ou `OPENROUTER_API_KEY` (OpenRouter Gratuito) no `.env`.';
+    } else if (errStr.includes('TIMEOUT')) {
+      category = 'TIMEOUT';
+      errorTitle = '⏱️ *Timeout na API de IA (> 15s)*';
+      actionTip = '👉 O provedor demorou demais para responder. Pode ser instabilidade temporária na rede.';
+    }
+
+    // Cooldown de 10 minutos (600.000 ms) para não inundar o privado do dono
+    const now = Date.now();
+    const lastAlert = ownerAlertCooldown.get(category) || 0;
+    if (now - lastAlert < 10 * 60 * 1000) {
+      logger.info({ category, remainingSec: Math.round((600000 - (now - lastAlert)) / 1000) }, 'Alerta ao dono suprimido por cooldown');
+      return;
+    }
+    ownerAlertCooldown.set(category, now);
+
+    const cleanSender = (sender || '').replace(/@.*$/, '');
+    const promptSnippet = (queryText || '').slice(0, 100);
+
+    const alertMessage =
+      `🚨 *[ALERTA HERMES IA - DONO]*\n\n` +
+      `${errorTitle}\n\n` +
+      `📍 *Grupo:* ${groupName || from}\n` +
+      `👤 *Membro:* @${cleanSender}\n` +
+      (promptSnippet ? `💬 *Mensagem:* "${promptSnippet}..."\n\n` : '\n') +
+      `${actionTip}\n\n` +
+      `🛡️ _Esta notificação foi enviada apenas para você no privado. No grupo, os membros receberam apenas uma resposta discreta de oscilação temporária._`;
+
+    await sendSafeMessage(sock, ownerJid, alertMessage, { mentions: sender ? [sender] : [] });
+    logger.info({ ownerJid, category }, 'Alerta de erro de IA enviado com sucesso ao dono no privado');
+  } catch (alertErr) {
+    logger.error({ alertErr }, 'Erro ao enviar alerta de IA ao dono no privado');
+  }
+}
 
 module.exports = {
   name: 'hermes',
@@ -365,36 +437,18 @@ module.exports = {
         logger.warn({ error: aiResponse.error }, 'Falha na resposta da IA');
         const err = String(aiResponse.error || '');
 
-        if (err.includes('API_KEY_MISSING')) {
-          return reply(
-            '⚠️ *Nenhuma chave de IA configurada no .env!*\n\n' +
-            'Configure `AI_API_KEY` (DeepSeek) ou adicione `OPENROUTER_API_KEY` (gratuita em openrouter.ai) no arquivo `.env`.'
-          );
-        }
+        // 1. Notifica o Dono no privado com o diagnóstico completo (sem expor no grupo)
+        await notifyOwnerAboutAIError({
+          sock,
+          errorDetails: err,
+          groupName,
+          from,
+          sender,
+          queryText
+        });
 
-        if (err.includes('402') || err.toLowerCase().includes('insufficient') || err.toLowerCase().includes('balance')) {
-          return reply(
-            '⚠️ *DeepSeek API (402): Saldo Insuficiente!*\n\n' +
-            'A sua conta na plataforma da DeepSeek está sem saldo.\n\n' +
-            '💡 *Opção 100% Gratuita:* Adicione uma chave gratuita do OpenRouter no `.env`:\n' +
-            '`OPENROUTER_API_KEY=sk-or-v1-...`\n\n' +
-            '👉 Ou recarregue sua conta DeepSeek em *platform.deepseek.com/top_up*.'
-          );
-        }
-
-        if (err.includes('401') || err.toLowerCase().includes('unauthorized') || err.toLowerCase().includes('invalid')) {
-          return reply(
-            '⚠️ *Chave de API Inválida (401)!*\n\n' +
-            'A chave de IA configurada no `.env` foi rejeitada.\n' +
-            '👉 Verifique se copiou a chave corretamente no `.env`.'
-          );
-        }
-
-        if (err.includes('TIMEOUT')) {
-          return reply('⏱️ A IA demorou para responder (Timeout). Tente novamente!');
-        }
-
-        return reply(`⚠️ *Falha na IA:* ${err.slice(0, 150)}`);
+        // 2. Resposta discreta e amigável no grupo para não expor falhas aos membros
+        return reply('Tive uma oscilação momentânea na conexão com minha IA. Tente novamente em alguns instantes!');
       }
 
       // Se o modelo solicitou Tool Calls (ações no grupo)
@@ -426,7 +480,15 @@ module.exports = {
       }
     } catch (err) {
       logger.error({ err }, 'Erro inesperado na interação do Hermes IA');
-      return reply('Tive uma oscilação na conexão com minha IA. Tenta novamente em instantes!');
+      await notifyOwnerAboutAIError({
+        sock,
+        errorDetails: err.message || String(err),
+        groupName,
+        from,
+        sender,
+        queryText
+      });
+      return reply('Tive uma oscilação momentânea na conexão com minha IA. Tente novamente em alguns instantes!');
     }
   }
 };
