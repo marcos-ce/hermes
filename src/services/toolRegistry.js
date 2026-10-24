@@ -1,5 +1,6 @@
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');
+const wizardEngine = require('../core/wizardEngine');
 const logger = require('../utils/logger');
 const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
 const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid } = require('../utils/jidResolver');
@@ -79,33 +80,101 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'toggle_group_protection',
-      description: 'Ativa, desativa ou configura módulos de proteção e automação do grupo (antilink, antiflood, antifake, welcome, automsg, schedule).',
+      description: 'Ativa, desativa ou configura detalhadamente os plugins do grupo (antilink, antiflood, antifake, welcome, automsg, schedule, warn, ban, hermes).',
       parameters: {
         type: 'object',
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule'],
-            description: 'Nome do módulo a ser ativado, desativado ou configurado.'
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes'],
+            description: 'Nome do plugin a ser ativado, desativado ou configurado.'
           },
           enabled: {
             type: 'boolean',
             description: 'True para ativar o módulo ou false para desativar.'
           },
+          action: {
+            type: 'string',
+            enum: ['delete', 'warn', 'ban'],
+            description: 'Punição para antilink ("delete", "warn" ou "ban") ou antiflood ("warn" ou "ban").'
+          },
+          allowedDomains: {
+            type: 'string',
+            description: 'Sites liberados no antilink separados por vírgula (ex: "youtube.com, instagram.com") ou "." para bloquear todos.'
+          },
+          maxMessages: {
+            type: 'integer',
+            description: 'Máximo de mensagens em 5s para o antiflood (ex: 6).'
+          },
+          maxChars: {
+            type: 'integer',
+            description: 'Limite máximo de caracteres anti-trava no antiflood (ex: 2500).'
+          },
+          allowedDdis: {
+            type: 'string',
+            description: 'DDIs permitidos no antifake separados por vírgula (ex: "55, 351").'
+          },
           welcomeMessage: {
             type: 'string',
-            description: 'Texto de boas-vindas (opcional, apenas quando module="welcome").'
+            description: 'Texto de boas-vindas (quando module="welcome", suporta {user}, {group}, {desc}).'
+          },
+          autoDeleteSeconds: {
+            type: 'integer',
+            description: 'Segundos para apagar boas-vindas automaticamente (quando module="welcome", 0 para não apagar).'
           },
           autoMsgText: {
             type: 'string',
-            description: 'Texto do anúncio periódico automático (opcional, apenas quando module="automsg").'
+            description: 'Texto do anúncio periódico automático (quando module="automsg").'
           },
           intervalMinutes: {
             type: 'integer',
-            description: 'Intervalo em minutos para o anúncio periódico (opcional, apenas quando module="automsg").'
+            description: 'Intervalo em minutos para o anúncio periódico (quando module="automsg").'
+          },
+          maxWarns: {
+            type: 'integer',
+            description: 'Limite de advertências antes do banimento automático (quando module="warn", padrão 3).'
+          },
+          customBanMessage: {
+            type: 'string',
+            description: 'Mensagem personalizada ao banir membro (quando module="ban", suporta {user}).'
+          },
+          personality: {
+            type: 'string',
+            enum: ['descontraido', 'formal'],
+            description: 'Personalidade do Hermes IA (quando module="hermes").'
           }
         },
-        required: ['module', 'enabled']
+        required: ['module']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_group_settings',
+      description: 'Altera configurações gerais do grupo: idioma (pt/es/en), prefixo de comandos (!, /, #, .), abre o painel interativo (!config) ou limpa a memória da IA.',
+      parameters: {
+        type: 'object',
+        properties: {
+          lang: {
+            type: 'string',
+            enum: ['pt', 'es', 'en'],
+            description: 'Novo idioma do grupo ("pt", "es" ou "en").'
+          },
+          prefix: {
+            type: 'string',
+            description: 'Novo prefixo de 1 caractere do grupo (ex: "!", "/", "#", ".").'
+          },
+          openPanel: {
+            type: 'boolean',
+            description: 'True para abrir o Painel Interativo de Configurações (!config) para o administrador.'
+          },
+          clearMemory: {
+            type: 'boolean',
+            description: 'True para limpar o histórico de memória de conversas do Hermes neste grupo.'
+          }
+        },
+        required: []
       }
     }
   },
@@ -520,17 +589,53 @@ class ToolRegistry {
 
       case 'toggle_group_protection': {
         const mod = String(args.module || '').toLowerCase();
-        const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule'];
+        const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes'];
         if (!validModules.includes(mod)) {
           return { success: false, error: `Módulo "${mod}" inválido.` };
         }
 
-        const enabled = Boolean(args.enabled);
+        const currentCfg = configManager.getPluginConfig(from, mod) || {};
+        const enabled = args.enabled !== undefined ? Boolean(args.enabled) : (currentCfg.enabled !== false);
         const updates = { enabled };
 
-        if (mod === 'welcome' && args.welcomeMessage && String(args.welcomeMessage).trim().length > 0) {
-          updates.message = String(args.welcomeMessage).trim();
+        if (mod === 'antilink') {
+          if (args.action && ['delete', 'warn', 'ban'].includes(args.action)) {
+            updates.action = args.action;
+          }
+          if (args.allowedDomains !== undefined) {
+            const rawDoms = String(args.allowedDomains).trim();
+            updates.allowedDomains = (rawDoms === '.' || rawDoms === '' || rawDoms === 'todos')
+              ? []
+              : rawDoms.split(/[\s,]+/).map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')).filter(Boolean);
+          }
         }
+
+        if (mod === 'antiflood') {
+          if (args.action && ['warn', 'ban'].includes(args.action)) {
+            updates.action = args.action;
+          }
+          if (args.maxMessages && Number(args.maxMessages) >= 2) {
+            updates.maxMessages = parseInt(args.maxMessages, 10);
+          }
+          if (args.maxChars && Number(args.maxChars) >= 100) {
+            updates.maxChars = parseInt(args.maxChars, 10);
+          }
+        }
+
+        if (mod === 'antifake' && args.allowedDdis !== undefined) {
+          const ddis = String(args.allowedDdis).split(/[\s,]+/).map(d => d.replace(/\D/g, '')).filter(Boolean);
+          if (ddis.length > 0) updates.allowedDdis = ddis;
+        }
+
+        if (mod === 'welcome') {
+          if (args.welcomeMessage && String(args.welcomeMessage).trim().length > 0) {
+            updates.message = String(args.welcomeMessage).trim();
+          }
+          if (args.autoDeleteSeconds !== undefined && Number(args.autoDeleteSeconds) >= 0) {
+            updates.autoDeleteSeconds = parseInt(args.autoDeleteSeconds, 10);
+          }
+        }
+
         if (mod === 'automsg') {
           if (args.autoMsgText && String(args.autoMsgText).trim().length > 0) {
             updates.message = String(args.autoMsgText).trim();
@@ -538,6 +643,18 @@ class ToolRegistry {
           if (args.intervalMinutes && Number(args.intervalMinutes) > 0) {
             updates.intervalMinutes = Math.max(parseInt(args.intervalMinutes, 10), 5);
           }
+        }
+
+        if (mod === 'warn' && args.maxWarns && Number(args.maxWarns) >= 1) {
+          updates.maxWarns = parseInt(args.maxWarns, 10);
+        }
+
+        if (mod === 'ban' && args.customBanMessage !== undefined) {
+          updates.customMessage = String(args.customBanMessage).trim();
+        }
+
+        if (mod === 'hermes' && args.personality && ['descontraido', 'formal'].includes(args.personality)) {
+          updates.personality = args.personality;
         }
 
         if (Object.keys(updates).length > 1) {
@@ -549,8 +666,33 @@ class ToolRegistry {
         const stateLabel = enabled ? t(lang, 'common.enabled') : t(lang, 'common.disabled');
         return {
           success: true,
-          message: `⚙️ *${mod.toUpperCase()}:* ${stateLabel}`
+          message: `${t(lang, 'common.saved')}\n⚙️ *${mod.toUpperCase()}:* ${stateLabel}`
         };
+      }
+
+      case 'set_group_settings': {
+        const results = [];
+        if (args.lang && ['pt', 'es', 'en'].includes(args.lang)) {
+          configManager.setGroupLang(from, args.lang);
+          results.push(t(args.lang, 'lang.changed'));
+        }
+        if (args.prefix && String(args.prefix).trim().length === 1) {
+          const newPrefix = String(args.prefix).trim();
+          configManager.setGroupPrefix(from, newPrefix);
+          results.push(t(lang, 'wizard.prefix_changed', { prefix: newPrefix }));
+        }
+        if (args.clearMemory) {
+          memoryEngine.clearGroupMemory(from);
+          results.push('🧹 *Memória limpa:* O histórico de conversas do Hermes neste grupo foi zerado.');
+        }
+        if (args.openPanel) {
+          await wizardEngine.startConfigPanel(sock, msg, from, sender);
+          return { success: true };
+        }
+        if (results.length > 0) {
+          return { success: true, message: results.join('\n') };
+        }
+        return { success: false, error: t(lang, 'common.error') };
       }
 
       case 'warn_member': {

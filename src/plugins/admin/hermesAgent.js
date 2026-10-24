@@ -501,16 +501,37 @@ module.exports = {
       memoryEngine.saveMessage(from, sender, queryText, msg.messageTimestamp, msg.pushName || '');
     }
 
-    // Estado real das configurações do grupo (para responder dúvidas como "que horas o grupo fecha?" ou "o antilink tá ativo?")
+    // Estado real das configurações de TODOS os plugins do grupo
     const schedCfg = configManager.getPluginConfig(from, 'schedule') || {};
     const schedActive = configManager.isPluginEnabled(from, 'schedule');
+    const antilinkCfg = configManager.getPluginConfig(from, 'antilink') || {};
+    const antifloodCfg = configManager.getPluginConfig(from, 'antiflood') || {};
+    const antifakeCfg = configManager.getPluginConfig(from, 'antifake') || {};
+    const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
+    const groupData = configManager.getGroup(from) || {};
     const activeMods = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule']
       .filter(m => configManager.isPluginEnabled(from, m));
     const schedSummary = schedActive
       ? `Ativo (Fecha: ${schedCfg.closeTime || '23:00'}, Abre: ${schedCfg.openTime || '07:00'})`
       : 'Desativado';
+    const antilinkDoms = Array.isArray(antilinkCfg.allowedDomains) && antilinkCfg.allowedDomains.length > 0
+      ? antilinkCfg.allowedDomains.join(', ')
+      : 'nenhum site liberado';
+    const antifakeDdis = Array.isArray(antifakeCfg.allowedDdis) && antifakeCfg.allowedDdis.length > 0
+      ? antifakeCfg.allowedDdis.join(', ')
+      : '55, 351, 1, 34, 54, 52';
+    const warnsEntries = Object.entries(groupData.warns || {})
+      .filter(([, w]) => w && w.count > 0)
+      .map(([jid, w]) => `@${jid.replace(/@.*$/, '')}(${w.count}/${warnCfg.maxWarns || 3})`);
+
     userPromptParts.push(
-      `[Estado atual do grupo]: Horários automáticos: ${schedSummary} | Proteções ativas: ${activeMods.length > 0 ? activeMods.join(', ') : 'nenhuma'}`
+      `[Estado atual do grupo]: Prefixo: "${configManager.getGroupPrefix(from)}" | Idioma: ${lang.toUpperCase()} | ` +
+      `Horários: ${schedSummary} | Módulos ativos: ${activeMods.length > 0 ? activeMods.join(', ') : 'nenhum'} | ` +
+      `AntiLink: punição=${antilinkCfg.action || 'delete'}, liberados=[${antilinkDoms}] | ` +
+      `AntiFlood: máx=${antifloodCfg.maxMessages || 6}msgs/5s, trava=${antifloodCfg.maxChars || 2500}chars, punição=${antifloodCfg.action || 'warn'} | ` +
+      `AntiFake DDIs: [${antifakeDdis}] | ` +
+      `Advertências (limite ${warnCfg.maxWarns || 3}): ${warnsEntries.length > 0 ? warnsEntries.join(', ') : 'ninguém advertido'} | ` +
+      `Blacklist: ${(groupData.blacklist || []).length} bloqueados`
     );
 
     // Mensagem atual do usuário com identificador e @numero
