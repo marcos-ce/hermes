@@ -106,7 +106,20 @@ async function connectBot(options = {}) {
 
   const authDir = path.resolve(process.cwd(), 'src', 'auth');
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
-  const { version, isLatest } = await fetchLatestBaileysVersion();
+  let version = [2, 3000, 1015901307];
+  let isLatest = false;
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout de 5s ao buscar versão')), 5000)
+    );
+    const verRes = await Promise.race([fetchLatestBaileysVersion(), timeoutPromise]);
+    if (verRes?.version) {
+      version = verRes.version;
+      isLatest = verRes.isLatest;
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Falha/timeout ao consultar versão remota do Baileys, usando fallback seguro');
+  }
 
   logger.info(`Iniciando Baileys v${version.join('.')} (Última versão: ${isLatest})`);
 

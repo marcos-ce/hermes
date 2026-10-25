@@ -409,9 +409,8 @@ module.exports = {
     // D. Continuidade em duas etapas (Ideia 5): Se o bot fez uma pergunta recente (< 60s) para este admin
     // e o admin respondeu apontando alguém (quote), mencionando (@) ou com resposta confirmativa/curta
     let isContinuation = false;
-    const clarifKey = `${from}:${sender}`;
-    const activeClarif = pendingClarifications.get(clarifKey);
-    if (activeClarif && (Date.now() - activeClarif.timestamp < 60000)) {
+    const activeClarif = wizardCache.get(`clarif:${from}:${sender}`);
+    if (activeClarif) { // TTL 60s garantido pelo node-cache
       const isShortResponse = lowerText.length <= 40 &&
         /^(\b(esse|ele|ela|esse aqui|essa|essa daqui|sim|pode|confirmo|este|esta|bora|vai|isso|isso mesmo|o proprio)\b|@|\d+)/i.test(lowerText);
       const hasQuotedTarget = Boolean(contextInfo?.quotedMessage && !isReplyToBot);
@@ -608,8 +607,8 @@ module.exports = {
         return m !== botJid && m !== botLid && (!botNum || num !== botNum) && (!botLidNum || num !== botLidNum);
       });
 
+    const formattedTargets = []; // escopo externo: cross-inference pode acessar
     if (targetMentions.length > 0) {
-      const formattedTargets = [];
       for (const tm of targetMentions) {
         const resolved = await resolveParticipant(sock, from, tm);
         const name = (resolved?.name) || memoryEngine.getParticipantName(from, tm) || memoryEngine.getParticipantName(from, resolved?.phoneJid) || '';
@@ -674,33 +673,43 @@ module.exports = {
     }
 
     // ── Cross-inference local (Group Soul) ── zero custo de API ─────────────
-    // Liga os @mentions e palavras-chave do texto a fatos/regras culturais
-    // conhecidos ANTES de chamar a DeepSeek, injetando só o que é relevante.
+    // Fix P0-2: reutiliza formattedTargets já resolvido — zero re-query SQLite
+    // Fix P1-3: word-boundary regex em vez de includes() — zero falsos positivos
     const crossRefs = [];
 
+    // Helper: escapa caracteres especiais de regex
+    const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Helper: testa match de palavra inteira (word-boundary)
+    const wordMatch = (needle, haystack) => {
+      try { return new RegExp('\\b' + escRe(needle) + '\\b').test(haystack); }
+      catch (_) { return haystack.includes(needle); }
+    };
+
     // 1. @menções → fatos/apelidos cadastrados
-    if (targetMentions && targetMentions.length > 0 &&
+    // formattedTargets já foi resolvido acima — zero re-query SQLite
+    if (formattedTargets.length > 0 &&
         culture.facts && Object.keys(culture.facts).length > 0) {
-      for (const mentionJid of targetMentions) {
-        const resolvedName = (memoryEngine.getParticipantName(from, mentionJid) || '').toLowerCase();
-        if (resolvedName) {
-          for (const [key, value] of Object.entries(culture.facts)) {
-            const lowerKey = key.toLowerCase();
-            if (resolvedName.includes(lowerKey) || lowerKey.includes(resolvedName)) {
-              crossRefs.push(`${resolvedName} → ${key}: ${value}`);
-            }
+      for (const displayName of formattedTargets) {
+        // "Lucas (@55119...)" → "lucas"
+        const namePart = displayName.split('(')[0].replace(/^@/, '').trim().toLowerCase();
+        if (!namePart) continue;
+        for (const [key, value] of Object.entries(culture.facts)) {
+          const lowerKey = key.toLowerCase();
+          if (wordMatch(lowerKey, namePart) || wordMatch(namePart, lowerKey)) {
+            crossRefs.push(`${namePart} → ${key}: ${value}`);
           }
         }
       }
     }
 
     // 2. Texto da mensagem → regras tácitas (≥2 palavras-chave com >4 chars)
+    // Word-boundary: "spam" não casa em "espamei", "link" não casa em "linkando"
     if (Array.isArray(culture.rules) && culture.rules.length > 0 && queryText) {
       const lowerQuery = queryText.toLowerCase();
       for (const rule of culture.rules) {
         const ruleKeywords = rule.toLowerCase().split(/\s+/).filter(w => w.length > 4);
         if (ruleKeywords.length === 0) continue;
-        const matches = ruleKeywords.filter(kw => lowerQuery.includes(kw));
+        const matches = ruleKeywords.filter(kw => wordMatch(kw, lowerQuery));
         if (matches.length >= 2) {
           crossRefs.push(`Regra aplicável: ${rule}`);
         }
@@ -771,17 +780,17 @@ module.exports = {
     }
 
     // Ideia 4: Injeção da última ação recente para o mecanismo de Desfazer (Undo)
-    const lastAction = lastGroupActions.get(from);
-    if (lastAction && (Date.now() - lastAction.timestamp < 30 * 60 * 1000)) {
+    const lastAction = wizardCache.get(`undo:${from}`);
+    if (lastAction) {
       const minutesAgo = Math.max(1, Math.round((Date.now() - lastAction.timestamp) / 60000));
       userPromptParts.push(`[Última ação executada pelo Hermes há ${minutesAgo} min: ferramenta=${lastAction.tool}, args=${JSON.stringify(lastAction.args)}]`);
     }
 
-    // Ideia 5: Se havia clarificação recente ativa, injeta a dica de contexto para resolução rápida
-    const clarifKey = `${from}:${sender}`;
-    if (pendingClarifications.has(clarifKey)) {
+    // Ideia 5: Continuação ativa — TTL 60s garantido pelo node-cache (zero leak)
+    const clarifKey = `clarif:${from}:${sender}`;
+    if (wizardCache.get(clarifKey)) {
       userPromptParts.push(`[Continuação de conversa: o admin está respondendo à pergunta anterior que você fez]`);
-      pendingClarifications.delete(clarifKey);
+      wizardCache.del(clarifKey);
     }
 
     // Data e Hora em Tempo Real (no fim do contexto para proteger o cache de prefixo)
@@ -917,14 +926,14 @@ module.exports = {
             await reply(execResult.message, mentionOpts);
             memoryEngine.saveMessage(from, 'hermes@bot', execResult.message, null, 'Hermes');
 
-            // Ideia 4: Registra ação reversível para o mecanismo de Desfazer (Undo)
+            // Ideia 4: Registra ação reversível — TTL 1800s, zero memory leak
             if (REVERSIBLE_TOOLS.has(call.name)) {
-              lastGroupActions.set(from, {
+              wizardCache.set(`undo:${from}`, {
                 tool: call.name,
                 args: call.args,
                 timestamp: Date.now(),
                 message: execResult.message
-              });
+              }, 1800);
             }
           } else if (execResult?.error) {
             await reply(execResult.error);
@@ -943,10 +952,7 @@ module.exports = {
         // Ideia 5: Se o Hermes terminou a resposta fazendo uma pergunta de clarificação,
         // ativa a janela de continuidade de 60 segundos para este admin
         if (/\?(\s*)$/.test(finalReply)) {
-          pendingClarifications.set(`${from}:${sender}`, {
-            timestamp: Date.now(),
-            question: finalReply
-          });
+          wizardCache.set(`clarif:${from}:${sender}`, { question: finalReply }, 60);
         }
       } else if (degraded) {
         await reply(tr(lang, 'hermes.degraded'));
