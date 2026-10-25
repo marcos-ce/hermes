@@ -4,6 +4,7 @@ const pluginLoader = require('../../core/pluginLoader');
 const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
+const { humanizeAIText } = require('../../services/humanizer');
 const { cleanJid, getGroupMetadata, checkAdminStatus } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
@@ -140,6 +141,7 @@ module.exports = {
     try {
       delete require.cache[require.resolve('../../services/aiService')];
       delete require.cache[require.resolve('../../services/toolRegistry')];
+      delete require.cache[require.resolve('../../services/humanizer')];
     } catch (_) {}
   },
 
@@ -797,7 +799,7 @@ module.exports = {
       // Resposta em texto direto (com aviso curto se estiver no modo sem ferramentas)
       const notice = degraded ? `${tr(lang, 'hermes.degraded')}\n` : '';
       if (aiResponse.content && aiResponse.content.trim().length > 0) {
-        const finalReply = aiResponse.content.trim();
+        const finalReply = humanizeAIText(aiResponse.content.trim());
         await reply(`${notice}${finalReply}`);
         memoryEngine.saveMessage(from, 'hermes@bot', finalReply, null, 'Hermes');
       } else if (degraded) {
