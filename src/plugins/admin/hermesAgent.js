@@ -593,7 +593,6 @@ module.exports = {
       currentDateTimeStr = now.toISOString();
     }
 
-    userPromptParts.push(`[Data e Hora Atual no Servidor: ${currentDateTimeStr} (${tz})]`);
 
     const botJid = cleanJid(sock?.user?.id || '');
     const botLid = cleanJid(sock?.user?.lid || '');
@@ -745,6 +744,9 @@ module.exports = {
       userPromptParts.push(`[Continuação de conversa: o admin está respondendo à pergunta anterior que você fez]`);
       pendingClarifications.delete(clarifKey);
     }
+
+    // Data e Hora em Tempo Real (no fim do contexto para proteger o cache de prefixo)
+    userPromptParts.push(`[Data e Hora Atual no Servidor: ${currentDateTimeStr} (${tz})]`);
 
     // Pedido atual do admin (único trecho tratado como instrução)
     userPromptParts.push(`[Pedido do admin] ${msg.pushName || 'Admin'}: ${queryText}`);

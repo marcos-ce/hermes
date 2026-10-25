@@ -12,23 +12,19 @@ const { parseRelativeTime } = require('./timeParser');
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
  */
+const TARGET_DESCRIPTION = 'Ref do histórico (ex: "m123"), número com DDI, @menção ou "quoted".';
+
 const TOOLS = [
   {
     type: 'function',
     function: {
       name: 'ban_member',
-      description: 'Remove/expulsa um membro infrator do grupo de WhatsApp imediatamente.',
+      description: 'Expulsa membro do grupo imediatamente.',
       parameters: {
         type: 'object',
         properties: {
-          target: {
-            type: 'string',
-            description: 'Número de telefone, menção com @ ou "quoted" se estiver respondendo a uma mensagem do infrator.'
-          },
-          reason: {
-            type: 'string',
-            description: 'Motivo da expulsão do membro.'
-          }
+          target: { type: 'string', description: TARGET_DESCRIPTION },
+          reason: { type: 'string', description: 'Motivo da expulsão.' }
         },
         required: ['target']
       }
@@ -38,23 +34,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_mute',
-      description: 'Tranca o grupo para apenas administradores falarem, ou abre o grupo para todos os membros (pode ser imediato ou programado para daqui a X minutos / horário específico).',
+      description: 'Tranca ("close") ou abre ("open") o grupo para mensagens (imediato ou agendado).',
       parameters: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            enum: ['close', 'open'],
-            description: '"close" para trancar/fechar o grupo ou "open" para abrir o grupo.'
-          },
-          delayMinutes: {
-            type: 'integer',
-            description: 'Quantidade de minutos para esperar antes de fechar ou abrir o grupo (ex: 30 para "daqui a meia hora", 60 para "em 1 hora", 15 para "em 15 minutos"). Use para ações futuras.'
-          },
-          time: {
-            type: 'string',
-            description: 'Horário ou tempo relativo para fechar ou abrir o grupo (ex: "18:00", "22h", "daqui a meia hora", "em 1 hora").'
-          }
+          action: { type: 'string', enum: ['close', 'open'], description: '"close" para trancar ou "open" para abrir.' },
+          delayMinutes: { type: 'integer', description: 'Minutos para aguardar antes da ação (ex: 15, 30, 60).' },
+          time: { type: 'string', description: 'Horário ou tempo relativo (ex: "22:00", "em 1 hora", "daqui a meia hora").' }
         },
         required: ['action']
       }
@@ -64,22 +50,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_schedule',
-      description: 'Configura, altera ou desativa os horários automáticos diários para fechar e abrir o grupo.',
+      description: 'Configura horários diários automáticos para fechar e abrir o grupo.',
       parameters: {
         type: 'object',
         properties: {
-          closeTime: {
-            type: 'string',
-            description: 'Horário diário para fechar o grupo no formato HH:MM (ex: "23:00", "22:30", "00:00") ou "0" para não fechar.'
-          },
-          openTime: {
-            type: 'string',
-            description: 'Horário diário para abrir o grupo no formato HH:MM (ex: "07:00", "08:00") ou "0" para não abrir.'
-          },
-          enabled: {
-            type: 'boolean',
-            description: 'True para ativar os horários agendados ou false para desativar o agendamento automático.'
-          }
+          closeTime: { type: 'string', description: 'Horário diário para fechar (HH:MM, ex: "23:00") ou "0".' },
+          openTime: { type: 'string', description: 'Horário diário para abrir (HH:MM, ex: "07:00") ou "0".' },
+          enabled: { type: 'boolean', description: 'Ativa (true) ou desativa (false) os horários diários.' }
         },
         required: []
       }
@@ -89,69 +66,28 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'toggle_group_protection',
-      description: 'Ativa, desativa ou configura detalhadamente os plugins do grupo (antilink, antiflood, antifake, welcome, automsg, schedule, warn, ban, hermes, calendar).',
+      description: 'Ativa, desativa ou configura plugins do grupo.',
       parameters: {
         type: 'object',
         properties: {
           module: {
             type: 'string',
             enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar'],
-            description: 'Nome do plugin a ser ativado, desativado ou configurado.'
+            description: 'Nome do plugin.'
           },
-          enabled: {
-            type: 'boolean',
-            description: 'True para ativar o módulo ou false para desativar.'
-          },
-          action: {
-            type: 'string',
-            enum: ['delete', 'warn', 'ban'],
-            description: 'Punição para antilink ("delete", "warn" ou "ban") ou antiflood ("warn" ou "ban").'
-          },
-          allowedDomains: {
-            type: 'string',
-            description: 'Sites liberados no antilink separados por vírgula (ex: "youtube.com, instagram.com") ou "." para bloquear todos.'
-          },
-          maxMessages: {
-            type: 'integer',
-            description: 'Máximo de mensagens em 5s para o antiflood (ex: 6).'
-          },
-          maxChars: {
-            type: 'integer',
-            description: 'Limite máximo de caracteres anti-trava no antiflood (ex: 2500).'
-          },
-          allowedDdis: {
-            type: 'string',
-            description: 'DDIs permitidos no antifake separados por vírgula (ex: "55, 351").'
-          },
-          welcomeMessage: {
-            type: 'string',
-            description: 'Texto de boas-vindas (quando module="welcome", suporta {user}, {group}, {desc}).'
-          },
-          autoDeleteSeconds: {
-            type: 'integer',
-            description: 'Segundos para apagar boas-vindas automaticamente (quando module="welcome", 0 para não apagar).'
-          },
-          autoMsgText: {
-            type: 'string',
-            description: 'Texto do anúncio periódico automático (quando module="automsg").'
-          },
-          intervalMinutes: {
-            type: 'integer',
-            description: 'Intervalo em minutos para o anúncio periódico (quando module="automsg").'
-          },
-          maxWarns: {
-            type: 'integer',
-            description: 'Limite de advertências antes do banimento automático (quando module="warn", padrão 3).'
-          },
-          customBanMessage: {
-            type: 'string',
-            description: 'Mensagem personalizada ao banir membro (quando module="ban", suporta {user}).'
-          },
-          personality: {
-            type: 'string',
-            enum: ['descontraido', 'formal'],
-            description: 'Personalidade do Hermes IA (quando module="hermes").'
-          }
+          enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
+          action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição: "delete", "warn" ou "ban".' },
+          allowedDomains: { type: 'string', description: 'Domínios liberados no antilink (ex: "youtube.com, instagram.com") ou "." para todos.' },
+          maxMessages: { type: 'integer', description: 'Máximo de mensagens em 5s no antiflood.' },
+          maxChars: { type: 'integer', description: 'Limite de caracteres anti-trava.' },
+          allowedDdis: { type: 'string', description: 'DDIs liberados no antifake (ex: "55, 351").' },
+          welcomeMessage: { type: 'string', description: 'Texto de boas-vindas ({user}, {group}, {desc}).' },
+          autoDeleteSeconds: { type: 'integer', description: 'Segundos para apagar boas-vindas (0 desativa).' },
+          autoMsgText: { type: 'string', description: 'Texto do comunicado periódico.' },
+          intervalMinutes: { type: 'integer', description: 'Intervalo em minutos do comunicado.' },
+          maxWarns: { type: 'integer', description: 'Limite de advertências antes do ban (padrão 3).' },
+          customBanMessage: { type: 'string', description: 'Mensagem personalizada de ban ({user}).' },
+          personality: { type: 'string', enum: ['descontraido', 'formal'], description: 'Tom do Hermes IA: "descontraido" ou "formal".' }
         },
         required: ['module']
       }
@@ -161,27 +97,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_settings',
-      description: 'Altera configurações gerais do grupo: idioma (pt/es/en), prefixo de comandos (!, /, #, .), abre o painel interativo (!config) ou limpa a memória da IA.',
+      description: 'Configurações gerais: idioma, prefixo, painel interativo ou limpa memória.',
       parameters: {
         type: 'object',
         properties: {
-          lang: {
-            type: 'string',
-            enum: ['pt', 'es', 'en'],
-            description: 'Novo idioma do grupo ("pt", "es" ou "en").'
-          },
-          prefix: {
-            type: 'string',
-            description: 'Novo prefixo de 1 caractere do grupo (ex: "!", "/", "#", ".").'
-          },
-          openPanel: {
-            type: 'boolean',
-            description: 'True para abrir o Painel Interativo de Configurações (!config) para o administrador.'
-          },
-          clearMemory: {
-            type: 'boolean',
-            description: 'True para limpar o histórico de memória de conversas do Hermes neste grupo.'
-          }
+          lang: { type: 'string', enum: ['pt', 'es', 'en'], description: 'Idioma: "pt", "es" ou "en".' },
+          prefix: { type: 'string', description: 'Novo prefixo de 1 caractere (ex: "/", "!", "#").' },
+          openPanel: { type: 'boolean', description: 'True para abrir o Painel Interativo (!config).' },
+          clearMemory: { type: 'boolean', description: 'True para limpar histórico do Hermes neste grupo.' }
         },
         required: []
       }
@@ -191,18 +114,12 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'warn_member',
-      description: 'Aplica uma advertência formal a um membro do grupo. Ao atingir o limite configurado (padrão 3), o membro é banido automaticamente.',
+      description: 'Aplica advertência formal a membro. No limite (padrão 3), aplica ban.',
       parameters: {
         type: 'object',
         properties: {
-          target: {
-            type: 'string',
-            description: 'Número de telefone, menção com @ ou "quoted" do membro a ser advertido.'
-          },
-          reason: {
-            type: 'string',
-            description: 'Motivo da advertência.'
-          }
+          target: { type: 'string', description: TARGET_DESCRIPTION },
+          reason: { type: 'string', description: 'Motivo da advertência.' }
         },
         required: ['target']
       }
@@ -212,14 +129,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'unwarn_member',
-      description: 'Remove 1 advertência (perdoa) de um membro do grupo.',
+      description: 'Remove 1 advertência de um membro (perdoa).',
       parameters: {
         type: 'object',
         properties: {
-          target: {
-            type: 'string',
-            description: 'Número de telefone, menção com @ ou "quoted" do membro a ser perdoado.'
-          }
+          target: { type: 'string', description: TARGET_DESCRIPTION }
         },
         required: ['target']
       }
@@ -229,19 +143,12 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'manage_blacklist',
-      description: 'Adiciona ou remove um número/membro da Lista Negra (blacklist) do grupo.',
+      description: 'Adiciona ("add") ou remove ("remove") número da lista negra.',
       parameters: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            enum: ['add', 'remove'],
-            description: '"add" para adicionar à lista negra (e expulsar se estiver no grupo) ou "remove" para remover da lista negra.'
-          },
-          target: {
-            type: 'string',
-            description: 'Número de telefone, menção com @ ou "quoted" do alvo.'
-          }
+          action: { type: 'string', enum: ['add', 'remove'], description: '"add" (adiciona e expulsa) ou "remove".' },
+          target: { type: 'string', description: TARGET_DESCRIPTION }
         },
         required: ['action', 'target']
       }
@@ -251,14 +158,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'delete_message',
-      description: 'Apaga uma mensagem específica ou a mensagem que foi respondida (quoted) no chat.',
+      description: 'Apaga mensagem por ref do histórico (ex: "m123") ou respondida (quoted).',
       parameters: {
         type: 'object',
         properties: {
-          messageId: {
-            type: 'string',
-            description: 'ID da mensagem a ser apagada, ou omita para apagar a mensagem respondida.'
-          }
+          messageId: { type: 'string', description: 'Ref do histórico (ex: "m123") ou omita para a mensagem respondida.' }
         },
         required: []
       }
@@ -268,14 +172,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'hidetag_announcement',
-      description: 'Envia um comunicado oficial no grupo marcando todos os membros de forma invisível/oculta.',
+      description: 'Envia comunicado marcando todos os membros de forma oculta.',
       parameters: {
         type: 'object',
         properties: {
-          message: {
-            type: 'string',
-            description: 'Texto do comunicado a ser transmitido para todos os membros.'
-          }
+          message: { type: 'string', description: 'Texto do comunicado a ser transmitido.' }
         },
         required: ['message']
       }
@@ -285,14 +186,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'promote_member',
-      description: 'Promove um membro comum a Administrador do grupo.',
+      description: 'Promove membro comum a Administrador.',
       parameters: {
         type: 'object',
         properties: {
-          target: {
-            type: 'string',
-            description: 'Número de telefone, menção com @, nome do membro ou "quoted" se o admin estiver respondendo à mensagem do membro a ser promovido.'
-          }
+          target: { type: 'string', description: TARGET_DESCRIPTION }
         },
         required: ['target']
       }
@@ -302,14 +200,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'demote_member',
-      description: 'Rebaixa um administrador a membro comum do grupo.',
+      description: 'Rebaixa Administrador a membro comum.',
       parameters: {
         type: 'object',
         properties: {
-          target: {
-            type: 'string',
-            description: 'Número de telefone, menção com @, nome do administrador ou "quoted" se o admin estiver respondendo à mensagem do membro a ser rebaixado.'
-          }
+          target: { type: 'string', description: TARGET_DESCRIPTION }
         },
         required: ['target']
       }
@@ -319,35 +214,16 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'manage_calendar',
-      description: 'Adiciona, lista ou remove eventos/agendamentos e lembretes do calendário do grupo com avisos automáticos na data e hora marcada ou tempo relativo.',
+      description: 'Gerencia lembretes e agendamentos no calendário do grupo.',
       parameters: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            enum: ['add', 'list', 'delete', 'clear'],
-            description: 'Ação a ser executada no calendário: "add" (agendar), "list" (listar), "delete" (remover por ID) ou "clear" (limpar tudo).'
-          },
-          date: {
-            type: 'string',
-            description: 'Data do evento (ex: "25/10", "28/10/2026", "amanhã" ou "hoje"). Opcional se delayMinutes for informado.'
-          },
-          time: {
-            type: 'string',
-            description: 'Horário do evento no formato HH:MM (ex: "14:30", "19:00" ou "19h") ou relativo (ex: "daqui a meia hora", "em 1 hora").'
-          },
-          delayMinutes: {
-            type: 'integer',
-            description: 'Minutos a partir de agora para o lembrete/evento (ex: 30 para meia hora, 60 para 1 hora, 15 para 15 minutos). Use quando o pedido for relativo.'
-          },
-          text: {
-            type: 'string',
-            description: 'Descrição ou comunicado do lembrete/evento a ser divulgado no grupo. Obrigatório para action="add".'
-          },
-          eventId: {
-            type: 'string',
-            description: 'ID numérico do evento a ser removido (ex: "1", "2"). Obrigatório para action="delete".'
-          }
+          action: { type: 'string', enum: ['add', 'list', 'delete', 'clear'], description: 'Ação: "add", "list", "delete" ou "clear".' },
+          date: { type: 'string', description: 'Data (DD/MM, "hoje" ou "amanhã").' },
+          time: { type: 'string', description: 'Horário (HH:MM, "14h" ou relativo "em 30 min").' },
+          delayMinutes: { type: 'integer', description: 'Minutos a partir de agora (ex: 15, 30, 60).' },
+          text: { type: 'string', description: 'Texto do lembrete (obrigatório para "add").' },
+          eventId: { type: 'string', description: 'ID numérico do evento para "delete" (ex: "1").' }
         },
         required: ['action']
       }
@@ -357,18 +233,12 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'raffle_members',
-      description: 'Realiza um sorteio aleatório e justo entre os membros do grupo.',
+      description: 'Realiza sorteio aleatório e justo entre os membros.',
       parameters: {
         type: 'object',
         properties: {
-          quantity: {
-            type: 'integer',
-            description: 'Quantidade de membros a serem sorteados (padrão: 1).'
-          },
-          prize: {
-            type: 'string',
-            description: 'Nome do prêmio do sorteio.'
-          }
+          quantity: { type: 'integer', description: 'Quantidade de sorteados (padrão: 1).' },
+          prize: { type: 'string', description: 'Nome ou descrição do prêmio.' }
         },
         required: []
       }
@@ -378,14 +248,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_description',
-      description: 'Altera, define ou limpa a descrição/bio/regras do grupo no WhatsApp.',
+      description: 'Altera ou limpa a descrição/regras/bio do grupo.',
       parameters: {
         type: 'object',
         properties: {
-          description: {
-            type: 'string',
-            description: 'Novo texto completo para a descrição ou regras do grupo (ou "" para limpar/remover).'
-          }
+          description: { type: 'string', description: 'Novo texto da descrição (ou "" para limpar).' }
         },
         required: ['description']
       }
@@ -395,15 +262,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_picture',
-      description: 'Altera ou remove a foto/ícone de perfil do grupo usando uma imagem enviada na mensagem ou citada (reply).',
+      description: 'Altera ("update") ou remove ("remove") a foto de perfil do grupo.',
       parameters: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            enum: ['update', 'remove'],
-            description: '"update" para atualizar com a imagem enviada/citada ou "remove" para remover a foto atual.'
-          }
+          action: { type: 'string', enum: ['update', 'remove'], description: '"update" (usa imagem enviada/citada) ou "remove".' }
         },
         required: ['action']
       }
@@ -413,24 +276,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'pin_group_message',
-      description: 'Fixa ou desafixa uma mensagem no chat do grupo. Requer responder à mensagem (quoted) ou informar o ref do histórico (ex: "m123").',
+      description: 'Fixa ("pin") ou desafixa ("unpin") mensagem respondida ou por ref "m123".',
       parameters: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            enum: ['pin', 'unpin'],
-            description: '"pin" para fixar a mensagem ou "unpin" para desafixar.'
-          },
-          duration: {
-            type: 'string',
-            enum: ['24h', '7d', '30d'],
-            description: 'Duração da fixação: "24h" (1 dia), "7d" (7 dias) ou "30d" (30 dias). Padrão: "24h".'
-          },
-          messageId: {
-            type: 'string',
-            description: 'Ref da mensagem do histórico (ex: "m123") ou omita para usar a mensagem respondida (quoted).'
-          }
+          action: { type: 'string', enum: ['pin', 'unpin'], description: '"pin" para fixar ou "unpin" para desafixar.' },
+          duration: { type: 'string', enum: ['24h', '7d', '30d'], description: 'Duração: "24h", "7d" ou "30d" (padrão: "24h").' },
+          messageId: { type: 'string', description: 'Ref "m123" ou omita para a mensagem respondida.' }
         },
         required: ['action']
       }
@@ -440,23 +292,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'create_group_poll',
-      description: 'Cria e envia uma enquete oficial interativa no grupo do WhatsApp com título e opções de voto.',
+      description: 'Cria enquete interativa oficial no WhatsApp.',
       parameters: {
         type: 'object',
         properties: {
-          title: {
-            type: 'string',
-            description: 'Pergunta ou título da enquete (claro e objetivo).'
-          },
-          options: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Lista com as opções de voto da enquete (mínimo 2, máximo 12 opções curtas e objetivas).'
-          },
-          multipleAnswers: {
-            type: 'boolean',
-            description: 'True se os membros puderem votar em mais de uma opção ao mesmo tempo (múltipla escolha), ou false para voto único (padrão false).'
-          }
+          title: { type: 'string', description: 'Pergunta ou título da enquete.' },
+          options: { type: 'array', items: { type: 'string' }, description: 'Opções de voto (mínimo 2, máximo 12).' },
+          multipleAnswers: { type: 'boolean', description: 'True para múltipla escolha, false para voto único.' }
         },
         required: ['title', 'options']
       }
@@ -466,23 +308,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'learn_group_fact',
-      description: 'Registra ou atualiza permanentemente um fato, regra tácita, apelido de membro, tom ou preferência cultural do grupo. Use quando o admin ensinar algo sobre o grupo, membros, regras ou estilo.',
+      description: 'Registra permanentemente fato, regra tácita, apelido ou tom do grupo.',
       parameters: {
         type: 'object',
         properties: {
-          category: {
-            type: 'string',
-            enum: ['fact', 'rule', 'tone', 'nickname'],
-            description: 'Categoria do aprendizado: "fact" (fato geral), "rule" (regra tácita do grupo), "tone" (tom de fala/vibe), "nickname" (apelido de membro).'
-          },
-          key: {
-            type: 'string',
-            description: 'Identificador do fato ou nome do membro (ex: "Lucas", "sexta-feira", "vibe").'
-          },
-          value: {
-            type: 'string',
-            description: 'O fato aprendido, regra, apelido ou descrição do tom (ex: "é o designer e apelido é Alemão", "sem reuniões de trabalho").'
-          }
+          category: { type: 'string', enum: ['fact', 'rule', 'tone', 'nickname'], description: 'Categoria: "fact", "rule", "tone" ou "nickname".' },
+          key: { type: 'string', description: 'Identificador ou termo (ex: "Lucas", "sexta", "tom").' },
+          value: { type: 'string', description: 'O fato aprendido, regra, apelido ou tom.' }
         },
         required: ['category', 'key', 'value']
       }
@@ -492,14 +324,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'forget_group_fact',
-      description: 'Remove um fato ou regra da memória cultural permanente do grupo. Use quando o admin pedir para esquecer ou remover algo que havia sido ensinado.',
+      description: 'Remove fato ou regra da memória cultural permanente do grupo.',
       parameters: {
         type: 'object',
         properties: {
-          key: {
-            type: 'string',
-            description: 'Identificador ou termo do fato a ser esquecido.'
-          }
+          key: { type: 'string', description: 'Termo ou chave a ser esquecida.' }
         },
         required: ['key']
       }
@@ -507,8 +336,6 @@ const TOOLS = [
   }
 ];
 
-// Descrição unificada (curta) para todo parâmetro "target": economiza tokens e reforça o uso de refs reais
-const TARGET_DESCRIPTION = 'Ref da mensagem do histórico (ex: "m123"), número com DDI, @menção ou "quoted". Nunca invente.';
 const MAX_ARG_STRING = 500;
 
 // Endurece os schemas: sem propriedades extras e com target padronizado
