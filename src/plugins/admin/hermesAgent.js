@@ -24,7 +24,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|\d{1,2}[:h]\d{0,2}/i;
 
 /**
  * Consome 1 unidade da cota horária de chamadas à IA do grupo
@@ -529,9 +529,11 @@ module.exports = {
 
     // Busca o nome do grupo para o framing do sistema
     let groupName = '';
+    let groupDesc = '';
     try {
       const meta = await getGroupMetadata(sock, from);
       groupName = meta?.subject || '';
+      groupDesc = meta?.desc || '';
     } catch (_) {}
 
     // Monta o prompt do usuário com contexto e histórico compactos em uma única mensagem
@@ -678,7 +680,8 @@ module.exports = {
         `[Estado] idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
         `antilink=${antilinkCfg.action || 'delete'},liberados=${antilinkDoms} | ` +
         `antiflood=${antifloodCfg.maxMessages || 6}msg/5s,${antifloodCfg.maxChars || 2500}chars,${antifloodCfg.action || 'warn'} | ` +
-        `antifake=${antifakeDdis} | agenda=${calSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}`
+        `antifake=${antifakeDdis} | agenda=${calSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}` +
+        (groupDesc && /descr|regra|bio/i.test(queryText || '') ? ` | descrição="${groupDesc.slice(0, 300)}"` : '')
       );
     }
 

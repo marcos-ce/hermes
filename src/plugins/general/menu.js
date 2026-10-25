@@ -30,7 +30,7 @@ module.exports = {
         } catch (_) {}
 
         // Coleta dinâmica de todos os plugins utilitários e de moderação direta
-        const directCommandsOrder = ['hidetag', 'promote', 'demote', 'ban', 'mute', 'clear', 'warn', 'raffle', 'blacklist', 'lang', 'ping'];
+        const directCommandsOrder = ['hidetag', 'poll', 'setdesc', 'setpic', 'pin', 'promote', 'demote', 'ban', 'mute', 'clear', 'warn', 'raffle', 'blacklist', 'lang', 'ping'];
         const protectionOrder = ['antilink', 'antiflood', 'antifake', 'welcome', 'schedule', 'automsg', 'hermes'];
         const groupCmds = [];
         const protectionCmds = [];

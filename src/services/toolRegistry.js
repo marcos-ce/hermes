@@ -373,6 +373,94 @@ const TOOLS = [
         required: []
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_group_description',
+      description: 'Altera, define ou limpa a descrição/bio/regras do grupo no WhatsApp.',
+      parameters: {
+        type: 'object',
+        properties: {
+          description: {
+            type: 'string',
+            description: 'Novo texto completo para a descrição ou regras do grupo (ou "" para limpar/remover).'
+          }
+        },
+        required: ['description']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_group_picture',
+      description: 'Altera ou remove a foto/ícone de perfil do grupo usando uma imagem enviada na mensagem ou citada (reply).',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['update', 'remove'],
+            description: '"update" para atualizar com a imagem enviada/citada ou "remove" para remover a foto atual.'
+          }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'pin_group_message',
+      description: 'Fixa ou desafixa uma mensagem no chat do grupo. Requer responder à mensagem (quoted) ou informar o ref do histórico (ex: "m123").',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['pin', 'unpin'],
+            description: '"pin" para fixar a mensagem ou "unpin" para desafixar.'
+          },
+          duration: {
+            type: 'string',
+            enum: ['24h', '7d', '30d'],
+            description: 'Duração da fixação: "24h" (1 dia), "7d" (7 dias) ou "30d" (30 dias). Padrão: "24h".'
+          },
+          messageId: {
+            type: 'string',
+            description: 'Ref da mensagem do histórico (ex: "m123") ou omita para usar a mensagem respondida (quoted).'
+          }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_group_poll',
+      description: 'Cria e envia uma enquete oficial interativa no grupo do WhatsApp com título e opções de voto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Pergunta ou título da enquete (claro e objetivo).'
+          },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Lista com as opções de voto da enquete (mínimo 2, máximo 12 opções curtas e objetivas).'
+          },
+          multipleAnswers: {
+            type: 'boolean',
+            description: 'True se os membros puderem votar em mais de uma opção ao mesmo tempo (múltipla escolha), ou false para voto único (padrão false).'
+          }
+        },
+        required: ['title', 'options']
+      }
+    }
   }
 ];
 
@@ -419,13 +507,14 @@ class ToolRegistry {
 
     for (const [key, def] of Object.entries(schema.properties || {})) {
       let value = input[key];
-      if (value === undefined || value === null || value === '') continue;
+      if (value === undefined || value === null || (value === '' && key !== 'description')) continue;
 
       if (def.type === 'string') {
         if (typeof value === 'number') value = String(value);
         if (typeof value !== 'string') return { ok: false, error: `Argumento "${key}" inválido.` };
-        value = value.trim().slice(0, MAX_ARG_STRING);
-        if (!value) continue;
+        const maxLen = (key === 'description' || key === 'message' || key === 'text') ? 2048 : MAX_ARG_STRING;
+        value = value.trim().slice(0, maxLen);
+        if (!value && key !== 'description') continue;
       } else if (def.type === 'integer') {
         const num = typeof value === 'string' ? Number(value.trim()) : value;
         if (!Number.isFinite(num)) return { ok: false, error: `Argumento "${key}" inválido.` };
@@ -434,6 +523,40 @@ class ToolRegistry {
         if (value === 'true') value = true;
         else if (value === 'false') value = false;
         else if (typeof value !== 'boolean') return { ok: false, error: `Argumento "${key}" inválido.` };
+      } else if (def.type === 'array') {
+        let arr = [];
+        if (Array.isArray(value)) {
+          arr = value;
+        } else if (typeof value === 'string') {
+          arr = value.split(/[\n|]/).map(s => s.trim()).filter(Boolean);
+          if (arr.length <= 1) {
+            arr = value.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+
+        const cleanedOpts = [];
+        const seen = new Set();
+        for (const item of arr) {
+          const rawStr = typeof item === 'object' && item !== null
+            ? (item.optionName || item.text || item.title || item.value || JSON.stringify(item))
+            : String(item || '');
+
+          const sanitized = rawStr
+            .replace(/^([0-9]{1,2}[.\-)]\s*|[-*•]\s*)/, '')
+            .trim()
+            .slice(0, 100);
+
+          if (sanitized.length > 0 && !seen.has(sanitized.toLowerCase())) {
+            seen.add(sanitized.toLowerCase());
+            cleanedOpts.push(sanitized);
+          }
+        }
+
+        if (cleanedOpts.length < 2) {
+          return { ok: false, error: 'A enquete precisa de no mínimo 2 opções de voto distintas.' };
+        }
+
+        value = cleanedOpts.slice(0, 12);
       }
 
       if (Array.isArray(def.enum) && !def.enum.includes(value)) {
@@ -1465,6 +1588,207 @@ class ToolRegistry {
         await sendSafeMessage(sock, from, { text: resultMsg, mentions });
 
         return { success: true };
+      }
+
+      case 'set_group_description': {
+        if (!isBotAdmin) {
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
+        }
+
+        const newDesc = typeof args.description === 'string' ? args.description.trim() : '';
+        const isClearing = !newDesc || ['limpar', 'clear', 'remover', 'del', 'apagar', '-'].includes(newDesc.toLowerCase());
+
+        try {
+          await sock.groupUpdateDescription(from, isClearing ? '' : newDesc);
+          groupCache.del(from);
+
+          return {
+            success: true,
+            message: isClearing ? t(lang, 'setdesc.cleared') : t(lang, 'setdesc.success')
+          };
+        } catch (err) {
+          logger.error({ err, from }, 'Erro ao atualizar descrição via Tool Call do Hermes');
+          return {
+            success: false,
+            error: t(lang, 'setdesc.error')
+          };
+        }
+      }
+
+      case 'set_group_picture': {
+        if (!isBotAdmin) {
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
+        }
+
+        const action = args.action || 'update';
+        if (action === 'remove') {
+          try {
+            await sock.removeProfilePicture(from);
+            return {
+              success: true,
+              message: t(lang, 'setpic.cleared')
+            };
+          } catch (err) {
+            logger.error({ err, from }, 'Erro ao remover foto do grupo via Hermes');
+            return { success: false, error: t(lang, 'setpic.error') };
+          }
+        }
+
+        const setpicPlugin = require('../plugins/admin/setpic');
+        const buffer = await setpicPlugin.extractImageBuffer(sock, msg);
+        if (!buffer) {
+          return {
+            success: false,
+            error: t(lang, 'setpic.no_image', { prefix: configManager.getGroupPrefix(from) || '!' })
+          };
+        }
+
+        try {
+          await sock.updateProfilePicture(from, buffer);
+          return {
+            success: true,
+            message: t(lang, 'setpic.success')
+          };
+        } catch (err) {
+          logger.error({ err, from }, 'Erro ao atualizar foto do grupo via Hermes');
+          return { success: false, error: t(lang, 'setpic.error') };
+        }
+      }
+
+      case 'pin_group_message': {
+        if (!isBotAdmin) {
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
+        }
+
+        let targetStanzaId = null;
+        let targetParticipant = null;
+
+        // 1. Ref explícito do histórico (ex: "m123")
+        if (args.messageId && /^m\d{1,9}$/i.test(args.messageId.trim())) {
+          const refData = memoryEngine.getMessageByRef(from, args.messageId.trim());
+          if (refData?.msgId) {
+            targetStanzaId = refData.msgId;
+            targetParticipant = refData.participant || refData.sender;
+          }
+        }
+
+        // 2. Fallback: mensagem respondida (quoted)
+        if (!targetStanzaId) {
+          const realMsg = msg?.message?.ephemeralMessage?.message ||
+                          msg?.message?.viewOnceMessage?.message ||
+                          msg?.message?.viewOnceMessageV2?.message ||
+                          msg?.message?.documentWithCaptionMessage?.message ||
+                          msg?.message;
+
+          const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                              realMsg?.imageMessage?.contextInfo ||
+                              realMsg?.videoMessage?.contextInfo ||
+                              realMsg?.documentMessage?.contextInfo;
+
+          if (contextInfo?.stanzaId) {
+            targetStanzaId = contextInfo.stanzaId;
+            targetParticipant = contextInfo.participant;
+          }
+        }
+
+        if (!targetStanzaId) {
+          return { success: false, error: t(lang, 'pin.reply_required') };
+        }
+
+        const botJid = cleanJid(sock?.user?.id || '');
+        const botLid = cleanJid(sock?.user?.lid || '');
+        const cleanParticipant = cleanJid(targetParticipant || '');
+        const isFromMe = cleanParticipant === botJid || cleanParticipant === botLid;
+
+        const targetKey = {
+          remoteJid: from,
+          fromMe: isFromMe,
+          id: targetStanzaId,
+          participant: targetParticipant || (isFromMe ? (sock?.user?.id || undefined) : undefined)
+        };
+
+        const action = args.action || 'pin';
+        if (action === 'unpin') {
+          try {
+            await sock.sendMessage(from, {
+              pin: targetKey,
+              type: 2 // 2 = UNPIN_FOR_ALL
+            });
+            return {
+              success: true,
+              message: t(lang, 'pin.unpinned')
+            };
+          } catch (err) {
+            logger.error({ err, from }, 'Erro ao desafixar mensagem via Hermes');
+            return { success: false, error: t(lang, 'pin.error') };
+          }
+        }
+
+        let durationSecs = 86400;
+        let durationLabel = '24 horas';
+        if (args.duration === '7d') {
+          durationSecs = 604800;
+          durationLabel = '7 dias';
+        } else if (args.duration === '30d') {
+          durationSecs = 2592000;
+          durationLabel = '30 dias';
+        }
+
+        try {
+          await sock.sendMessage(from, {
+            pin: targetKey,
+            type: 1, // 1 = PIN_FOR_ALL
+            time: durationSecs
+          });
+          return {
+            success: true,
+            message: t(lang, 'pin.pinned', { duration: durationLabel })
+          };
+        } catch (err) {
+          logger.error({ err, from }, 'Erro ao fixar mensagem via Hermes');
+          return { success: false, error: t(lang, 'pin.error') };
+        }
+      }
+
+      case 'create_group_poll': {
+        const title = typeof args.title === 'string' ? args.title.trim().slice(0, 255) : '';
+        const options = Array.isArray(args.options) ? args.options : [];
+        const isMultiple = Boolean(args.multipleAnswers);
+
+        if (!title || options.length < 2) {
+          return {
+            success: false,
+            error: t(lang, 'poll.error_options')
+          };
+        }
+
+        try {
+          await sendSafeMessage(sock, from, {
+            poll: {
+              name: title,
+              values: options.slice(0, 12),
+              selectableCount: isMultiple ? 0 : 1
+            }
+          });
+
+          const typeLabel = isMultiple ? t(lang, 'poll.type_multi') : t(lang, 'poll.type_single');
+          const confirmMsg = t(lang, 'poll.success', {
+            title,
+            type: typeLabel,
+            count: options.length
+          });
+
+          return {
+            success: true,
+            message: confirmMsg
+          };
+        } catch (err) {
+          logger.error({ err, from, title }, 'Erro ao criar enquete via Hermes');
+          return {
+            success: false,
+            error: t(lang, 'poll.error')
+          };
+        }
       }
 
       default:
