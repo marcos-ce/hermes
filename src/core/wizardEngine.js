@@ -290,81 +290,47 @@ class WizardEngine {
       }
     };
 
-    let menuText = `⚙️ PAINEL DE CONFIGURAÇÕES - HERMES\n\n`;
-    menuText += `Responda com o NÚMERO do módulo para ativar/desativar ou configurar:\n`;
-    menuText += `Ou digite:\n`;
-    menuText += `* [P] [novo_prefixo] para trocar o prefixo (Ex: P /)\n`;
-    menuText += `* [L] para trocar o idioma\n`;
-    menuText += `* [X] para apagar e fechar o menu\n\n`;
-    menuText += `📌 Prefixo atual: ${currentPrefix} | 🌐 Idioma: ${lang.toUpperCase()}\n`;
+    const headerTitle = {
+      pt: '⚙️ *PAINEL DE CONTROLE* • Hermes',
+      es: '⚙️ *PANEL DE CONTROL* • Hermes',
+      en: '⚙️ *CONTROL PANEL* • Hermes'
+    }[lang] || '⚙️ *PAINEL DE CONTROLE* • Hermes';
+
+    const groupLabel = {
+      pt: '👥 Grupo:',
+      es: '👥 Grupo:',
+      en: '👥 Group:'
+    }[lang] || '👥 Grupo:';
+
+    const membersLabel = {
+      pt: 'membros',
+      es: 'miembros',
+      en: 'members'
+    }[lang] || 'membros';
+
+    const footerHelp = {
+      pt: `_Responda com o número (1 a ${modules.length}) para configurar ou ligar/desligar._\n_Atalhos: *P [novo]* prefixo • *L* idioma • *X* fechar_\n📖 _Para ver a lista de comandos, use ${currentPrefix}menu_`,
+      es: `_Responda con el número (1 a ${modules.length}) para configurar o activar/desactivar._\n_Atajos: *P [nuevo]* prefijo • *L* idioma • *X* cerrar_\n📖 _Para ver los comandos, use ${currentPrefix}menu_`,
+      en: `_Reply with number (1 to ${modules.length}) to configure or toggle._\n_Shortcuts: *P [new]* prefix • *L* language • *X* close_\n📖 _To see commands, use ${currentPrefix}menu_`
+    }[lang] || `_Responda com o número (1 a ${modules.length}) para configurar._`;
+
+    let menuText = `${headerTitle}\n\n`;
+    menuText += `📌 *Prefixo:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\`\n`;
     if (from.endsWith('@g.us')) {
-      menuText += `👥 *Grupo:* ${groupName} (${membersCount} membros)\n`;
+      menuText += `${groupLabel} *${groupName}* (${membersCount} ${membersLabel})\n`;
     }
-    menuText += `\n─────────────────────────\n`;
+    menuText += '\n';
 
     const nameMap = localizedModuleNames[lang] || localizedModuleNames.pt;
 
     modules.forEach((mod, index) => {
-      const statusIcon = mod.enabled ? '🟢 [ON]' : '🔴 [OFF]';
-      const displayName = mod.title ? mod.title.toUpperCase() : (nameMap[mod.name] || mod.name.toUpperCase());
-      menuText += `[${index + 1}] ${statusIcon} ${displayName}\n`;
-      if (mod.desc) menuText += `    ${mod.desc}\n`;
+      const statusIcon = mod.enabled ? '🟢' : '🔴';
+      const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
+      menuText += `[${index + 1}] ${statusIcon} *${cleanTitle}*\n`;
+      if (mod.desc) menuText += `    _${mod.desc}_\n`;
     });
 
-    // Coleta dinâmica dos comandos utilitários e de moderação direta
-    const otherTitle = {
-      pt: '🛠️ *OUTROS COMANDOS DO BOT:*',
-      es: '🛠️ *OTROS COMANDOS DEL BOT:*',
-      en: '🛠️ *OTHER BOT COMMANDS:*'
-    }[lang] || '🛠️ *OUTROS COMANDOS DO BOT:*';
-
-    const directCommandsOrder = ['hidetag', 'promote', 'demote', 'ban', 'mute', 'del', 'warn', 'sortear', 'blacklist', 'idioma', 'ping'];
-    const directCommands = [];
-    for (const [name, plugin] of pluginLoader.commands.entries()) {
-      if (plugin.category === 'owner' || plugin.ownerOnly) continue;
-      if (['menu', 'config'].includes(name)) continue;
-
-      const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name) || plugin.isDirectCommand;
-      if (!isUtility) continue;
-
-      const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
-      const desc = typeof plugin.description === 'object' 
-        ? (plugin.description[lang] || plugin.description.pt) 
-        : (plugin.description || '');
-
-      const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
-      directCommands.push({
-        name,
-        num: cmdNum,
-        usage: `${currentPrefix}${usage}`,
-        desc
-      });
-    }
-
-    directCommands.sort((a, b) => {
-      const idxA = directCommandsOrder.indexOf(a.name);
-      const idxB = directCommandsOrder.indexOf(b.name);
-      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
-    });
-
-    if (directCommands.length > 0) {
-      menuText += `─────────────────────────\n`;
-      menuText += `${otherTitle}\n`;
-      directCommands.forEach(cmd => {
-        const numLabel = cmd.num ? `[${cmd.num}] ` : '';
-        menuText += `* ${numLabel}*${cmd.usage}* - ${cmd.desc}\n`;
-      });
-    }
-
-    menuText += `─────────────────────────\n`;
-    menuText += `💡 Exemplos rápidos:\n`;
-    menuText += `* Digite 1 a ${modules.length} para ativar/desativar ou configurar os módulos no painel\n`;
-    menuText += `* Use os números com a barra direto no chat (Ex: /5 @user dá ban, /9 aviso marca todos, /10 @user dá adm, /17 dá ping)\n`;
-    menuText += `* Digite P / para mudar o prefixo para /\n`;
-    menuText += `* Digite L para mudar o idioma\n`;
-    menuText += `* Digite X para apagar e fechar o menu\n`;
-    menuText += `* Ou mencione o bot para enviar comandos (Ex: @bot 5 @user ou @bot menu)`;
-
+    menuText += `\n${footerHelp}`;
     const session = {
       type: 'config_menu',
       groupJid: from,

@@ -5,174 +5,137 @@ const pluginLoader = require('../../core/pluginLoader');
 module.exports = {
   name: 'menu',
   aliases: ['menu', 'comandos', 'commands', 'ajuda', 'help', 'start', 'botmenu'],
-  description: 'Painel Interativo de Configurações ou Menu de Comandos',
+  description: 'Guia de Comandos e Ajuda do Hermes Bot',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: false,
 
-  async execute({ sock, msg, from, sender, reply, prefix, lang, isOwner, isGroup, command }) {
+  async execute({ sock, msg, from, sender, args, reply, prefix, lang, isOwner, isGroup }) {
     const p = prefix || '/';
     const l = (lang || 'pt').toLowerCase();
-    const trigger = (command || '').toLowerCase();
+    const sub = (args[0] || '').toLowerCase();
+
+    // Se o usuário pedir especificamente o painel via subcomando: !menu config ou !menu painel
+    if (['config', 'painel', 'panel', 'settings', 'cfg'].includes(sub)) {
+      if (isGroup) {
+        return await wizardEngine.startConfigPanel(sock, msg, from, sender);
+      }
+    }
 
     // ========================================================
     // 1. EM GRUPOS
     // ========================================================
     if (isGroup) {
-      // Se solicitou explicitamente a lista de comandos rápidos (/comandos ou /ajuda)
-      if (['comandos', 'commands', 'ajuda', 'help'].includes(trigger)) {
-        let groupName = 'Grupo';
-        let membersCount = 0;
-        try {
-          const meta = await getGroupMetadata(sock, from);
-          groupName = meta?.subject || 'Grupo';
-          membersCount = meta?.participants?.length || 0;
-        } catch (_) {}
+      let groupName = 'Grupo';
+      let membersCount = 0;
+      try {
+        const meta = await getGroupMetadata(sock, from);
+        groupName = meta?.subject || 'Grupo';
+        membersCount = meta?.participants?.length || 0;
+      } catch (_) {}
 
-        // Coleta dinâmica de todos os plugins utilitários e de moderação direta
-        const directCommandsOrder = ['hidetag', 'poll', 'setdesc', 'setpic', 'pin', 'promote', 'demote', 'ban', 'mute', 'clear', 'warn', 'raffle', 'blacklist', 'lang', 'ping'];
-        const protectionOrder = ['antilink', 'antiflood', 'antifake', 'welcome', 'schedule', 'automsg', 'hermes'];
-        const groupCmds = [];
-        const protectionCmds = [];
-
-        for (const [name, plugin] of pluginLoader.commands.entries()) {
-          if (plugin.category === 'owner' || plugin.ownerOnly) continue; // Nunca expõe comandos de dono em grupos
-          if (['menu', 'config'].includes(name)) continue;
-
-          const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
-          const desc = typeof plugin.description === 'object'
-            ? (plugin.description[l] || plugin.description.pt)
-            : (plugin.description || '');
-
-          const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
-          const item = {
-            name,
-            num: cmdNum,
-            usage: `${p}${usage}`,
-            desc
-          };
-
-          const isUtility = !plugin.configSchema || ['ban', 'warn'].includes(name) || plugin.isDirectCommand;
-          if (isUtility) {
-            groupCmds.push(item);
-          } else {
-            protectionCmds.push(item);
-          }
+      const titles = {
+        pt: {
+          title: '🤖 *HERMES BOT* • Guia de Comandos',
+          group: '👥 Grupo:',
+          members: 'membros',
+          secQuick: '⚡ *Ações Rápidas & Moderação*',
+          secConfig: '⚙️ *Gestão & Utilidades*',
+          tipHeader: '💡 *Dica do Hermes:*',
+          tipBody: `Você não precisa decorar comandos! Peça normalmente em português:\n• _"Hermes, fecha o grupo e avisa que volta às 14h"_\n• _"Hermes, cria uma votação sobre o almoço de amanhã"_\n• _"Hermes, fixa essa mensagem por 7 dias"_\n\n👉 Para abrir o painel de módulos de proteção, envie \`${p}config\``
+        },
+        es: {
+          title: '🤖 *HERMES BOT* • Guía de Comandos',
+          group: '👥 Grupo:',
+          members: 'miembros',
+          secQuick: '⚡ *Acciones Rápidas y Moderación*',
+          secConfig: '⚙️ *Gestión y Utilidades*',
+          tipHeader: '💡 *Consejo de Hermes:*',
+          tipBody: `¡No necesitas memorizar comandos! Pídelo normalmente en lenguaje natural:\n• _"Hermes, cierra el grupo hasta las 14h"_\n• _"Hermes, crea una encuesta sobre el almuerzo"_\n• _"Hermes, fija este mensaje por 7 días"_\n\n👉 Para abrir el panel de módulos de protección, envía \`${p}config\``
+        },
+        en: {
+          title: '🤖 *HERMES BOT* • Commands Guide',
+          group: '👥 Group:',
+          members: 'members',
+          secQuick: '⚡ *Quick Actions & Moderation*',
+          secConfig: '⚙️ *Management & Utilities*',
+          tipHeader: '💡 *Hermes Tip:*',
+          tipBody: `No need to memorize commands! Just ask naturally:\n• _"Hermes, close the group until 2 PM"_\n• _"Hermes, create a poll about tomorrow's lunch"_\n• _"Hermes, pin this message for 7 days"_\n\n👉 To open the protection modules panel, send \`${p}config\``
         }
+      };
 
-        groupCmds.sort((a, b) => {
-          const idxA = directCommandsOrder.indexOf(a.name);
-          const idxB = directCommandsOrder.indexOf(b.name);
-          return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
-        });
+      const tInfo = titles[l] || titles.pt;
 
-        protectionCmds.sort((a, b) => {
-          const idxA = protectionOrder.indexOf(a.name);
-          const idxB = protectionOrder.indexOf(b.name);
-          return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
-        });
+      // Lista limpa e consistente de comandos rápidos
+      const quickActions = [
+        { cmd: `${p}fechar | ${p}abrir`, desc: { pt: 'Trancar ou abrir o grupo', es: 'Cerrar o abrir el grupo', en: 'Lock or unlock the group' } },
+        { cmd: `${p}ban @user`, desc: { pt: 'Banir membro (ou via resposta)', es: 'Expulsar miembro (o respondiendo)', en: 'Kick member (or via reply)' } },
+        { cmd: `${p}warn @user`, desc: { pt: 'Advertir membro (!unwarn, !warns)', es: 'Advertir miembro (!unwarn, !warns)', en: 'Warn member (!unwarn, !warns)' } },
+        { cmd: `${p}del`, desc: { pt: 'Apagar mensagem respondida', es: 'Borrar mensaje respondido', en: 'Delete replied message' } },
+        { cmd: `${p}pin [24h|7d|30d]`, desc: { pt: 'Fixar mensagem (!unpin desfixa)', es: 'Fijar mensaje (!unpin desfija)', en: 'Pin message (!unpin unpins)' } },
+        { cmd: `${p}enquete [opções]`, desc: { pt: 'Criar votação interativa', es: 'Crear encuesta interactiva', en: 'Create interactive poll' } },
+        { cmd: `${p}foto`, desc: { pt: 'Definir foto do grupo (com imagem)', es: 'Cambiar foto del grupo (con imagen)', en: 'Change group icon (with image)' } },
+        { cmd: `${p}setdesc [texto]`, desc: { pt: 'Alterar descrição do grupo', es: 'Cambiar descripción del grupo', en: 'Change group description' } },
+        { cmd: `${p}all [texto]`, desc: { pt: 'Marcar todos os membros', es: 'Mencionar a todos los miembros', en: 'Mention all group members' } },
+        { cmd: `${p}adm @user`, desc: { pt: 'Promover membro a Administrador', es: 'Promover miembro a Administrador', en: 'Promote member to Admin' } },
+        { cmd: `${p}demote @user`, desc: { pt: 'Rebaixar administrador a membro', es: 'Degradar administrador a miembro', en: 'Demote admin to regular member' } }
+      ];
 
-        const titles = {
-          pt: {
-            title: '🤖 *HERMES BOT - GUIA DE COMANDOS*',
-            sec: '╭━━━〔 ⚡ AÇÕES RÁPIDAS 〕━━━╮',
-            sec2: '╭━━━〔 🛡️ PROTEÇÕES, AUTOMAÇÃO & IA 〕━━━╮',
-            tip: `💡 *3 Jeitos Fáceis de Usar:*\n1️⃣ *Sem decorar comandos:* Peça em português normal (Ex: _"Hermes, fecha o grupo"_, _"Hermes, muda o horário pra fechar 23:00"_).\n2️⃣ *Painel de Números:* Envie \`${p}config\` e digite apenas os números (1, 2, 3).\n3️⃣ *Comandos diretos:* Use pelo nome (Ex: \`${p}ban @user\`) ou número (Ex: \`${p}5 @user\`).`
-          },
-          es: {
-            title: '🤖 *HERMES BOT - GUÍA DE COMANDOS*',
-            sec: '╭━━━〔 ⚡ ACCIONES RÁPIDAS 〕━━━╮',
-            sec2: '╭━━━〔 🛡️ PROTECCIONES, AUTOMATIZACIÓN E IA 〕━━━╮',
-            tip: `💡 *3 Formas Fáciles de Usar:*\n1️⃣ *Sin memorizar comandos:* Pídelo normalmente a *"Hermes"*.\n2️⃣ *Panel Numérico:* Envía \`${p}config\` y responde con números (1, 2, 3).\n3️⃣ *Comandos directos:* Usa por nombre (Ej: \`${p}ban @user\`) o número (Ej: \`${p}5 @user\`).`
-          },
-          en: {
-            title: '🤖 *HERMES BOT - COMMANDS GUIDE*',
-            sec: '╭━━━〔 ⚡ QUICK ACTIONS 〕━━━╮',
-            sec2: '╭━━━〔 🛡️ PROTECTIONS, AUTOMATION & AI 〕━━━╮',
-            tip: `💡 *3 Easy Ways to Use:*\n1️⃣ *No commands needed:* Just ask *"Hermes"* in plain language.\n2️⃣ *Numbered Panel:* Send \`${p}config\` and reply with numbers (1, 2, 3).\n3️⃣ *Direct commands:* Use by name (e.g. \`${p}ban @user\`) or number (e.g. \`${p}5 @user\`).`
-          }
-        };
+      const configActions = [
+        { cmd: `${p}config`, desc: { pt: 'Painel de módulos interativo (1 a 10)', es: 'Panel interactivo de módulos (1 a 10)', en: 'Interactive modules panel (1 to 10)' } },
+        { cmd: `${p}agenda`, desc: { pt: 'Calendário de lembretes e avisos', es: 'Calendario de recordatorios y avisos', en: 'Reminders and schedule calendar' } },
+        { cmd: `${p}sortear [qtd] [prêmio]`, desc: { pt: 'Sorteio rápido e justo entre membros', es: 'Sorteo rápido entre miembros', en: 'Raffle draw among members' } },
+        { cmd: `${p}blacklist add/del`, desc: { pt: 'Lista negra que expulsa ao entrar', es: 'Lista negra que expulsa al entrar', en: 'Blacklist auto-kick on join' } },
+        { cmd: `${p}idioma [pt|es|en]`, desc: { pt: 'Alterar o idioma do bot', es: 'Cambiar idioma del bot', en: 'Change bot language' } },
+        { cmd: `${p}ping`, desc: { pt: 'Status, latência e memória do bot', es: 'Estado, latencia y memoria', en: 'Bot status, latency and memory' } }
+      ];
 
-        const tInfo = titles[l] || titles.pt;
-        let output = `${tInfo.title}\n\n`;
-        output += `👥 *Grupo:* ${groupName} (${membersCount} membros)\n`;
-        output += `📌 *Prefixo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n\n`;
-        output += `${tInfo.sec}\n`;
+      let output = `${tInfo.title}\n`;
+      output += `📌 *Prefixo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n`;
+      output += `${tInfo.group} *${groupName}* (${membersCount} ${tInfo.members})\n\n`;
 
-        groupCmds.forEach(cmd => {
-          const numLabel = cmd.num ? `[${cmd.num}] ` : '';
-          output += `┃ *${numLabel}${cmd.usage}* - ${cmd.desc}\n`;
-        });
-        output += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+      output += `${tInfo.secQuick}\n`;
+      quickActions.forEach(a => {
+        const d = a.desc[l] || a.desc.pt;
+        output += `• \`${a.cmd}\` - ${d}\n`;
+      });
 
-        if (protectionCmds.length > 0) {
-          output += `${tInfo.sec2}\n`;
-          output += `┃ *${p}config* - Painel interativo passo a passo (por números)\n`;
-          protectionCmds.forEach(cmd => {
-            const numLabel = cmd.num ? `[${cmd.num}] ` : '';
-            output += `┃ *${numLabel}${cmd.usage}* - ${cmd.desc}\n`;
-          });
-          output += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-        }
+      output += `\n${tInfo.secConfig}\n`;
+      configActions.forEach(a => {
+        const d = a.desc[l] || a.desc.pt;
+        output += `• \`${a.cmd}\` - ${d}\n`;
+      });
 
-        output += `${tInfo.tip}`;
+      output += `\n${tInfo.tipHeader}\n${tInfo.tipBody}`;
 
-        return reply(output);
-      }
-
-      // Por padrão em grupos: /menu abre o Painel Interativo de Configurações - Hermes
-      return await wizardEngine.startConfigPanel(sock, msg, from, sender);
+      return reply(output);
     }
 
     // ========================================================
-    // 2. NO PRIVADO (DM) - APENAS PARA O DONO (DINÂMICO E ANTI-POLUIÇÃO)
+    // 2. NO PRIVADO (DM) - APENAS PARA O DONO
     // ========================================================
     if (isOwner) {
-      const ownerOrder = ['bot', 'autoadm', 'bangrupo', 'reload'];
-      const ownerCmds = [];
+      const ownerCmds = [
+        { cmd: `${p}bot on [dias]`, desc: 'Ativar bot no grupo (ou renovar dias)' },
+        { cmd: `${p}bot add [dias]`, desc: 'Adicionar dias à assinatura do grupo' },
+        { cmd: `${p}bot off`, desc: 'Pausar bot no grupo (mantém configurações)' },
+        { cmd: `${p}bot list`, desc: 'Listar todos os grupos e dias restantes' },
+        { cmd: `${p}bot status`, desc: 'Exibir status do grupo atual' },
+        { cmd: `${p}pv on / off`, desc: 'Liberar ou travar comandos no privado (Anti-Ban)' },
+        { cmd: `${p}autoadm all`, desc: 'Promover o Dono a admin em todos os grupos' },
+        { cmd: `${p}bangrupo [id]`, desc: 'Banir grupo permanentemente do bot' },
+        { cmd: `${p}reload`, desc: 'Recarregar plugins e traduções em tempo real' },
+        { cmd: `${p}ping`, desc: 'Status, latência e consumo de memória do bot' }
+      ];
 
-      for (const [name, plugin] of pluginLoader.commands.entries()) {
-        if (plugin.category === 'owner' || plugin.ownerOnly) {
-          const usage = plugin.usage || plugin.aliases?.[0] || plugin.name;
-          const desc = typeof plugin.description === 'object'
-            ? (plugin.description[l] || plugin.description.pt)
-            : (plugin.description || '');
+      let ownerMenu = `👑 *PAINEL DO DONO & SAAS* • Hermes\n`;
+      ownerMenu += `📌 *Prefixo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n\n`;
 
-          const cmdNum = plugin.cmdNumber || pluginLoader.getCommandNumber(name);
-
-          ownerCmds.push({
-            name,
-            num: cmdNum,
-            usage: `${p}${usage}`,
-            desc
-          });
-        }
-      }
-
-      ownerCmds.sort((a, b) => {
-        const idxA = ownerOrder.indexOf(a.name);
-        const idxB = ownerOrder.indexOf(b.name);
-        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      ownerCmds.forEach(c => {
+        ownerMenu += `• \`${c.cmd}\`\n  _${c.desc}_\n`;
       });
 
-      let ownerMenu = `👑 *PAINEL DO DONO & SAAS - HERMES*\n\n` +
-        `📌 *Prefixo atual:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n` +
-        `─────────────────────────\n`;
-
-      ownerCmds.forEach(cmd => {
-        const numLabel = cmd.num ? `[${cmd.num}] ` : '';
-        ownerMenu += `🔑 *${numLabel}${cmd.usage}*\n    _${cmd.desc}_\n`;
-      });
-
-      const pingPlugin = pluginLoader.commands.get('ping');
-      if (pingPlugin) {
-        const pingNum = pingPlugin.cmdNumber || pluginLoader.getCommandNumber('ping');
-        const numLabel = pingNum ? `[${pingNum}] ` : '';
-        ownerMenu += `🏓 *${numLabel}${p}${pingPlugin.usage || 'ping'}*\n    _${pingPlugin.description}_\n`;
-      }
-
-      ownerMenu += `─────────────────────────\n` +
-        `💡 *Dica Anti-Ban:* Gerencie seus grupos e licenças aqui no privado usando o comando ou o número (Ex: \`${p}19 on 30\`, \`${p}20\`, \`${p}17\`).`;
+      ownerMenu += `\n💡 *Dica Anti-Ban:* Mantenha respostas no PV restritas apenas a você para máxima segurança.`;
 
       return reply(ownerMenu);
     }

@@ -1,4 +1,4 @@
-﻿const configManager = require('../../core/configManager');
+const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { floodCache } = require('../../utils/cache');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
@@ -9,7 +9,7 @@ const settings = require('../../config/settings');
 module.exports = {
   name: 'antiflood',
   aliases: ['antiflood', 'antispam', 'flood', 'spam', 'antitrava', 'trava'],
-  description: 'Anti-Spam de mensagens rÃ¡pidas e Anti-Trava (caracteres excessivos)',
+  description: 'Anti-Spam de mensagens rápidas e Anti-Trava (caracteres excessivos)',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
@@ -17,8 +17,8 @@ module.exports = {
 
   configSchema: {
     title: {
-      pt: 'ProteÃ§Ã£o Anti-Flood e Anti-Trava',
-      es: 'ProtecciÃ³n Anti-Flood y Anti-Trava',
+      pt: 'Proteção Anti-Flood e Anti-Trava',
+      es: 'Protección Anti-Flood y Anti-Trava',
       en: 'Anti-Flood & Anti-Crash Protection'
     },
     description: {
@@ -31,8 +31,8 @@ module.exports = {
         name: 'maxMessages',
         type: 'number',
         question: {
-          pt: 'Quantas mensagens consecutivas em 5 segundos caracterizam Flood? (PadrÃ£o: 6):',
-          es: 'Â¿CuÃ¡ntos mensajes consecutivos en 5 segundos se consideran Flood? (Predeterminado: 6):',
+          pt: 'Quantas mensagens consecutivas em 5 segundos caracterizam Flood? (Padrão: 6):',
+          es: '¿Cuántos mensajes consecutivos en 5 segundos se consideran Flood? (Predeterminado: 6):',
           en: 'How many consecutive messages in 5 seconds are considered Flood? (Default: 6):'
         },
         default: 6,
@@ -43,8 +43,8 @@ module.exports = {
         name: 'maxChars',
         type: 'number',
         question: {
-          pt: 'Qual o limite de caracteres por mensagem para Anti-Trava? (PadrÃ£o: 2500):',
-          es: 'Â¿CuÃ¡l es el lÃ­mite de caracteres por mensaje para Anti-Trava? (Predeterminado: 2500):',
+          pt: 'Qual o limite de caracteres por mensagem para Anti-Trava? (Padrão: 2500):',
+          es: '¿Cuál es el límite de caracteres por mensaje para Anti-Trava? (Predeterminado: 2500):',
           en: 'What is the character limit per message for Anti-Crash? (Default: 2500):'
         },
         default: 2500,
@@ -55,8 +55,8 @@ module.exports = {
         name: 'action',
         type: 'choice',
         question: {
-          pt: 'Qual aÃ§Ã£o aplicar em caso de flood ou trava?',
-          es: 'Â¿QuÃ© acciÃ³n aplicar en caso de flood o trava?',
+          pt: 'Qual ação aplicar em caso de flood ou trava?',
+          es: '¿Qué acción aplicar en caso de flood o trava?',
           en: 'What action should be taken in case of flood or crash attempt?'
         },
         choices: [
@@ -87,25 +87,25 @@ module.exports = {
       const msgs = cfg.maxMessages || 6;
       const chars = cfg.maxChars || 2500;
       const action = cfg.action || 'warn';
-      return reply(`${t('common.saved')}\nðŸŒŠ *AntiFlood:* ATIVADO\nâš¡ *MÃ¡x:* ${msgs} msgs/5s | *Trava:* ${chars} carac | *AÃ§Ã£o:* ${action}`);
+      return reply(`${t('common.saved')}\n🌊 *AntiFlood:* ATIVADO\n⚡ *Máx:* ${msgs} msgs/5s | *Trava:* ${chars} carac | *Ação:* ${action}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'antiflood', false);
-      return reply(t('common.saved') + '\nðŸŒŠ *AntiFlood:* DESATIVADO');
+      return reply(t('common.saved') + '\n🌊 *AntiFlood:* DESATIVADO');
     }
 
     if (['ban', 'banir', 'expulsar'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antiflood', { action: 'ban', enabled: true });
-      return reply('ðŸ’¾ *AntiFlood atualizado:* AÃ§Ã£o definida para *EXPULSAR (BAN)*.');
+      return reply('💾 *AntiFlood atualizado:* Ação definida para *EXPULSAR (BAN)*.');
     }
 
     if (['warn', 'adv', 'advertir'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antiflood', { action: 'warn', enabled: true });
-      return reply('ðŸ’¾ *AntiFlood atualizado:* AÃ§Ã£o definida para *ADVERTIR (WARN)*.');
+      return reply('💾 *AntiFlood atualizado:* Ação definida para *ADVERTIR (WARN)*.');
     }
 
-    // ConfiguraÃ§Ã£o direta: /antiflood 5 2000
+    // Configuração direta: /antiflood 5 2000
     const parsedMsgs = parseInt(sub, 10);
     if (!isNaN(parsedMsgs) && parsedMsgs >= 3) {
       const parsedChars = parseInt(args[1], 10) || (cfg.maxChars || 2500);
@@ -114,7 +114,7 @@ module.exports = {
         maxChars: parsedChars, 
         enabled: true 
       });
-      return reply(`ðŸ’¾ *AntiFlood atualizado e ATIVADO!*\nâš¡ *Limite Flood:* \`${parsedMsgs} mensagens em 5s\`\nðŸ›¡ï¸ *Limite Anti-Trava:* \`${parsedChars} caracteres\``);
+      return reply(`💾 *AntiFlood atualizado e ATIVADO!*\n⚡ *Limite Flood:* \`${parsedMsgs} mensagens em 5s\`\n🛡️ *Limite Anti-Trava:* \`${parsedChars} caracteres\``);
     }
 
     const status = configManager.isPluginEnabled(from, 'antiflood') ? t('common.enabled') : t('common.disabled');
@@ -123,12 +123,12 @@ module.exports = {
     const action = cfg.action || 'warn';
 
     let help = t('antiflood.status', { status, msgs, chars, action });
-    help += `\n\nðŸ’¡ *Comandos Diretos:*\nâ€¢ \`/antiflood on\` ou \`/antiflood off\`\nâ€¢ \`/antiflood 5 2000\` (msgs/5s + limite anti-trava)\nâ€¢ \`/antiflood ban\` (expulsa infrator)\nâ€¢ \`/antiflood adv\` (adverte infrator)\nâ€¢ \`/antiflood config\` (abre wizard)`;
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/antiflood on\` ou \`/antiflood off\`\n• \`/antiflood 5 2000\` (msgs/5s + limite anti-trava)\n• \`/antiflood ban\` (expulsa infrator)\n• \`/antiflood adv\` (adverte infrator)\n• \`/antiflood config\` (abre wizard)`;
     return reply(help);
   },
 
   /**
-   * Hook passivo: monitora frequÃªncia de mensagens e tamanho do texto
+   * Hook passivo: monitora frequência de mensagens e tamanho do texto
    */
   async onMessage({ sock, msg, from, sender, text, lang }) {
     if (!configManager.isPluginEnabled(from, 'antiflood')) return false;
@@ -148,7 +148,7 @@ module.exports = {
     let violationType = '';
 
     // 1. Checagem de Anti-Trava (Tamanho da mensagem)
-    // M-4: Extrai o texto completo incluindo legendas de mídia (imagem, vídeo, documento)
+    // Extrai o texto completo incluindo legendas de mídia (imagem, vídeo, documento)
     const realMsg = msg?.message?.ephemeralMessage?.message ||
                     msg?.message?.viewOnceMessage?.message ||
                     msg?.message?.viewOnceMessageV2?.message ||
@@ -163,19 +163,19 @@ module.exports = {
       violationType = 'trava';
     }
 
-    // 2. Checagem de Anti-Flood (Mensagens em 5 segundos com janela temporal FIXA e nÃ£o renovÃ¡vel)
+    // 2. Checagem de Anti-Flood (Mensagens em 5 segundos com janela temporal FIXA e não renovável)
     if (!isViolation) {
       const cacheKey = `${from}:${sender}`;
       const now = Date.now();
       let record = floodCache.get(cacheKey);
 
       if (!record || (now - record.startTime) > 5000) {
-        // Nova janela: TTL fixo de 5s â€” nÃ£o renovÃ¡vel entre mensagens
+        // Nova janela: TTL fixo de 5s — não renovável entre mensagens
         record = { count: 1, startTime: now };
         floodCache.set(cacheKey, record, 5);
       } else {
         record.count += 1;
-        // Calcula o TTL restante para nÃ£o estender a janela original de 5s
+        // Calcula o TTL restante para não estender a janela original de 5s
         const elapsedSecs = Math.floor((now - record.startTime) / 1000);
         const remainingTTL = Math.max(5 - elapsedSecs, 1);
         floodCache.set(cacheKey, record, remainingTTL);
@@ -184,13 +184,13 @@ module.exports = {
       if (record.count > maxMessages) {
         isViolation = true;
         violationType = 'flood';
-        floodCache.del(cacheKey); // Reseta contador apÃ³s flagrar
+        floodCache.del(cacheKey); // Reseta contador após flagrar
       }
     }
 
     if (!isViolation) return false;
 
-    // AÃ§Ã£o de EmergÃªncia (Zero Delay): Apagar mensagem
+    // Ação de Emergência (Zero Delay): Apagar mensagem
     await safeDelete(sock, from, msg.key);
 
     const targetData = await resolveParticipant(sock, from, sender);
@@ -209,7 +209,7 @@ module.exports = {
       // Advertir
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const maxWarns = warnCfg.maxWarns || 3;
-      const reason = violationType === 'trava' ? 'Envio de mensagem excessivamente longa (Trava)' : 'Envio de mensagens rÃ¡pidas (Flood)';
+      const reason = violationType === 'trava' ? 'Envio de mensagem excessivamente longa (Trava)' : 'Envio de mensagens rápidas (Flood)';
       const count = configManager.addWarn(from, targetPhone, reason);
 
       if (count >= maxWarns) {
