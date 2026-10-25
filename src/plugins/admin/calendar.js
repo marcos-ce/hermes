@@ -38,7 +38,7 @@ function parseDate(dateStr) {
   }
 
   // Formato DD/MM ou DD-MM
-  const match = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  const match = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
   if (!match) return null;
 
   const day = parseInt(match[1], 10);
@@ -55,7 +55,7 @@ function parseDate(dateStr) {
  */
 function parseTime(timeStr) {
   if (!timeStr) return null;
-  const match = timeStr.match(/^(\d{1,2})[:hH](\d{2})?$/);
+  const match = timeStr.match(/^(\d{1,2})(?:[:hH](\d{2})?)?$/);
   if (!match) return null;
 
   const hours = parseInt(match[1], 10);
@@ -148,7 +148,13 @@ module.exports = {
             if (mentionAll) {
               const meta = await getGroupMetadata(sock, groupJid);
               if (meta && Array.isArray(meta.participants)) {
-                mentions = meta.participants.map(p => p.id);
+                const allMembers = new Set();
+                meta.participants.forEach(p => {
+                  if (p.id) allMembers.add(p.id);
+                  if (p.jid) allMembers.add(p.jid);
+                  if (p.lid) allMembers.add(p.lid);
+                });
+                mentions = Array.from(allMembers);
               }
             }
 
@@ -199,7 +205,8 @@ module.exports = {
         return reply(translate('calendar.invalid_format', { prefix }));
       }
 
-      const newId = String(Date.now()).slice(-4);
+      const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
+      const newId = String(maxId + 1);
       const newEvent = {
         id: newId,
         date: parsedDate,
@@ -223,12 +230,12 @@ module.exports = {
 
     // 4. Remover evento específico: !agenda del <id>
     if (sub === 'del' || sub === 'rm' || sub === 'remover' || sub === 'cancelar') {
-      const targetId = (args[1] || '').replace(/\D/g, '');
+      const targetId = (args[1] || '').trim().replace(/^#/, '');
       if (!targetId) {
-        return reply(`⚠️ Informe o ID do agendamento.\nExemplo: \`${prefix}agenda del 1234\``);
+        return reply(`⚠️ Informe o ID do agendamento.\nExemplo: \`${prefix}agenda del 1\``);
       }
 
-      const idx = events.findIndex(e => e.id === targetId);
+      const idx = events.findIndex(e => String(e.id) === targetId);
       if (idx === -1) {
         return reply(translate('calendar.not_found', { id: targetId }));
       }

@@ -80,13 +80,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'toggle_group_protection',
-      description: 'Ativa, desativa ou configura detalhadamente os plugins do grupo (antilink, antiflood, antifake, welcome, automsg, schedule, warn, ban, hermes).',
+      description: 'Ativa, desativa ou configura detalhadamente os plugins do grupo (antilink, antiflood, antifake, welcome, automsg, schedule, warn, ban, hermes, calendar).',
       parameters: {
         type: 'object',
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes'],
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar'],
             description: 'Nome do plugin a ser ativado, desativado ou configurado.'
           },
           enabled: {
@@ -303,6 +303,40 @@ const TOOLS = [
           }
         },
         required: ['target']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_calendar',
+      description: 'Adiciona, lista ou remove eventos/agendamentos do calendário do grupo com avisos automáticos na data e hora marcada.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['add', 'list', 'delete', 'clear'],
+            description: 'Ação a ser executada no calendário: "add" (agendar), "list" (listar), "delete" (remover por ID) ou "clear" (limpar tudo).'
+          },
+          date: {
+            type: 'string',
+            description: 'Data do evento (ex: "25/10", "28/10/2026", "amanhã" ou "hoje"). Obrigatório para action="add".'
+          },
+          time: {
+            type: 'string',
+            description: 'Horário do evento no formato HH:MM (ex: "14:30", "19:00" ou "19h"). Obrigatório para action="add".'
+          },
+          text: {
+            type: 'string',
+            description: 'Descrição ou comunicado do evento a ser divulgado no grupo. Obrigatório para action="add".'
+          },
+          eventId: {
+            type: 'string',
+            description: 'ID numérico do evento a ser removido (ex: "1", "2"). Obrigatório para action="delete".'
+          }
+        },
+        required: ['action']
       }
     }
   },
@@ -740,8 +774,9 @@ class ToolRegistry {
       }
 
       case 'toggle_group_protection': {
-        const mod = String(args.module || '').toLowerCase();
-        const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes'];
+        const rawMod = String(args.module || '').toLowerCase();
+        const mod = rawMod === 'agenda' ? 'calendar' : rawMod;
+        const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar'];
         if (!validModules.includes(mod)) {
           return { success: false, error: `Módulo "${mod}" inválido.` };
         }
@@ -807,6 +842,10 @@ class ToolRegistry {
 
         if (mod === 'hermes' && args.personality && ['descontraido', 'formal'].includes(args.personality)) {
           updates.personality = args.personality;
+        }
+
+        if (mod === 'calendar' && args.mentionAll !== undefined) {
+          updates.mentionAll = Boolean(args.mentionAll);
         }
 
         if (Object.keys(updates).length > 1) {
@@ -1065,6 +1104,120 @@ class ToolRegistry {
           message: t(lang, 'demote.success', { user: targetData.displayNum }),
           mentions: [targetData.groupJid]
         };
+      }
+
+      case 'manage_calendar': {
+        const action = String(args.action || '').toLowerCase();
+        const cfg = configManager.getPluginConfig(from, 'calendar') || {};
+        const events = Array.isArray(cfg.events) ? cfg.events : [];
+
+        if (action === 'add') {
+          if (!args.date || !args.time || !args.text) {
+            return { success: false, error: 'Para agendar, informe data, hora e a mensagem do evento.' };
+          }
+
+          const lowerDate = String(args.date).toLowerCase().trim();
+          const now = new Date();
+          const tz = settings.timezone || 'America/Sao_Paulo';
+          let parsedDate = null;
+
+          if (lowerDate === 'hoje' || lowerDate === 'today' || lowerDate === 'hoy') {
+            try {
+              const parts = now.toLocaleDateString('pt-BR', { timeZone: tz }).split('/');
+              parsedDate = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+            } catch (_) {
+              parsedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+          } else if (lowerDate === 'amanha' || lowerDate === 'amanhã' || lowerDate === 'tomorrow' || lowerDate === 'mañana') {
+            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            try {
+              const parts = tomorrow.toLocaleDateString('pt-BR', { timeZone: tz }).split('/');
+              parsedDate = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+            } catch (_) {
+              parsedDate = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}`;
+            }
+          } else {
+            const dateMatch = lowerDate.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
+            if (dateMatch) {
+              const d = parseInt(dateMatch[1], 10);
+              const m = parseInt(dateMatch[2], 10);
+              if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+                parsedDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+              }
+            }
+          }
+
+          let parsedTime = null;
+          const timeMatch = String(args.time).match(/^(\d{1,2})(?:[:hH](\d{2})?)?$/);
+          if (timeMatch) {
+            const h = parseInt(timeMatch[1], 10);
+            const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+              parsedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            }
+          }
+
+          if (!parsedDate || !parsedTime) {
+            return { success: false, error: 'Data ou hora inválida. Use data DD/MM (ou hoje/amanhã) e hora HH:MM.' };
+          }
+
+          const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
+          const newId = String(maxId + 1);
+          const newEvent = {
+            id: newId,
+            date: parsedDate,
+            time: parsedTime,
+            text: String(args.text).trim(),
+            createdBy: sender.replace(/@.*$/, ''),
+            createdAt: Date.now(),
+            executed: false
+          };
+
+          events.push(newEvent);
+          configManager.updatePluginConfig(from, 'calendar', { events, enabled: true });
+
+          return {
+            success: true,
+            message: t(lang, 'calendar.added', {
+              id: newId,
+              date: parsedDate,
+              time: parsedTime,
+              text: newEvent.text
+            })
+          };
+        }
+
+        if (action === 'delete') {
+          const targetId = String(args.eventId || '').trim().replace(/^#/, '');
+          if (!targetId) return { success: false, error: 'Informe o ID do agendamento para remover.' };
+          const idx = events.findIndex(e => String(e.id) === targetId);
+          if (idx === -1) return { success: false, error: t(lang, 'calendar.not_found', { id: targetId }) };
+          events.splice(idx, 1);
+          configManager.updatePluginConfig(from, 'calendar', { events });
+          return { success: true, message: t(lang, 'calendar.deleted', { id: targetId }) };
+        }
+
+        if (action === 'clear') {
+          configManager.updatePluginConfig(from, 'calendar', { events: [] });
+          return { success: true, message: t(lang, 'calendar.cleared') };
+        }
+
+        if (action === 'list') {
+          const activeEvents = events.filter(e => !e.executed);
+          if (activeEvents.length === 0) {
+            return {
+              success: true,
+              message: t(lang, 'calendar.list_empty', { prefix: configManager.getGroupPrefix(from) || '!' })
+            };
+          }
+          let listText = `${t(lang, 'calendar.list_title')}\n\n`;
+          activeEvents.forEach(e => {
+            listText += `${t(lang, 'calendar.item', { id: e.id, date: e.date, time: e.time, text: e.text })}\n`;
+          });
+          return { success: true, message: listText };
+        }
+
+        return { success: false, error: `Ação "${action}" desconhecida.` };
       }
 
       case 'raffle_members': {

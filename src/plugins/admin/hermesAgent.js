@@ -307,14 +307,7 @@ module.exports = {
 
     const senderName = msg.pushName || '';
 
-    // Proteção 1 (Wizard ativo): Se o remetente possuir sessão ativa no wizardCache, entrega ao wizardEngine
     const rawSender = msg?.key?.participant || msg?.participant;
-    if (
-      wizardCache.get(`${from}:${sender}`) ||
-      (rawSender && (wizardCache.get(`${from}:${cleanJid(rawSender)}`) || wizardCache.get(`${from}:${rawSender}`)))
-    ) {
-      return false;
-    }
 
     const groupPrefix = configManager.getGroupPrefix(from) || '!';
     const trimmedText = (text || '').trim();
@@ -403,6 +396,37 @@ module.exports = {
         participant: msg?.key?.participant || sender
       });
       return false;
+    }
+
+    // Proteção 1 (Wizard ativo): Se o admin chamou o Hermes enquanto está no meio de um Wizard,
+    // pergunta amigavelmente se deseja cancelar o menu ou continuar configurando
+    const activeWizard = wizardCache.get(`${from}:${sender}`) ||
+      (rawSender && (wizardCache.get(`${from}:${cleanJid(rawSender)}`) || wizardCache.get(`${from}:${rawSender}`)));
+
+    if (activeWizard) {
+      // Se o usuário falou expressamente com Hermes para cancelar o menu ativo
+      if (/\b(cancel|cancela|cancelar|sair|fecha|fechar)\b/i.test(trimmedText)) {
+        wizardCache.del(`${from}:${sender}`);
+        if (rawSender) {
+          wizardCache.del(`${from}:${cleanJid(rawSender)}`);
+          wizardCache.del(`${from}:${rawSender}`);
+        }
+        await reply(tr(lang, 'wizard.cancelled'));
+        return true;
+      }
+
+      const moduleName = activeWizard.pluginName ? activeWizard.pluginName.toUpperCase() : 'PAINEL DE CONFIGURAÇÕES';
+      activeWizard.focusSwitchPending = true;
+      wizardCache.set(`${from}:${sender}`, activeWizard);
+
+      await reply(
+        tr(lang, 'wizard.hermes_focus_detected', {
+          module: moduleName,
+          user: sender.replace(/@.*$/, '')
+        }),
+        { mentions: [sender] }
+      );
+      return true;
     }
 
     // 2.1 Gatilho exclusivo de administradores: a IA permanece 100% adormecida para membros comuns
@@ -518,6 +542,31 @@ module.exports = {
     // Monta o prompt do usuário com contexto e histórico compactos em uma única mensagem
     const userPromptParts = [];
 
+    // Injeção de Data e Hora em Tempo Real (fuso configurado, padrão Brasília)
+    const now = new Date();
+    const tz = settings.timezone || 'America/Sao_Paulo';
+    let currentDateTimeStr = '';
+    try {
+      const dateFormatted = now.toLocaleDateString('pt-BR', {
+        timeZone: tz,
+        weekday: 'long',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const timeFormatted = now.toLocaleTimeString('pt-BR', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      currentDateTimeStr = `${dateFormatted}, ${timeFormatted}`;
+    } catch (_) {
+      currentDateTimeStr = now.toISOString();
+    }
+
+    userPromptParts.push(`[Data e Hora Atual no Servidor: ${currentDateTimeStr} (${tz})]`);
+
     const botJid = cleanJid(sock?.user?.id || '');
     const botLid = cleanJid(sock?.user?.lid || '');
     const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
@@ -585,8 +634,17 @@ module.exports = {
       const antifakeCfg = configManager.getPluginConfig(from, 'antifake') || {};
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const groupData = configManager.getGroup(from) || {};
-      const activeMods = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule']
+      const activeMods = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'calendar']
         .filter(m => configManager.isPluginEnabled(from, m));
+
+      const calCfg = configManager.getPluginConfig(from, 'calendar') || {};
+      const calActive = configManager.isPluginEnabled(from, 'calendar');
+      const activeEvents = Array.isArray(calCfg.events)
+        ? calCfg.events.filter(e => !e.executed).slice(0, 5).map(e => `${e.date} às ${e.time}: ${e.text}`)
+        : [];
+      const calSummary = calActive
+        ? (activeEvents.length > 0 ? activeEvents.join('; ') : 'nenhum evento pendente')
+        : 'off';
       const schedSummary = schedActive
         ? `fecha ${schedCfg.closeTime || '23:00'}/abre ${schedCfg.openTime || '07:00'}`
         : 'off';
@@ -604,7 +662,7 @@ module.exports = {
         `[Estado] idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
         `antilink=${antilinkCfg.action || 'delete'},liberados=${antilinkDoms} | ` +
         `antiflood=${antifloodCfg.maxMessages || 6}msg/5s,${antifloodCfg.maxChars || 2500}chars,${antifloodCfg.action || 'warn'} | ` +
-        `antifake=${antifakeDdis} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}`
+        `antifake=${antifakeDdis} | agenda=${calSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}`
       );
     }
 

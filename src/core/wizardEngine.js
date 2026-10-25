@@ -460,8 +460,13 @@ class WizardEngine {
     const text = (rawText || '').trim();
     const lang = configManager.getGroupLang(from);
 
-    // Cancelamento expresso: apaga todos os menus/prompts e a mensagem do usuário
-    if (['x', 'cancelar', 'sair'].includes(text.toLowerCase())) {
+    const lower = text.toLowerCase().trim();
+
+    // Cancelamento expresso ou resposta de cancelamento durante decisão de foco pendente
+    const isCancelExplicit = ['x', 'cancelar', 'sair', 'cancel'].includes(lower);
+    const isFocusCancel = session.focusSwitchPending && ['2', 'nao', 'não', 'no', 'parar', 'fechar', 'dispensa'].includes(lower);
+
+    if (isCancelExplicit || isFocusCancel) {
       const keysToDelete = [];
       if (session.menuMsgKey) keysToDelete.push(session.menuMsgKey);
       if (Array.isArray(session.promptKeys)) {
@@ -486,9 +491,8 @@ class WizardEngine {
       return true;
     }
 
-    // Se o usuário estava com decisão de foco pendente e optou por continuar
+    // Se o usuário estava com decisão de foco pendente
     if (session.focusSwitchPending) {
-      const lower = text.toLowerCase().trim();
       if (['1', 'continuar', 'sim', 'seguir', 'voltar', 'manter'].includes(lower)) {
         session.focusSwitchPending = false;
         wizardCache.set(sessionKey, session);
@@ -506,6 +510,10 @@ class WizardEngine {
         }
         return true;
       }
+
+      // Se continua pendente e a mensagem não foi continuar nem cancelar,
+      // ignora silenciosamente a conversa paralela para não disparar opções acidentais no menu
+      return true;
     }
 
     // ==========================================
