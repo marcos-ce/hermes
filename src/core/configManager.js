@@ -539,6 +539,88 @@ class ConfigManager {
     this.scheduleSave();
     return group.plugins[pluginName];
   }
+
+  // ==========================================
+  // Perfil Cultural do Grupo (Group Culture & Memory)
+  // ==========================================
+
+  getGroupCulture(groupJid) {
+    const group = this.groups.get(groupJid);
+    return group?.culture || {
+      vibe: '',
+      tone: '',
+      rules: [],
+      facts: {},
+      vocabulary: []
+    };
+  }
+
+  updateGroupCulture(groupJid, updates = {}) {
+    const group = this.getOrCreateGroup(groupJid);
+    const existing = group.culture || {
+      vibe: '',
+      tone: '',
+      rules: [],
+      facts: {},
+      vocabulary: []
+    };
+
+    group.culture = {
+      ...existing,
+      ...updates,
+      rules: Array.isArray(updates.rules) ? updates.rules : existing.rules,
+      facts: {
+        ...(existing.facts || {}),
+        ...(updates.facts || {})
+      },
+      vocabulary: Array.isArray(updates.vocabulary) ? updates.vocabulary : existing.vocabulary
+    };
+
+    this.scheduleSave();
+    return group.culture;
+  }
+
+  addCultureFact(groupJid, key, value) {
+    if (!groupJid || !key || !value) return false;
+    const group = this.getOrCreateGroup(groupJid);
+    if (!group.culture) {
+      group.culture = { vibe: '', tone: '', rules: [], facts: {}, vocabulary: [] };
+    }
+    if (!group.culture.facts) group.culture.facts = {};
+    group.culture.facts[key.trim()] = String(value).trim();
+    this.scheduleSave();
+    return true;
+  }
+
+  removeCultureFact(groupJid, key) {
+    if (!groupJid || !key) return false;
+    const group = this.groups.get(groupJid);
+    if (group?.culture?.facts && group.culture.facts[key.trim()]) {
+      delete group.culture.facts[key.trim()];
+      this.scheduleSave();
+      return true;
+    }
+    return false;
+  }
+
+  addCultureRule(groupJid, rule) {
+    if (!groupJid || !rule) return false;
+    const group = this.getOrCreateGroup(groupJid);
+    if (!group.culture) {
+      group.culture = { vibe: '', tone: '', rules: [], facts: {}, vocabulary: [] };
+    }
+    if (!Array.isArray(group.culture.rules)) group.culture.rules = [];
+    const cleanRule = String(rule).trim();
+    if (!group.culture.rules.includes(cleanRule)) {
+      group.culture.rules.push(cleanRule);
+      if (group.culture.rules.length > 15) {
+        group.culture.rules.shift(); // Limite de 15 regras tácitas
+      }
+      this.scheduleSave();
+      return true;
+    }
+    return false;
+  }
 }
 
 const configManager = new ConfigManager();

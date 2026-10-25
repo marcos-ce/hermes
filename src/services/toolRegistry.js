@@ -461,6 +461,49 @@ const TOOLS = [
         required: ['title', 'options']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'learn_group_fact',
+      description: 'Registra ou atualiza permanentemente um fato, regra tácita, apelido de membro, tom ou preferência cultural do grupo. Use quando o admin ensinar algo sobre o grupo, membros, regras ou estilo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            enum: ['fact', 'rule', 'tone', 'nickname'],
+            description: 'Categoria do aprendizado: "fact" (fato geral), "rule" (regra tácita do grupo), "tone" (tom de fala/vibe), "nickname" (apelido de membro).'
+          },
+          key: {
+            type: 'string',
+            description: 'Identificador do fato ou nome do membro (ex: "Lucas", "sexta-feira", "vibe").'
+          },
+          value: {
+            type: 'string',
+            description: 'O fato aprendido, regra, apelido ou descrição do tom (ex: "é o designer e apelido é Alemão", "sem reuniões de trabalho").'
+          }
+        },
+        required: ['category', 'key', 'value']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'forget_group_fact',
+      description: 'Remove um fato ou regra da memória cultural permanente do grupo. Use quando o admin pedir para esquecer ou remover algo que havia sido ensinado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description: 'Identificador ou termo do fato a ser esquecido.'
+          }
+        },
+        required: ['key']
+      }
+    }
   }
 ];
 
@@ -1789,6 +1832,47 @@ class ToolRegistry {
             error: t(lang, 'poll.error')
           };
         }
+      }
+
+      case 'learn_group_fact': {
+        const category = String(args.category || 'fact').toLowerCase();
+        const key = typeof args.key === 'string' ? args.key.trim().slice(0, 100) : '';
+        const value = typeof args.value === 'string' ? args.value.trim().slice(0, 300) : '';
+
+        if (!key || !value) {
+          return { success: false, error: 'Chave e valor são obrigatórios para registrar o fato.' };
+        }
+
+        if (category === 'rule') {
+          configManager.addCultureRule(from, `${key}: ${value}`);
+        } else if (category === 'tone') {
+          configManager.updateGroupCulture(from, { tone: value, vibe: key });
+        } else {
+          configManager.addCultureFact(from, key, value);
+        }
+
+        const confirmMsg = t(lang, 'hermes.fact_learned', { key, value });
+        return {
+          success: true,
+          message: confirmMsg
+        };
+      }
+
+      case 'forget_group_fact': {
+        const key = typeof args.key === 'string' ? args.key.trim().slice(0, 100) : '';
+        if (!key) {
+          return { success: false, error: 'Informe a chave do fato a ser esquecido.' };
+        }
+
+        const removed = configManager.removeCultureFact(from, key);
+        const confirmMsg = removed
+          ? t(lang, 'hermes.fact_forgotten', { key })
+          : t(lang, 'hermes.fact_not_found', { key });
+
+        return {
+          success: true,
+          message: confirmMsg
+        };
       }
 
       default:

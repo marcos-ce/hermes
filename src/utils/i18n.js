@@ -180,7 +180,10 @@ const dictionaries = {
     'hermes.tool_failed': "Não consegui executar essa ação agora.",
     'hermes.msg_not_found': "Não encontrei essa mensagem no histórico recente.",
     'hermes.oscillation': "Tive uma oscilação momentânea na conexão com minha IA. Tente novamente em alguns instantes!",
-    'hermes.need_explicit_target': "⚠️ Para remover alguém, marque a pessoa (@) ou responda à mensagem dela com o pedido."
+    'hermes.need_explicit_target': "⚠️ Para remover alguém, marque a pessoa (@) ou responda à mensagem dela com o pedido.",
+    'hermes.fact_learned': "🧠 Anotado na memória permanente do grupo: *{key}* = *{value}*",
+    'hermes.fact_forgotten': "🗑️ Fato *{key}* removido da memória do grupo com sucesso.",
+    'hermes.fact_not_found': "ℹ️ O fato *{key}* não foi encontrado na memória do grupo."
   },
 
   es: {
@@ -358,7 +361,10 @@ const dictionaries = {
     'hermes.tool_failed': "No pude ejecutar esa acción ahora.",
     'hermes.msg_not_found': "No encontré ese mensaje en el historial reciente.",
     'hermes.oscillation': "Tuve una oscilación momentánea en la conexión con mi IA. ¡Inténtalo de nuevo en unos instantes!",
-    'hermes.need_explicit_target': "⚠️ Para expulsar a alguien, menciona a la persona (@) o responde a su mensaje con la solicitud."
+    'hermes.need_explicit_target': "⚠️ Para expulsar a alguien, menciona a la persona (@) o responde a su mensaje con la solicitud.",
+    'hermes.fact_learned': "🧠 Anotado en la memoria permanente del grupo: *{key}* = *{value}*",
+    'hermes.fact_forgotten': "🗑️ Dato *{key}* eliminado de la memoria del grupo con éxito.",
+    'hermes.fact_not_found': "ℹ️ El dato *{key}* no se encontró en la memoria del grupo."
   },
 
   en: {
@@ -536,7 +542,10 @@ const dictionaries = {
     'hermes.tool_failed': "I couldn't perform that action right now.",
     'hermes.msg_not_found': "I couldn't find that message in recent history.",
     'hermes.oscillation': "I experienced a brief connection oscillation with my AI service. Please try again in a moment!",
-    'hermes.need_explicit_target': "⚠️ To remove someone, mention the person (@) or reply to their message with the request."
+    'hermes.need_explicit_target': "⚠️ To remove someone, mention the person (@) or reply to their message with the request.",
+    'hermes.fact_learned': "🧠 Learned to group permanent memory: *{key}* = *{value}*",
+    'hermes.fact_forgotten': "🗑️ Fact *{key}* successfully removed from group memory.",
+    'hermes.fact_not_found': "ℹ️ Fact *{key}* was not found in group memory."
   }
 };
 

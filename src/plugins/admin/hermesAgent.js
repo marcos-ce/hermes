@@ -16,7 +16,7 @@ const { t: tr } = require('../../utils/i18n');
 const ownerAlertCooldown = new Map();
 
 // Trilhos de custo e segurança da IA (100% determinísticos, sem chamar o modelo)
-const MAX_HISTORY_MESSAGES = 50;          // contexto enviado ao modelo
+const MAX_HISTORY_MESSAGES = 20;          // contexto recente enxuto (economiza ~350 tokens graças ao Perfil Cultural)
 const MAX_TOOL_CALLS = 6;                 // ações máximas por pedido
 const MAX_DESTRUCTIVE_CALLS = 3;          // bans/rebaixamentos/blacklist máximos por pedido
 const DESTRUCTIVE_TOOLS = new Set(['ban_member', 'demote_member', 'manage_blacklist']);
@@ -24,7 +24,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -658,7 +658,23 @@ module.exports = {
       userPromptParts.push(`[Alvo da mensagem citada: ${quotedAuthor}]`);
     }
 
-    // Histórico recente (últimas 50 mensagens do SQLite) ANTES de gravar a pergunta atual (sem duplicação)
+    // Injeção do Perfil Cultural do Grupo (Group Soul - apenas 30 a 60 tokens)
+    const culture = configManager.getGroupCulture(from);
+    const cultureParts = [];
+    if (culture.vibe) cultureParts.push(`Vibe: ${culture.vibe}`);
+    if (culture.tone) cultureParts.push(`Tom: ${culture.tone}`);
+    if (Array.isArray(culture.rules) && culture.rules.length > 0) {
+      cultureParts.push(`Regras tácitas: ${culture.rules.slice(0, 8).join('; ')}`);
+    }
+    if (culture.facts && Object.keys(culture.facts).length > 0) {
+      const factsList = Object.entries(culture.facts).slice(0, 10).map(([k, v]) => `${k}=${v}`).join(', ');
+      cultureParts.push(`Fatos/Apelidos: ${factsList}`);
+    }
+    if (cultureParts.length > 0) {
+      userPromptParts.push(`[Perfil Cultural do Grupo]: ${cultureParts.join(' | ')}`);
+    }
+
+    // Histórico recente (últimas mensagens do SQLite) ANTES de gravar a pergunta atual (sem duplicação)
     if (memoryEnabled) {
       const historyText = memoryEngine.getFormattedHistory(from, MAX_HISTORY_MESSAGES);
       if (historyText) {
