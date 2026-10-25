@@ -62,6 +62,25 @@ async function main() {
   const isSetupForced = process.argv.includes('--setup');
   const envExists = fs.existsSync(path.resolve(process.cwd(), '.env'));
 
+  // Suporte a comando de reparo de sessões corrompidas (--fix-sessions)
+  if (process.argv.includes('--fix-sessions')) {
+    const authDir = path.resolve(process.cwd(), 'src', 'auth');
+    if (fs.existsSync(authDir)) {
+      const files = fs.readdirSync(authDir);
+      let count = 0;
+      for (const f of files) {
+        if (f !== 'creds.json' && (f.startsWith('session-') || f.startsWith('sender-key-') || f.startsWith('pre-key-'))) {
+          try {
+            fs.unlinkSync(path.join(authDir, f));
+            count++;
+          } catch (_) {}
+        }
+      }
+      console.log(`🧹 [Auto-Healing] ${count} arquivos de sessão corrompidos removidos com sucesso.`);
+      console.log('🔒 creds.json preservado intacto. O bot irá reconectar com novas chaves limpas.\n');
+    }
+  }
+
   // 1. Executa o Setup Wizard de terminal no primeiro boot ou se forçado
   if (!envExists || isSetupForced) {
     await setupWizard.run(isSetupForced);

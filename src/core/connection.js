@@ -15,6 +15,50 @@ const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
 
+/**
+ * Auto-cura de sessões de criptografia corrompidas (Over 2000 messages into the future / No matching sessions).
+ * Exclui exclusivamente os arquivos de sessão afetados preservando creds.json intacto, forçando o Baileys
+ * a solicitar novas PreKeys limpas ao WhatsApp sem deslogar a conta.
+ * @param {object} msg Mensagem de stub com erro de decriptografia
+ */
+async function healBrokenSession(msg) {
+  try {
+    const authDir = path.resolve(process.cwd(), 'src', 'auth');
+    const fs = require('fs');
+    if (!fs.existsSync(authDir)) return;
+
+    const jid = msg?.key?.remoteJid || '';
+    const participant = msg?.key?.participant || msg?.participant || '';
+    const candidates = [
+      jid.replace(/@.*$/, ''),
+      participant.replace(/@.*$/, '')
+    ].filter(Boolean);
+
+    const files = await fs.promises.readdir(authDir);
+    let removedCount = 0;
+
+    for (const file of files) {
+      if (file === 'creds.json') continue; // JAMAIS toca no creds.json
+
+      if (file.startsWith('session-') || file.startsWith('sender-key-')) {
+        const matchesCandidate = candidates.some(c => c && file.includes(c));
+        if (matchesCandidate) {
+          try {
+            await fs.promises.unlink(path.join(authDir, file));
+            removedCount++;
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (removedCount > 0) {
+      logger.warn({ removedCount, candidates }, 'Auto-Healing Baileys: Sessões corrompidas removidas para forçar renegociação de chaves');
+    }
+  } catch (err) {
+    logger.error({ err }, 'Erro no auto-healing de sessões');
+  }
+}
+
 let currentSock = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
@@ -212,6 +256,18 @@ async function connectBot(options = {}) {
   // Mensagens recebidas
   sock.ev.on('messages.upsert', async (m) => {
     try {
+      // Auto-healing de sessões corrompidas (Over 2000 messages into the future / No matching sessions)
+      if (Array.isArray(m?.messages)) {
+        for (const msg of m.messages) {
+          if (msg?.messageStubType === 2 /* CIPHERTEXT */ && Array.isArray(msg?.messageStubParameters)) {
+            const errStr = msg.messageStubParameters.join(' ');
+            if (errStr.includes('2000') || errStr.includes('future') || errStr.includes('No matching sessions')) {
+              await healBrokenSession(msg);
+            }
+          }
+        }
+      }
+
       await handleMessage(sock, m);
     } catch (err) {
       logger.error({ err }, 'Erro inesperado no handler de mensagens');
