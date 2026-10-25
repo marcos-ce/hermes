@@ -42,6 +42,7 @@ class MemoryEngine {
           timestamp INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_group_timestamp ON messages(group_jid, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_group_id ON messages(group_jid, id DESC);
       `);
 
       // Migração não-destrutiva: colunas extras para referenciar mensagens (apagar/banir por ref "mNN")
@@ -72,9 +73,9 @@ class MemoryEngine {
 
       this.cleanupStmt = this.db.prepare(`
         DELETE FROM messages
-        WHERE group_jid = ? AND id NOT IN (
-          SELECT id FROM messages WHERE group_jid = ? ORDER BY id DESC LIMIT 50
-        )
+        WHERE group_jid = ? AND id < COALESCE((
+          SELECT id FROM messages WHERE group_jid = ? ORDER BY id DESC LIMIT 1 OFFSET 49
+        ), 0)
       `);
 
       this.countStmt = this.db.prepare(`

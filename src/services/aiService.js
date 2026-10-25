@@ -14,13 +14,13 @@ class AIService {
   }
 
   /**
-   * Recarrega o .env no máximo 1x a cada 30s (evita I/O de disco a cada mensagem do grupo)
+   * Recarrega configurações do .env de forma atômica
+   * Em produção, só relê o disco se explicitamente solicitado (force = true ou !reload),
+   * eliminando concorrência e I/O síncrono no hot path de mensagens.
    * @param {boolean} [force]
    */
   reloadConfig(force = false) {
-    const now = Date.now();
-    if (!force && now - this._lastReload < 30000) return;
-    this._lastReload = now;
+    if (!force && this._initialized) return;
 
     try {
       dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
@@ -36,6 +36,7 @@ class AIService {
     // Temperatura baixa = tool calls mais determinísticas e menos "papo de IA"
     const temp = parseFloat(process.env.AI_TEMPERATURE);
     this.temperature = Number.isFinite(temp) ? temp : 0.3;
+    this._initialized = true;
   }
 
   isConfigured() {
