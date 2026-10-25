@@ -281,9 +281,16 @@ async function processSingleMessage(sock, msg) {
   const wizardKey = `${from}:${sender}`;
   const activeSession = wizardCache.get(wizardKey) || (rawSender ? wizardCache.get(`${from}:${rawSender}`) : null);
 
-  // Se existe sessão do Wizard ativa e o texto NÃO é um comando com prefixo ou menção
+  // Se existe sessão do Wizard ativa e o usuário enviou um novo comando explícito com prefixo,
+  // limpa a sessão antiga para não haver sobreposição de menus
   const isExplicitCommand = effectivePrefix !== null && effectivePrefix !== '';
-  if (activeSession && !isExplicitCommand) {
+  if (activeSession && isExplicitCommand) {
+    wizardCache.del(wizardKey);
+    if (rawSender) {
+      wizardCache.del(`${from}:${rawSender}`);
+      wizardCache.del(`${from}:${cleanJid(rawSender)}`);
+    }
+  } else if (activeSession) {
     const intercepted = await wizardEngine.handleInput(sock, msg, from, sender, text);
     if (intercepted) {
       return;

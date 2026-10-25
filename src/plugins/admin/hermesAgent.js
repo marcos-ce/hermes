@@ -404,29 +404,21 @@ module.exports = {
       (rawSender && (wizardCache.get(`${from}:${cleanJid(rawSender)}`) || wizardCache.get(`${from}:${rawSender}`)));
 
     if (activeWizard) {
-      // Se o usuário falou expressamente com Hermes para cancelar o menu ativo
-      if (/\b(cancel|cancela|cancelar|sair|fecha|fechar)\b/i.test(trimmedText)) {
-        wizardCache.del(`${from}:${sender}`);
-        if (rawSender) {
-          wizardCache.del(`${from}:${cleanJid(rawSender)}`);
-          wizardCache.del(`${from}:${rawSender}`);
-        }
+      // Libera e encerra o wizard anterior automaticamente para não engessar nem prender a conversa
+      wizardCache.del(`${from}:${sender}`);
+      if (rawSender) {
+        wizardCache.del(`${from}:${cleanJid(rawSender)}`);
+        wizardCache.del(`${from}:${rawSender}`);
+      }
+
+      // Se o usuário falou apenas para cancelar/fechar o menu ativo
+      if (/^(cancel|cancela|cancelar|sair|fecha|fechar|x)$/i.test(trimmedText)) {
         await reply(tr(lang, 'wizard.cancelled'));
         return true;
       }
 
-      const moduleName = activeWizard.pluginName ? activeWizard.pluginName.toUpperCase() : 'PAINEL DE CONFIGURAÇÕES';
-      activeWizard.focusSwitchPending = true;
-      wizardCache.set(`${from}:${sender}`, activeWizard);
-
-      await reply(
-        tr(lang, 'wizard.hermes_focus_detected', {
-          module: moduleName,
-          user: sender.replace(/@.*$/, '')
-        }),
-        { mentions: [sender] }
-      );
-      return true;
+      // Se o admin fez uma pergunta ou deu uma instrução natural (ex: "Queria agendar fechamento automático"),
+      // a sessão antiga é descartada e o fluxo segue DIRETO para a IA atender o pedido na hora sem burocracia!
     }
 
     // 2.1 Gatilho exclusivo de administradores: a IA permanece 100% adormecida para membros comuns

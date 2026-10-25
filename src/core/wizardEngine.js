@@ -528,15 +528,9 @@ class WizardEngine {
     const hasMentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0;
 
     if (isChoiceStep && (text.length > 15 || hasMentions)) {
-      // Detecta mudança de foco do admin durante a etapa de escolha e pergunta se deseja cancelar ou continuar
-      if (!session.focusSwitchPending) {
-        session.focusSwitchPending = true;
-        wizardCache.set(sessionKey, session);
-        const moduleName = session.pluginName ? session.pluginName.toUpperCase() : 'PAINEL DE CONFIGURAÇÕES';
-        await sendSafeMessage(sock, from, {
-          text: t(lang, 'wizard.focus_switch_prompt', { module: moduleName })
-        }, { quoted: msg });
-      }
+      // Filtro Inteligente de Conversa Paralela:
+      // Ignora silenciosamente mensagens longas de bate-papo no grupo sem poluir o chat com prompts robóticos,
+      // mantendo a sessão viva para quando o admin responder com a opção numérica curta.
       return true;
     }
 
