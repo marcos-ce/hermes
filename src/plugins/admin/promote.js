@@ -3,7 +3,7 @@ const { resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
 
 module.exports = {
   name: 'promote',
-  aliases: ['promote', 'promover', 'adm', 'admin', 'daradm'],
+  aliases: ['promote', 'promover', 'promove', 'adm', 'admin', 'daradm'],
   usage: 'adm @user',
   description: 'Promove membro a Administrador do grupo',
   ownerOnly: false,
@@ -27,7 +27,7 @@ module.exports = {
       await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
       groupCache.del(from); // Invalida o cache
 
-      return reply(t('promote.success', { user: targetData.displayNum }), {
+      return reply(t('promote.success', { user: targetData.displayUser || targetData.displayNum }), {
         mentions: [targetData.groupJid, targetData.phoneJid]
       });
     } catch (_err) {

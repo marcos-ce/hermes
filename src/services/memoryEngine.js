@@ -290,6 +290,31 @@ class MemoryEngine {
   }
 
   /**
+   * Obtém o nome conhecido (pushName) de um participante pelo seu JID ou número
+   * @param {string} groupJid
+   * @param {string} participantJid
+   * @returns {string|null}
+   */
+  getParticipantName(groupJid, participantJid) {
+    if (!groupJid || !participantJid) return null;
+    const clean = String(participantJid).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    if (!clean) return null;
+    const recent = this.getRecentMessages(groupJid, 100);
+    for (let i = recent.length - 1; i >= 0; i--) {
+      const msg = recent[i];
+      if (!msg.sender || msg.sender === 'hermes@bot') continue;
+      const msgNum = String(msg.sender).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      const partNum = msg.participant ? String(msg.participant).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '') : '';
+      if (msgNum === clean || partNum === clean) {
+        if (msg.name && !/^\d{8,15}$/.test(msg.name.trim())) {
+          return msg.name.trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Retorna estatísticas de memória do grupo
    * @param {string} groupJid 
    * @returns {{ count: number }}

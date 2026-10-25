@@ -217,6 +217,7 @@ async function resolveParticipant(sock, groupJid, targetJid) {
 
   let phoneJid = cleanTarget.endsWith('@s.whatsapp.net') ? cleanTarget : (lidToPhoneMap.get(cleanTarget) || null);
   let groupParticipantJid = cleanTarget;
+  let matchedName = null;
 
   if (groupJid && groupJid.endsWith('@g.us') && sock) {
     const targetNumber = cleanTarget.replace(/@.*$/, '').replace(/\D/g, '');
@@ -242,6 +243,7 @@ async function resolveParticipant(sock, groupJid, targetJid) {
         if (isMatch) {
           groupParticipantJid = pId; // O JID exato que o grupo espera nas ações do Baileys
           if (pJid) phoneJid = pJid;
+          if (p.notify || p.name) matchedName = p.notify || p.name;
           break;
         }
       }
@@ -250,11 +252,14 @@ async function resolveParticipant(sock, groupJid, targetJid) {
 
   const finalPhoneJid = phoneJid || cleanTarget;
   const displayNum = finalPhoneJid.replace(/@.*$/, '').replace(/\D/g, '') || cleanTarget.replace(/@.*$/, '');
+  const cleanName = (matchedName && !/^\d{8,15}$/.test(String(matchedName).trim())) ? String(matchedName).trim() : null;
 
   return {
     phoneJid: finalPhoneJid,
     groupJid: groupParticipantJid,
-    displayNum
+    displayNum,
+    name: cleanName,
+    displayUser: cleanName ? `${displayNum} (${cleanName})` : displayNum
   };
 }
 

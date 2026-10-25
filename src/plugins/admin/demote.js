@@ -4,7 +4,7 @@ const settings = require('../../config/settings');
 
 module.exports = {
   name: 'demote',
-  aliases: ['demote', 'rebaixar', 'tiraradm', 'quitaradm', 'unadmin'],
+  aliases: ['demote', 'rebaixar', 'rebaixa', 'tiraradm', 'quitaradm', 'unadmin'],
   usage: 'demote @user',
   description: 'Rebaixa administrador a membro comum',
   ownerOnly: false,
@@ -32,7 +32,7 @@ module.exports = {
       await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'demote');
       groupCache.del(from); // Invalida o cache
 
-      return reply(t('demote.success', { user: targetData.displayNum }), {
+      return reply(t('demote.success', { user: targetData.displayUser || targetData.displayNum }), {
         mentions: [targetData.groupJid, targetData.phoneJid]
       });
     } catch (_err) {

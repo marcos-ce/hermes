@@ -282,7 +282,7 @@ const TOOLS = [
         properties: {
           target: {
             type: 'string',
-            description: 'Número de telefone ou menção com @ do membro a ser promovido.'
+            description: 'Número de telefone, menção com @, nome do membro ou "quoted" se o admin estiver respondendo à mensagem do membro a ser promovido.'
           }
         },
         required: ['target']
@@ -299,7 +299,7 @@ const TOOLS = [
         properties: {
           target: {
             type: 'string',
-            description: 'Número de telefone ou menção com @ do administrador a ser rebaixado.'
+            description: 'Número de telefone, menção com @, nome do administrador ou "quoted" se o admin estiver respondendo à mensagem do membro a ser rebaixado.'
           }
         },
         required: ['target']
@@ -458,6 +458,24 @@ class ToolRegistry {
       return `${hh}:${mm}`;
     }
     return null;
+  }
+
+  /**
+   * Formata a exibição do usuário com menção @número e nome entre parênteses, se disponível
+   * Ex: "559899944034 (Mello)" ou apenas "559899944034"
+   * @param {string} from JID do grupo
+   * @param {object} targetData Dados resolvidos do alvo
+   * @returns {string}
+   */
+  _formatUserDisplay(from, targetData) {
+    if (!targetData) return '';
+    const num = targetData.displayNum || '';
+    const knownName = targetData.name ||
+                      (memoryEngine ? (memoryEngine.getParticipantName(from, targetData.phoneJid) || memoryEngine.getParticipantName(from, targetData.groupJid)) : null);
+    if (knownName && String(knownName).trim() && !/^\d{8,15}$/.test(String(knownName).trim())) {
+      return `${num} (${String(knownName).trim()})`;
+    }
+    return num;
   }
 
   /**
@@ -708,8 +726,8 @@ class ToolRegistry {
 
         const banMessage =
           banCfg.customMessage && String(banCfg.customMessage).trim().length > 0 && banCfg.customMessage !== '.'
-            ? String(banCfg.customMessage).replace(/\{user\}/gi, `@${targetData.displayNum}`)
-            : t(lang, 'ban.success', { user: targetData.displayNum });
+            ? String(banCfg.customMessage).replace(/\{user\}/gi, `@${this._formatUserDisplay(from, targetData)}`)
+            : t(lang, 'ban.success', { user: this._formatUserDisplay(from, targetData) });
 
         return {
           success: true,
@@ -915,14 +933,14 @@ class ToolRegistry {
           configManager.resetWarns(from, targetData.phoneJid);
           return {
             success: true,
-            message: t(lang, 'warn.max_reached', { user: targetData.displayNum, max: maxWarns }),
+            message: t(lang, 'warn.max_reached', { user: this._formatUserDisplay(from, targetData), max: maxWarns }),
             mentions: [targetData.groupJid]
           };
         }
 
         return {
           success: true,
-          message: t(lang, 'warn.added', { user: targetData.displayNum, reason, warns: count, max: maxWarns }),
+          message: t(lang, 'warn.added', { user: this._formatUserDisplay(from, targetData), reason, warns: count, max: maxWarns }),
           mentions: [targetData.groupJid]
         };
       }
@@ -939,7 +957,7 @@ class ToolRegistry {
 
         return {
           success: true,
-          message: t(lang, 'warn.removed', { user: targetData.displayNum, warns: remaining, max: maxWarns }),
+          message: t(lang, 'warn.removed', { user: this._formatUserDisplay(from, targetData), warns: remaining, max: maxWarns }),
           mentions: [targetData.groupJid]
         };
       }
@@ -964,7 +982,7 @@ class ToolRegistry {
           configManager.removeGroupBlacklist(from, targetData.phoneJid);
           return {
             success: true,
-            message: t(lang, 'blacklist.removed', { user: targetData.displayNum }),
+            message: t(lang, 'blacklist.removed', { user: this._formatUserDisplay(from, targetData) }),
             mentions: [targetData.groupJid]
           };
         }
@@ -982,7 +1000,7 @@ class ToolRegistry {
 
         return {
           success: true,
-          message: t(lang, 'blacklist.added', { user: targetData.displayNum }),
+          message: t(lang, 'blacklist.added', { user: this._formatUserDisplay(from, targetData) }),
           mentions: [targetData.groupJid]
         };
       }
@@ -1072,7 +1090,7 @@ class ToolRegistry {
 
         return {
           success: true,
-          message: t(lang, 'promote.success', { user: targetData.displayNum }),
+          message: t(lang, 'promote.success', { user: this._formatUserDisplay(from, targetData) }),
           mentions: [targetData.groupJid]
         };
       }
@@ -1101,7 +1119,7 @@ class ToolRegistry {
 
         return {
           success: true,
-          message: t(lang, 'demote.success', { user: targetData.displayNum }),
+          message: t(lang, 'demote.success', { user: this._formatUserDisplay(from, targetData) }),
           mentions: [targetData.groupJid]
         };
       }

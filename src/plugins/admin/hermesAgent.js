@@ -5,7 +5,7 @@ const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
 const { humanizeAIText } = require('../../services/humanizer');
-const { cleanJid, getGroupMetadata, checkAdminStatus } = require('../../utils/jidResolver');
+const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
@@ -566,7 +566,7 @@ module.exports = {
     const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
     const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
-    // Alvos marcados na mensagem (excluindo o próprio bot)
+    // Alvos marcados na mensagem (excluindo o próprio bot) com resolução de nome
     const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
     const targetMentions = rawMentions
       .map(m => cleanJid(m))
@@ -576,17 +576,32 @@ module.exports = {
       });
 
     if (targetMentions.length > 0) {
-      const formattedTargets = targetMentions.map(m => `@${m.replace(/@.*$/, '')}`).join(', ');
-      userPromptParts.push(`[Alvo marcado: ${formattedTargets}]`);
+      const formattedTargets = [];
+      for (const tm of targetMentions) {
+        const resolved = await resolveParticipant(sock, from, tm);
+        const name = (resolved?.name) || memoryEngine.getParticipantName(from, tm) || memoryEngine.getParticipantName(from, resolved?.phoneJid) || '';
+        const num = resolved?.displayNum || tm.replace(/@.*$/, '').replace(/\D/g, '');
+        formattedTargets.push(name ? `${name} (@${num})` : `@${num}`);
+      }
+      userPromptParts.push(`[Alvo marcado com @: ${formattedTargets.join(', ')}]`);
     }
 
-    // Mensagem citada: autor (quando não é o bot) + trecho curto
+    // Mensagem citada: autor (resolvido com nome e número real, tratando @lid) + trecho curto
+    const rawQuotedJid = contextInfo?.participant || contextInfo?.quotedMessage?.participant;
     let quotedAuthor = '';
-    if (contextInfo?.participant) {
-      const qParticipant = cleanJid(contextInfo.participant);
+    let isQuotingBot = false;
+
+    if (rawQuotedJid) {
+      const qParticipant = cleanJid(rawQuotedJid);
       const qNum = qParticipant.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      const isQuotingBot = qParticipant === botJid || qParticipant === botLid || (botNum && qNum === botNum) || (botLidNum && qNum === botLidNum);
-      if (!isQuotingBot && qNum) quotedAuthor = `@${qNum}`;
+      isQuotingBot = qParticipant === botJid || qParticipant === botLid || (botNum && qNum === botNum) || (botLidNum && qNum === botLidNum);
+      
+      if (!isQuotingBot) {
+        const resolved = await resolveParticipant(sock, from, qParticipant);
+        const resolvedNum = resolved?.displayNum || qNum;
+        const qName = resolved?.name || memoryEngine.getParticipantName(from, qParticipant) || memoryEngine.getParticipantName(from, resolved?.phoneJid) || '';
+        quotedAuthor = qName ? `${qName} (@${resolvedNum})` : `@${resolvedNum}`;
+      }
     }
 
     if (contextInfo?.quotedMessage) {
@@ -595,12 +610,18 @@ module.exports = {
                             qm.extendedTextMessage?.text ||
                             qm.imageMessage?.caption ||
                             qm.videoMessage?.caption || '').trim();
-      if (quotedContent || quotedAuthor) {
-        const snippet = quotedContent.length > 200 ? `${quotedContent.slice(0, 200)}…` : quotedContent;
-        userPromptParts.push(`[Respondendo a ${quotedAuthor || 'mensagem'}${snippet ? `: "${snippet}"` : ''}]`);
+      const snippet = quotedContent.length > 200 ? `${quotedContent.slice(0, 200)}…` : quotedContent;
+
+      if (isQuotingBot) {
+        userPromptParts.push(`[Respondendo à mensagem anterior do próprio bot (Hermes): "${snippet}"]`);
+      } else if (quotedAuthor) {
+        userPromptParts.push(`[Respondendo a ${quotedAuthor}: "${snippet}"]`);
+        userPromptParts.push(`[Alvo da mensagem citada: ${quotedAuthor}]`);
+      } else if (snippet) {
+        userPromptParts.push(`[Respondendo a mensagem: "${snippet}"]`);
       }
-    } else if (quotedAuthor) {
-      userPromptParts.push(`[Respondendo a ${quotedAuthor}]`);
+    } else if (quotedAuthor && !isQuotingBot) {
+      userPromptParts.push(`[Alvo da mensagem citada: ${quotedAuthor}]`);
     }
 
     // Histórico recente (últimas 50 mensagens do SQLite) ANTES de gravar a pergunta atual (sem duplicação)
