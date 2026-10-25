@@ -673,6 +673,45 @@ module.exports = {
       userPromptParts.push(`[Perfil Cultural do Grupo]: ${cultureParts.join(' | ')}`);
     }
 
+    // ── Cross-inference local (Group Soul) ── zero custo de API ─────────────
+    // Liga os @mentions e palavras-chave do texto a fatos/regras culturais
+    // conhecidos ANTES de chamar a DeepSeek, injetando só o que é relevante.
+    const crossRefs = [];
+
+    // 1. @menções → fatos/apelidos cadastrados
+    if (targetMentions && targetMentions.length > 0 &&
+        culture.facts && Object.keys(culture.facts).length > 0) {
+      for (const mentionJid of targetMentions) {
+        const resolvedName = (memoryEngine.getParticipantName(from, mentionJid) || '').toLowerCase();
+        if (resolvedName) {
+          for (const [key, value] of Object.entries(culture.facts)) {
+            const lowerKey = key.toLowerCase();
+            if (resolvedName.includes(lowerKey) || lowerKey.includes(resolvedName)) {
+              crossRefs.push(`${resolvedName} → ${key}: ${value}`);
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Texto da mensagem → regras tácitas (≥2 palavras-chave com >4 chars)
+    if (Array.isArray(culture.rules) && culture.rules.length > 0 && queryText) {
+      const lowerQuery = queryText.toLowerCase();
+      for (const rule of culture.rules) {
+        const ruleKeywords = rule.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+        if (ruleKeywords.length === 0) continue;
+        const matches = ruleKeywords.filter(kw => lowerQuery.includes(kw));
+        if (matches.length >= 2) {
+          crossRefs.push(`Regra aplicável: ${rule}`);
+        }
+      }
+    }
+
+    if (crossRefs.length > 0) {
+      userPromptParts.push(`[Contexto Relevante]: ${crossRefs.join(' | ')}`);
+    }
+    // ── fim cross-inference ───────────────────────────────────────────────
+
     // Histórico recente (últimas mensagens do SQLite) ANTES de gravar a pergunta atual (sem duplicação)
     if (memoryEnabled) {
       const historyText = memoryEngine.getFormattedHistory(from, MAX_HISTORY_MESSAGES);
