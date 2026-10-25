@@ -62,8 +62,8 @@ async function main() {
   const isSetupForced = process.argv.includes('--setup');
   const envExists = fs.existsSync(path.resolve(process.cwd(), '.env'));
 
-  // Suporte a comando de reparo de sessões corrompidas (--fix-sessions)
-  if (process.argv.includes('--fix-sessions')) {
+  // Suporte a comando de reparo de sessões corrompidas (--fix-sessions ou env FIX_SESSIONS)
+  if (process.argv.includes('--fix-sessions') || process.env.FIX_SESSIONS === 'true') {
     const authDir = path.resolve(process.cwd(), 'src', 'auth');
     if (fs.existsSync(authDir)) {
       const files = fs.readdirSync(authDir);
