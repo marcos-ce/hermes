@@ -1270,6 +1270,12 @@ class ToolRegistry {
 
           const reminderText = String(args.text || args.message || 'Lembrete agendado pelo administrador').trim();
 
+          const creatorData = await resolveParticipant(sock, from, sender);
+          const creatorNum = creatorData?.displayNum || sender.replace(/@.*$/, '').replace(/\D/g, '');
+          const creatorDisplay = creatorData?.displayUser || creatorNum;
+          const creatorJid = creatorData?.groupJid || cleanJid(sender);
+          const creatorPhoneJid = creatorData?.phoneJid || null;
+
           const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
           const newId = String(maxId + 1);
           const newEvent = {
@@ -1277,7 +1283,10 @@ class ToolRegistry {
             date: parsedDate,
             time: parsedTime,
             text: reminderText,
-            createdBy: sender.replace(/@.*$/, ''),
+            createdBy: creatorNum,
+            creatorDisplay,
+            creatorJid,
+            creatorPhoneJid,
             createdAt: Date.now(),
             executed: false
           };
@@ -1297,9 +1306,21 @@ class ToolRegistry {
                   ev.executedAt = Date.now();
                   configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
 
+                  let creatorMention = '';
+                  let eventCreatorJid = ev.creatorJid || '';
+                  if (!eventCreatorJid && ev.createdBy) {
+                    eventCreatorJid = ev.createdBy.includes('@') ? ev.createdBy : `${ev.createdBy}@s.whatsapp.net`;
+                  }
+
+                  const eventCreatorDisplay = ev.creatorDisplay || ev.createdBy || '';
+                  if (eventCreatorDisplay) {
+                    creatorMention = t(lang, 'calendar.creator_tag', { user: eventCreatorDisplay });
+                  }
+
                   const body = t(lang, 'calendar.event_announcement', {
                     time: parsedTime,
-                    text: reminderText
+                    text: reminderText,
+                    creator: creatorMention
                   });
 
                   let mentions = [];
@@ -1314,6 +1335,13 @@ class ToolRegistry {
                       });
                       mentions = Array.from(allMembers);
                     }
+                  }
+
+                  if (eventCreatorJid && !mentions.includes(eventCreatorJid)) {
+                    mentions.push(eventCreatorJid);
+                  }
+                  if (ev.creatorPhoneJid && !mentions.includes(ev.creatorPhoneJid)) {
+                    mentions.push(ev.creatorPhoneJid);
                   }
 
                   await sendSafeMessage(sock, from, { text: body, mentions });

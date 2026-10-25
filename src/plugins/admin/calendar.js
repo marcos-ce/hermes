@@ -2,7 +2,7 @@ const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const settings = require('../../config/settings');
 const { sendSafeMessage } = require('../../utils/antiBan');
-const { getGroupMetadata } = require('../../utils/jidResolver');
+const { getGroupMetadata, resolveParticipant, cleanJid } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 
 /**
@@ -162,9 +162,21 @@ module.exports = {
             type: 'calendar_event',
             groupJid,
             run: async () => {
+              let creatorMention = '';
+              let creatorJid = event.creatorJid || '';
+              if (!creatorJid && event.createdBy) {
+                creatorJid = event.createdBy.includes('@') ? event.createdBy : `${event.createdBy}@s.whatsapp.net`;
+              }
+
+              const creatorDisplay = event.creatorDisplay || event.createdBy || '';
+              if (creatorDisplay) {
+                creatorMention = t(lang, 'calendar.creator_tag', { user: creatorDisplay });
+              }
+
               const body = t(lang, 'calendar.event_announcement', {
                 time: eventTime,
-                text: eventText
+                text: eventText,
+                creator: creatorMention
               });
 
               let mentions = [];
@@ -179,6 +191,13 @@ module.exports = {
                   });
                   mentions = Array.from(allMembers);
                 }
+              }
+
+              if (creatorJid && !mentions.includes(creatorJid)) {
+                mentions.push(creatorJid);
+              }
+              if (event.creatorPhoneJid && !mentions.includes(event.creatorPhoneJid)) {
+                mentions.push(event.creatorPhoneJid);
               }
 
               await sendSafeMessage(sock, groupJid, { text: body, mentions });
@@ -229,6 +248,12 @@ module.exports = {
         return reply(translate('calendar.invalid_format', { prefix }));
       }
 
+      const creatorData = await resolveParticipant(sock, from, sender);
+      const creatorNum = creatorData?.displayNum || sender.replace(/@.*$/, '').replace(/\D/g, '');
+      const creatorDisplay = creatorData?.displayUser || creatorNum;
+      const creatorJid = creatorData?.groupJid || cleanJid(sender);
+      const creatorPhoneJid = creatorData?.phoneJid || null;
+
       const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
       const newId = String(maxId + 1);
       const newEvent = {
@@ -236,7 +261,10 @@ module.exports = {
         date: parsedDate,
         time: parsedTime,
         text: eventText,
-        createdBy: sender.replace(/@.*$/, ''),
+        createdBy: creatorNum,
+        creatorDisplay,
+        creatorJid,
+        creatorPhoneJid,
         createdAt: Date.now(),
         executed: false
       };
