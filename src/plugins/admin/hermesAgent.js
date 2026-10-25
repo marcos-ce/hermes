@@ -10,6 +10,7 @@ const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
 const logger = require('../../utils/logger');
+const pollTracker = require('../../utils/pollTracker');
 const { t: tr } = require('../../utils/i18n');
 
 // Cache em memória para debounce de alertas de erro enviados ao dono (10 min de cooldown)
@@ -24,7 +25,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -642,20 +643,43 @@ module.exports = {
       }
     }
 
-    if (contextInfo?.quotedMessage) {
-      const qm = contextInfo.quotedMessage;
-      const quotedContent = (qm.conversation ||
-                            qm.extendedTextMessage?.text ||
-                            qm.imageMessage?.caption ||
-                            qm.videoMessage?.caption || '').trim();
-      const snippet = quotedContent.length > 200 ? `${quotedContent.slice(0, 200)}…` : quotedContent;
+    const rawQuotedMsg = contextInfo?.quotedMessage;
+    const unwrappedQuoted = rawQuotedMsg?.ephemeralMessage?.message ||
+                            rawQuotedMsg?.viewOnceMessage?.message ||
+                            rawQuotedMsg?.viewOnceMessageV2?.message ||
+                            rawQuotedMsg?.documentWithCaptionMessage?.message ||
+                            rawQuotedMsg;
+
+    if (unwrappedQuoted) {
+      const isQuotedImage = Boolean(unwrappedQuoted.imageMessage || unwrappedQuoted.stickerMessage);
+      const isQuotedVideo = Boolean(unwrappedQuoted.videoMessage);
+      const quotedPoll = unwrappedQuoted.pollCreationMessage ||
+                         unwrappedQuoted.pollCreationMessageV2 ||
+                         unwrappedQuoted.pollCreationMessageV3;
+
+      const quotedContent = (unwrappedQuoted.conversation ||
+                            unwrappedQuoted.extendedTextMessage?.text ||
+                            unwrappedQuoted.imageMessage?.caption ||
+                            unwrappedQuoted.videoMessage?.caption ||
+                            '').trim();
+      const snippet = quotedContent.length > 250 ? `${quotedContent.slice(0, 250)}…` : quotedContent;
+
+      if (isQuotedImage) {
+        userPromptParts.push(`[A mensagem citada contém uma FOTO/IMAGEM${snippet ? ` com legenda: "${snippet}"` : ' (sem legenda)'}]`);
+      } else if (isQuotedVideo) {
+        userPromptParts.push(`[A mensagem citada contém um VÍDEO${snippet ? ` com legenda: "${snippet}"` : ''}]`);
+      } else if (quotedPoll) {
+        userPromptParts.push(`[A mensagem citada é uma ENQUETE: "${quotedPoll.name || 'Enquete'}"]`);
+      }
 
       if (isQuotingBot) {
         userPromptParts.push(`[Respondendo à mensagem anterior do próprio bot (Hermes): "${snippet}"]`);
       } else if (quotedAuthor) {
-        userPromptParts.push(`[Respondendo a ${quotedAuthor}: "${snippet}"]`);
+        if (snippet && !isQuotedImage) {
+          userPromptParts.push(`[Respondendo a ${quotedAuthor}: "${snippet}"]`);
+        }
         userPromptParts.push(`[Alvo da mensagem citada: ${quotedAuthor}]`);
-      } else if (snippet) {
+      } else if (snippet && !isQuotedImage) {
         userPromptParts.push(`[Respondendo a mensagem: "${snippet}"]`);
       }
     } else if (quotedAuthor && !isQuotingBot) {
@@ -776,11 +800,20 @@ module.exports = {
         .filter(([, w]) => w && w.count > 0)
         .map(([jid, w]) => `@${jid.replace(/@.*$/, '')}(${w.count}/${warnCfg.maxWarns || 3})`);
 
+      const pollData = pollTracker.getPollResults(from);
+      let pollSummary = 'nenhuma';
+      if (pollData) {
+        const winnerDesc = pollData.winner
+          ? `vencedor="${pollData.winner.name}"(${pollData.winner.votes} votos)`
+          : (pollData.isTie ? 'empate' : 'sem votos');
+        pollSummary = `"${pollData.title}" (${pollData.summary} | ${winnerDesc})`;
+      }
+
       userPromptParts.push(
         `[Estado] idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
         `antilink=${antilinkCfg.action || 'delete'},liberados=${antilinkDoms} | ` +
         `antiflood=${antifloodCfg.maxMessages || 6}msg/5s,${antifloodCfg.maxChars || 2500}chars,${antifloodCfg.action || 'warn'} | ` +
-        `antifake=${antifakeDdis} | agenda=${calSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}` +
+        `antifake=${antifakeDdis} | agenda=${calSummary} | enquete=${pollSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}` +
         (groupDesc && /descr|regra|bio/i.test(queryText || '') ? ` | descrição="${groupDesc.slice(0, 300)}"` : '')
       );
     }

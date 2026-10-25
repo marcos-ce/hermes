@@ -216,7 +216,7 @@ class MemoryEngine {
       .map(m => {
         const body = m.text.length > 200 ? `${m.text.slice(0, 200)}…` : m.text;
         if (m.sender === 'hermes@bot') {
-          return `Hermes: ${body}`;
+          return `[m${m.id}] Hermes: ${body}`;
         }
         const num = (m.sender || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
         const label = (m.name || '').trim() || (num ? `…${num.slice(-4)}` : 'Membro');
@@ -249,7 +249,7 @@ class MemoryEngine {
       }
     }
 
-    if (!row || !row.sender || row.sender === 'hermes@bot') return null;
+    if (!row || !row.sender) return null;
     return row;
   }
 

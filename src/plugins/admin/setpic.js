@@ -56,11 +56,26 @@ async function extractImageBuffer(sock, msg) {
         reuploadRequest: sock?.updateMediaMessage
       }
     );
-    return buffer;
+    if (buffer && buffer.length > 0) return buffer;
   } catch (err) {
-    logger.error({ err }, 'Erro ao baixar imagem para foto de perfil do grupo');
-    return null;
+    logger.warn({ err: err?.message || err }, 'Tentando fallback de thumbnail para foto do grupo');
   }
+
+  // Fallback: em mensagens citadas no WhatsApp, a URL de mídia pode vir ausente,
+  // mas o jpegThumbnail preserva o buffer da imagem para uso imediato
+  const imgPayload = targetMsg.message?.imageMessage || unwrappedQuoted?.imageMessage || realMsg?.imageMessage;
+  if (imgPayload?.jpegThumbnail) {
+    try {
+      const thumbBuf = Buffer.isBuffer(imgPayload.jpegThumbnail)
+        ? imgPayload.jpegThumbnail
+        : Buffer.from(imgPayload.jpegThumbnail);
+      if (thumbBuf && thumbBuf.length > 0) {
+        return thumbBuf;
+      }
+    } catch (_) {}
+  }
+
+  return null;
 }
 
 module.exports = {

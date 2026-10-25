@@ -6,6 +6,7 @@ const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
 const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid } = require('../utils/jidResolver');
 const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
+const pollTracker = require('../utils/pollTracker');
 const memoryEngine = require('./memoryEngine');
 const { parseRelativeTime } = require('./timeParser');
 
@@ -301,6 +302,18 @@ const TOOLS = [
           multipleAnswers: { type: 'boolean', description: 'True para múltipla escolha, false para voto único.' }
         },
         required: ['title', 'options']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_poll_results',
+      description: 'Consulta o resultado, opções, votos computados e vencedor da enquete mais recente do grupo.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
       }
     }
   },
@@ -1086,11 +1099,15 @@ class ToolRegistry {
                             realMsg?.imageMessage?.contextInfo ||
                             msg?.message?.extendedTextMessage?.contextInfo;
 
-        let deleteId = contextInfo?.stanzaId;
-        let deleteParticipant = contextInfo?.participant;
+        let deleteId = null;
+        let deleteParticipant = null;
 
-        // Ref do histórico ("m123"): chave real (id + participante) vem do SQLite; IDs inventados são ignorados
-        if (args.messageId && /^m\d{1,9}$/i.test(String(args.messageId).trim())) {
+        // 1. Prioridade absoluta: mensagem citada diretamente no chat (reply)
+        if (contextInfo?.stanzaId) {
+          deleteId = contextInfo.stanzaId;
+          deleteParticipant = contextInfo.participant;
+        } else if (args.messageId && /^m\d{1,9}$/i.test(String(args.messageId).trim())) {
+          // 2. Ref do histórico ("m123") quando NÃO houve citação direta
           const refData = memoryEngine.getMessageByRef(from, String(args.messageId).trim());
           if (!refData || !refData.msgId) {
             return { success: false, error: t(lang, 'hermes.msg_not_found') };
@@ -1465,7 +1482,38 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
-        const newDesc = typeof args.description === 'string' ? args.description.trim() : '';
+        const realMsg = msg?.message?.ephemeralMessage?.message ||
+                        msg?.message?.viewOnceMessage?.message ||
+                        msg?.message?.viewOnceMessageV2?.message ||
+                        msg?.message?.documentWithCaptionMessage?.message ||
+                        msg?.message;
+
+        const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                            realMsg?.imageMessage?.contextInfo ||
+                            realMsg?.videoMessage?.contextInfo ||
+                            realMsg?.documentMessage?.contextInfo;
+
+        const rawQuoted = contextInfo?.quotedMessage;
+        const unwrappedQuoted = rawQuoted?.ephemeralMessage?.message ||
+                                rawQuoted?.viewOnceMessage?.message ||
+                                rawQuoted?.viewOnceMessageV2?.message ||
+                                rawQuoted?.documentWithCaptionMessage?.message ||
+                                rawQuoted;
+
+        const quotedText = (unwrappedQuoted?.conversation ||
+                            unwrappedQuoted?.extendedTextMessage?.text ||
+                            unwrappedQuoted?.imageMessage?.caption ||
+                            unwrappedQuoted?.videoMessage?.caption ||
+                            '').trim();
+
+        let newDesc = typeof args.description === 'string' ? args.description.trim() : '';
+
+        // Se o admin falou "coloque isso de descrição" respondendo a uma mensagem
+        const isReferential = !newDesc || /^(isso|isto|essa|esse|esta|este|o texto acima|a mensagem citada|a resposta acima|o que está citado)$/i.test(newDesc);
+        if (isReferential && quotedText.length > 0) {
+          newDesc = quotedText;
+        }
+
         const isClearing = !newDesc || ['limpar', 'clear', 'remover', 'del', 'apagar', '-'].includes(newDesc.toLowerCase());
 
         try {
@@ -1530,34 +1578,30 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
+        const realMsg = msg?.message?.ephemeralMessage?.message ||
+                        msg?.message?.viewOnceMessage?.message ||
+                        msg?.message?.viewOnceMessageV2?.message ||
+                        msg?.message?.documentWithCaptionMessage?.message ||
+                        msg?.message;
+
+        const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                            realMsg?.imageMessage?.contextInfo ||
+                            realMsg?.videoMessage?.contextInfo ||
+                            realMsg?.documentMessage?.contextInfo;
+
         let targetStanzaId = null;
         let targetParticipant = null;
 
-        // 1. Ref explícito do histórico (ex: "m123")
-        if (args.messageId && /^m\d{1,9}$/i.test(args.messageId.trim())) {
+        // 1. Prioridade absoluta: mensagem citada diretamente no chat (reply)
+        if (contextInfo?.stanzaId) {
+          targetStanzaId = contextInfo.stanzaId;
+          targetParticipant = contextInfo.participant;
+        } else if (args.messageId && /^m\d{1,9}$/i.test(args.messageId.trim())) {
+          // 2. Ref explícito do histórico (ex: "m123") quando NÃO houve citação física
           const refData = memoryEngine.getMessageByRef(from, args.messageId.trim());
           if (refData?.msgId) {
             targetStanzaId = refData.msgId;
             targetParticipant = refData.participant || refData.sender;
-          }
-        }
-
-        // 2. Fallback: mensagem respondida (quoted)
-        if (!targetStanzaId) {
-          const realMsg = msg?.message?.ephemeralMessage?.message ||
-                          msg?.message?.viewOnceMessage?.message ||
-                          msg?.message?.viewOnceMessageV2?.message ||
-                          msg?.message?.documentWithCaptionMessage?.message ||
-                          msg?.message;
-
-          const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
-                              realMsg?.imageMessage?.contextInfo ||
-                              realMsg?.videoMessage?.contextInfo ||
-                              realMsg?.documentMessage?.contextInfo;
-
-          if (contextInfo?.stanzaId) {
-            targetStanzaId = contextInfo.stanzaId;
-            targetParticipant = contextInfo.participant;
           }
         }
 
@@ -1567,14 +1611,22 @@ class ToolRegistry {
 
         const botJid = cleanJid(sock?.user?.id || '');
         const botLid = cleanJid(sock?.user?.lid || '');
+        const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
         const cleanParticipant = cleanJid(targetParticipant || '');
-        const isFromMe = cleanParticipant === botJid || cleanParticipant === botLid;
+        const cleanParticipantNum = cleanParticipant.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+        const isFromMe = cleanParticipant === botJid ||
+                         cleanParticipant === botLid ||
+                         (botNum && cleanParticipantNum === botNum) ||
+                         (botLidNum && cleanParticipantNum === botLidNum);
 
         const targetKey = {
           remoteJid: from,
           fromMe: isFromMe,
           id: targetStanzaId,
-          participant: targetParticipant || (isFromMe ? (sock?.user?.id || undefined) : undefined)
+          participant: isFromMe ? (cleanParticipant || botJid || undefined) : (targetParticipant || undefined)
         };
 
         const action = args.action || 'pin';
@@ -1633,13 +1685,17 @@ class ToolRegistry {
         }
 
         try {
-          await sendSafeMessage(sock, from, {
+          const sent = await sendSafeMessage(sock, from, {
             poll: {
               name: title,
               values: options.slice(0, 12),
               selectableCount: isMultiple ? 0 : 1
             }
           });
+
+          if (sent?.key?.id) {
+            pollTracker.savePoll(from, sent);
+          }
 
           const typeLabel = isMultiple ? t(lang, 'poll.type_multi') : t(lang, 'poll.type_single');
           const confirmMsg = t(lang, 'poll.success', {
@@ -1659,6 +1715,25 @@ class ToolRegistry {
             error: t(lang, 'poll.error')
           };
         }
+      }
+
+      case 'get_poll_results': {
+        const pollResults = pollTracker.getPollResults(from);
+        if (!pollResults) {
+          return {
+            success: true,
+            message: 'Nenhuma enquete recente com votos registrados foi encontrada neste grupo.'
+          };
+        }
+
+        const winnerStr = pollResults.winner
+          ? `🏆 Vencedor atual: "${pollResults.winner.name}" com ${pollResults.winner.votes} voto(s)`
+          : (pollResults.isTie ? '⚖️ Empate entre as opções mais votadas' : 'Nenhum voto computado ainda');
+
+        return {
+          success: true,
+          message: `📊 *Resultado da Enquete: "${pollResults.title}"*\n\n${pollResults.summary.split(' | ').map(s => `• ${s}`).join('\n')}\n\n${winnerStr}\n(Total de votos apurados: ${pollResults.totalVotes})`
+        };
       }
 
       case 'learn_group_fact': {

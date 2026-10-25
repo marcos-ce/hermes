@@ -1,4 +1,4 @@
-﻿const { 
+const { 
   default: makeWASocket, 
   useMultiFileAuthState, 
   DisconnectReason, 
@@ -11,6 +11,7 @@ const settings = require('../config/settings');
 const logger = require('../utils/logger');
 const { groupCache } = require('../utils/cache');
 const { registerParticipantLid } = require('../utils/jidResolver');
+const pollTracker = require('../utils/pollTracker');
 const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
@@ -138,7 +139,10 @@ async function connectBot(options = {}) {
     msgRetryCounterCache, // Evita tempestades de retentativas de decriptografia
     getMessage: async (key) => {
       const id = key?.id;
-      if (id && msgStore.has(id)) return msgStore.get(id);
+      if (!id) return undefined;
+      if (msgStore.has(id)) return msgStore.get(id);
+      const poll = pollTracker.getPoll(id);
+      if (poll?.message) return poll.message;
       return undefined;
     },
     shouldIgnoreJid: (jid) => typeof jid === 'string' && (jid.endsWith('@newsletter') || jid.endsWith('@broadcast')),
@@ -293,6 +297,22 @@ async function connectBot(options = {}) {
       await handleParticipantsUpdate(sock, update);
     } catch (err) {
       logger.error({ err }, 'Erro no handler de participantes de grupo');
+    }
+  });
+
+  // Atualização de mensagens (votos de enquetes, reações e status)
+  sock.ev.on('messages.update', (updates) => {
+    try {
+      if (Array.isArray(updates)) {
+        const meId = sock?.user?.id;
+        for (const u of updates) {
+          if (u.update?.pollUpdates) {
+            pollTracker.handlePollUpdate(u.key, u.update.pollUpdates, meId);
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Erro ao processar messages.update no pollTracker');
     }
   });
 

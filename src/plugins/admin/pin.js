@@ -36,14 +36,22 @@ module.exports = {
 
     const botJid = cleanJid(sock?.user?.id || '');
     const botLid = cleanJid(sock?.user?.lid || '');
+    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
     const participantJid = cleanJid(contextInfo?.participant || '');
-    const isFromMe = participantJid === botJid || participantJid === botLid;
+    const participantNum = participantJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+    const isFromMe = participantJid === botJid ||
+                     participantJid === botLid ||
+                     (botNum && participantNum === botNum) ||
+                     (botLidNum && participantNum === botLidNum);
 
     const targetKey = {
       remoteJid: from,
       fromMe: isFromMe,
       id: stanzaId,
-      participant: contextInfo?.participant || (isFromMe ? (sock?.user?.id || undefined) : undefined)
+      participant: isFromMe ? (participantJid || botJid || undefined) : (contextInfo?.participant || undefined)
     };
 
     const cmdName = (command || '').toLowerCase();

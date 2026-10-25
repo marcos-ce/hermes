@@ -1,4 +1,5 @@
 const { sendSafeMessage } = require('../../utils/antiBan');
+const pollTracker = require('../../utils/pollTracker');
 const logger = require('../../utils/logger');
 
 /**
@@ -88,13 +89,16 @@ module.exports = {
     const selectableCount = parsed.isMultiple ? 0 : 1;
 
     try {
-      await sendSafeMessage(sock, from, {
+      const sent = await sendSafeMessage(sock, from, {
         poll: {
           name: parsed.title,
           values: finalOptions,
           selectableCount
         }
       });
+      if (sent?.key?.id) {
+        pollTracker.savePoll(from, sent);
+      }
     } catch (err) {
       logger.error({ err, from, title: parsed.title }, 'Erro ao criar enquete via comando');
       return reply(t('poll.error'));
