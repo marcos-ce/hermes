@@ -1,4 +1,4 @@
-const configManager = require('../../core/configManager');
+﻿const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { sendSafeMessage } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
@@ -60,7 +60,7 @@ module.exports = {
     if (closeTime && closeTime === currentHHMM && closeTime !== '0') {
       const execKey = `${groupJid}:close:${currentDateKey}:${currentHHMM}`;
       if (!lastExecuted.has(execKey)) {
-        lastExecuted.add(execKey);
+        lastExecuted.set(execKey, Date.now());
         queueTask({
           type: 'schedule_close',
           groupJid,
@@ -76,7 +76,7 @@ module.exports = {
     if (openTime && openTime === currentHHMM && openTime !== '0') {
       const execKey = `${groupJid}:open:${currentDateKey}:${currentHHMM}`;
       if (!lastExecuted.has(execKey)) {
-        lastExecuted.add(execKey);
+        lastExecuted.set(execKey, Date.now());
         queueTask({
           type: 'schedule_open',
           groupJid,
@@ -152,3 +152,4 @@ module.exports = {
     return reply(help);
   }
 };
+

@@ -13,6 +13,7 @@ class MemoryEngine {
     this.db = null;
     this.writeCounters = new Map();
     this.fallbackStore = new Map();
+    this.fallbackSeq = 0;
     this.init();
   }
 
@@ -43,17 +44,30 @@ class MemoryEngine {
         CREATE INDEX IF NOT EXISTS idx_group_timestamp ON messages(group_jid, timestamp);
       `);
 
+      // Migração não-destrutiva: colunas extras para referenciar mensagens (apagar/banir por ref "mNN")
+      for (const col of ['msg_id TEXT', 'participant TEXT']) {
+        try {
+          this.db.exec(`ALTER TABLE messages ADD COLUMN ${col}`);
+        } catch (_) { /* coluna já existe */ }
+      }
+
       this.insertStmt = this.db.prepare(`
-        INSERT INTO messages (group_jid, sender_jid, sender_name, text, timestamp)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO messages (group_jid, sender_jid, sender_name, text, timestamp, msg_id, participant)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
       this.selectStmt = this.db.prepare(`
-        SELECT id, sender_jid, sender_name, text, timestamp
+        SELECT id, sender_jid, sender_name, text, timestamp, msg_id, participant
         FROM messages
         WHERE group_jid = ?
         ORDER BY id DESC
         LIMIT ?
+      `);
+
+      this.selectByRefStmt = this.db.prepare(`
+        SELECT id, sender_jid, sender_name, msg_id, participant
+        FROM messages
+        WHERE group_jid = ? AND id = ?
       `);
 
       this.cleanupStmt = this.db.prepare(`
@@ -84,8 +98,9 @@ class MemoryEngine {
    * @param {string} text 
    * @param {number} timestamp 
    * @param {string} [senderName] 
+   * @param {{ msgId?: string, participant?: string }} [extra] ID da mensagem e participante bruto (para apagar por ref)
    */
-  saveMessage(groupJid, senderJid, text, timestamp = null, senderName = '') {
+  saveMessage(groupJid, senderJid, text, timestamp = null, senderName = '', extra = {}) {
     if (!groupJid || !text) return;
 
     const cleanText = text.trim();
@@ -111,11 +126,13 @@ class MemoryEngine {
         this.fallbackStore.set(groupJid, list);
       }
       list.push({
-        id: list.length + 1,
+        id: ++this.fallbackSeq,
         sender: senderJid,
         name: senderName || (senderJid || '').replace(/@.*$/, '').replace(/\D/g, ''),
         text: cleanText,
-        timestamp: ts
+        timestamp: ts,
+        msgId: extra?.msgId || null,
+        participant: extra?.participant || null
       });
       while (list.length > 50) {
         list.shift();
@@ -124,7 +141,15 @@ class MemoryEngine {
     }
 
     try {
-      this.insertStmt.run(groupJid, senderJid, senderName || '', cleanText, ts);
+      this.insertStmt.run(
+        groupJid,
+        senderJid,
+        senderName || '',
+        cleanText,
+        ts,
+        extra?.msgId || null,
+        extra?.participant || null
+      );
 
       // 2. LIMPEZA AMORTIZADA DE ELITE (Amortized Cleanup):
       // Em vez de executar um DELETE com subquery a cada mensagem recebida,
@@ -163,7 +188,9 @@ class MemoryEngine {
         sender: r.sender_jid,
         name: r.sender_name || r.sender_jid.replace(/@.*$/, '').replace(/\D/g, ''),
         text: r.text,
-        timestamp: r.timestamp
+        timestamp: r.timestamp,
+        msgId: r.msg_id || null,
+        participant: r.participant || null
       }));
     } catch (err) {
       logger.error({ err, groupJid }, 'Erro ao consultar mensagens da memória local');
@@ -178,22 +205,51 @@ class MemoryEngine {
    * @param {number} limit 
    * @returns {string}
    */
-  getFormattedHistory(groupJid, limit = 25) {
+  getFormattedHistory(groupJid, limit = 50) {
     const list = this.getRecentMessages(groupJid, limit);
     if (!list || list.length === 0) return '';
 
+    // Formato compacto (economia de tokens): "[mID] Nome: texto".
+    // O ref "mID" substitui JIDs/IDs longos: o modelo só devolve "m123" e o código resolve autor e chave real.
     return list
       .map(m => {
+        const body = m.text.length > 200 ? `${m.text.slice(0, 200)}…` : m.text;
         if (m.sender === 'hermes@bot') {
-          return `Hermes (Você): ${m.text}`;
+          return `Hermes: ${body}`;
         }
         const num = (m.sender || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-        const label = m.name && num && m.name !== num
-          ? `${m.name} (@${num})`
-          : (m.name || (num ? `@${num}` : 'Membro'));
-        return `${label}: ${m.text}`;
+        const label = (m.name || '').trim() || (num ? `…${num.slice(-4)}` : 'Membro');
+        return `[m${m.id}] ${label}: ${body}`;
       })
       .join('\n');
+  }
+
+  /**
+   * Resolve um ref "mNN" (ou número) do histórico em autor e chave real da mensagem.
+   * Valida que o ref pertence ao grupo informado (anti-alucinação do modelo).
+   * @param {string} groupJid
+   * @param {string|number} ref
+   * @returns {{ sender: string, name: string, msgId: string|null, participant: string|null }|null}
+   */
+  getMessageByRef(groupJid, ref) {
+    const id = parseInt(String(ref || '').replace(/^m/i, ''), 10);
+    if (!groupJid || !Number.isFinite(id) || id <= 0) return null;
+
+    let row = null;
+    if (!this.db) {
+      const found = (this.fallbackStore.get(groupJid) || []).find(m => m.id === id);
+      if (found) row = { sender: found.sender, name: found.name, msgId: found.msgId, participant: found.participant };
+    } else {
+      try {
+        const r = this.selectByRefStmt.get(groupJid, id);
+        if (r) row = { sender: r.sender_jid, name: r.sender_name, msgId: r.msg_id || null, participant: r.participant || null };
+      } catch (err) {
+        logger.warn({ err, groupJid }, 'Falha ao resolver ref de mensagem');
+      }
+    }
+
+    if (!row || !row.sender || row.sender === 'hermes@bot') return null;
+    return row;
   }
 
   /**

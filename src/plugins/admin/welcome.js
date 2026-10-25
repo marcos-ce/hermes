@@ -1,4 +1,4 @@
-const configManager = require('../../core/configManager');
+﻿const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { getGroupMetadata } = require('../../utils/jidResolver');
 const { sendSafeMessage, safeDelete } = require('../../utils/antiBan');
@@ -77,10 +77,13 @@ module.exports = {
         .replace(/\{group\}/g, groupName)
         .replace(/\{desc\}/g, groupDesc);
 
-      // Tenta obter a foto do perfil do grupo para enriquecer as boas-vindas
+      // Tenta obter a foto do perfil do grupo com timeout de 3s para não bloquear o pipeline
       let ppUrl = null;
       try {
-        ppUrl = await sock.profilePictureUrl(groupJid, 'image');
+        ppUrl = await Promise.race([
+          sock.profilePictureUrl(groupJid, 'image'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+        ]);
       } catch (_) {
         ppUrl = null;
       }
@@ -200,3 +203,4 @@ module.exports = {
     return reply(help);
   }
 };
+

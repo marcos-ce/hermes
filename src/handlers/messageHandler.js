@@ -1,4 +1,4 @@
-const { wizardCache } = require('../utils/cache');
+﻿const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
 const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
@@ -192,7 +192,8 @@ async function processSingleMessage(sock, msg) {
     }
   }
 
-  const [commandTrigger, ...args] = rawBody ? rawBody.split(/\s+/) : ['', []];
+  const parts = rawBody ? rawBody.split(/\s+/).filter(Boolean) : [];
+  const [commandTrigger = '', ...args] = parts;
   const commandArgsText = commandTrigger ? rawBody.slice(commandTrigger.length).trim() : '';
   const plugin = commandTrigger ? pluginLoader.findCommand(commandTrigger) : null;
 
@@ -241,10 +242,7 @@ async function processSingleMessage(sock, msg) {
       }
     }
 
-    // Registra atividade recente do grupo para o AutoMsg
-    configManager.touchGroupActivity(from);
-  }
-
+  } // fim do if (isGroup) — Verificação de Grupo Ativo / Licença SaaS
   // ========================================================
   // 3. Hooks Passivos de Proteção (onMessage)
   // ========================================================
@@ -270,6 +268,11 @@ async function processSingleMessage(sock, msg) {
         logger.error({ err, plugin: hookPlugin.name }, 'Erro no hook onMessage');
       }
     }
+  }
+
+  // Registra atividade recente do grupo para o AutoMsg (após hooks, só se a msg passou pelos filtros)
+  if (isGroup) {
+    configManager.touchGroupActivity(from);
   }
 
   // ========================================================
@@ -365,6 +368,9 @@ async function processSingleMessage(sock, msg) {
     logger.error({ err, command: commandTrigger, from, sender }, 'Erro ao executar comando');
     await reply(translate('common.error'));
   }
+
+  // Registra a mensagem no mini-store para suporte a re-decriptografia em reconexões (require lazy anti-circular)
+  try { require('../core/connection').storeMsgForRetry(msg); } catch (_) {}
 }
 
 module.exports = {

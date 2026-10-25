@@ -1,9 +1,11 @@
-const { wizardCache } = require('../utils/cache');
+﻿const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, safeDelete } = require('../utils/antiBan');
 const { cleanJid, getGroupMetadata } = require('../utils/jidResolver');
 const { t, resolveSchemaText } = require('../utils/i18n');
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
+// A-3: getSocket importado lazily (evita dependência circular na inicialização)
+// É usado apenas no listener de expiração de sessão.
 
 /**
  * Converte expressões humanas de tempo (ex: "3h", "3 horas", "30m", "1 dia", "30s") em minutos e segundos
@@ -985,7 +987,50 @@ class WizardEngine {
 }
 
 const wizardEngine = new WizardEngine();
-wizardEngine.parseHumanDuration = parseHumanDuration;
-wizardEngine.formatHumanDuration = formatHumanDuration;
-wizardEngine.formatFieldValue = formatFieldValue;
+
+// A-3: Listener de expiração de sessão — avisa o admin quando o wizard expira (TTL 180s)
+// sem que ele tenha respondido. Evita que a sessão morra em silêncio deixando prompts órfãos.
+wizardCache.on('expired', async (key, session) => {
+  try {
+    if (!session || !session.groupJid || !session.sender) return;
+    // Tipos de sessão que merecem notificação (wizard, config_menu, lang_selection, mute_selection)
+    if (!session.type) return;
+
+    const { getSocket } = require('./connection');
+    const sock = getSocket();
+    if (!sock) return;
+
+    const lang = configManager.getGroupLang(session.groupJid);
+    const timeoutMsg = t(lang, 'wizard.session_expired');
+
+    // Apaga prompts órfãos antes de notificar (limpeza do chat)
+    if (Array.isArray(session.promptKeys)) {
+      for (const pk of session.promptKeys) {
+        try {
+          const { safeDelete } = require('../utils/antiBan');
+          await safeDelete(sock, session.groupJid, pk);
+        } catch (_) {}
+      }
+    }
+    if (session.menuMsgKey) {
+      try {
+        const { safeDelete } = require('../utils/antiBan');
+        await safeDelete(sock, session.groupJid, session.menuMsgKey);
+      } catch (_) {}
+    }
+
+    // Envia aviso de expiração mencionando o admin
+    const { sendSafeMessage } = require('../utils/antiBan');
+    await sendSafeMessage(sock, session.groupJid, {
+      text: timeoutMsg,
+      mentions: [session.sender]
+    });
+  } catch (_) {}
+});
+
+// B-5: Funções utilitárias exportadas diretamente (não como propriedades de instância)
+// Isso evita que hot-reload que reinstancia WizardEngine perca essas referências.
 module.exports = wizardEngine;
+module.exports.parseHumanDuration = parseHumanDuration;
+module.exports.formatHumanDuration = formatHumanDuration;
+module.exports.formatFieldValue = formatFieldValue;

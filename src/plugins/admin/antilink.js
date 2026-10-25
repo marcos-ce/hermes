@@ -1,11 +1,11 @@
-const configManager = require('../../core/configManager');
+﻿const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
 const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
 
-const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live|tv|co|info|biz|club|shop|store|games?|news|blog|media)[^\s]*)/gi;
+const URL_REGEX_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live|tv|co|info|biz|club|shop|store|games?|news|blog|media)[^\s]*)/gi.source;
 
 /**
  * Aliases canônicos: mapeamento de domínios "alternativos" para o domínio principal.
@@ -231,8 +231,7 @@ module.exports = {
 
     // Extrai TODOS os textos relevantes (incluindo link previews e legendas de mídia)
     const fullText = extractAllTextForLinks(msg.message);
-    URL_REGEX.lastIndex = 0;
-    const matches = fullText ? fullText.match(URL_REGEX) : null;
+    const matches = fullText ? fullText.match(new RegExp(URL_REGEX_PATTERN, 'gi')) : null;
     if (!matches || matches.length === 0) return false;
 
     // Ignora se quem enviou for Dono ou Administrador

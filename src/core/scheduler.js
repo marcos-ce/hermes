@@ -1,4 +1,4 @@
-const configManager = require('./configManager');
+﻿const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
 const settings = require('../config/settings');
 const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
@@ -9,7 +9,7 @@ class Scheduler {
   constructor() {
     this.sock = null;
     this.intervalId = null;
-    this.lastExecutedSchedule = new Set();
+    this.lastExecutedSchedule = new Map(); // Map<execKey, timestamp> para limpeza seletiva sem perda de estado
     this.lastAutoMsgTimes = new Map();
   }
 
@@ -132,9 +132,12 @@ class Scheduler {
         }
       }
 
-      // Limpeza de cache de execuções antigas do schedule (evita acúmulo em RAM)
+      // Limpeza seletiva de execuções antigas (> 2 min): evita acúmulo em RAM sem apagar estado recente
       if (this.lastExecutedSchedule.size > 500) {
-        this.lastExecutedSchedule.clear();
+        const cutoff = Date.now() - 2 * 60 * 1000;
+        for (const [k, ts] of this.lastExecutedSchedule.entries()) {
+          if (ts < cutoff) this.lastExecutedSchedule.delete(k);
+        }
       }
     } catch (err) {
       logger.error({ err }, 'Erro no loop do scheduler');
@@ -144,3 +147,4 @@ class Scheduler {
 
 const scheduler = new Scheduler();
 module.exports = scheduler;
+

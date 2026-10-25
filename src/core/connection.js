@@ -1,4 +1,4 @@
-const { 
+﻿const { 
   default: makeWASocket, 
   useMultiFileAuthState, 
   DisconnectReason, 
@@ -18,6 +18,24 @@ const scheduler = require('./scheduler');
 let currentSock = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
+// Mini-store de mensagens recentes para re-decriptografia pós-reconexão (substitui makeInMemoryStore)
+// Guarda as últimas 100 mensagens em RAM com eviction FIFO. Sem TTL = sem vazamento de memória.
+const msgStore = new Map();
+const MSG_STORE_MAX = 100;
+
+/**
+ * Registra uma mensagem no mini-store para suporte a re-decriptografia do Baileys.
+ * Deve ser chamado após o pipeline processar cada mensagem com sucesso.
+ * @param {object} msg 
+ */
+function storeMsgForRetry(msg) {
+  if (!msg?.key?.id || !msg.message) return;
+  if (!msgStore.has(msg.key.id) && msgStore.size >= MSG_STORE_MAX) {
+    const oldest = msgStore.keys().next().value;
+    msgStore.delete(oldest);
+  }
+  msgStore.set(msg.key.id, msg.message);
+}
 
 // Cache anti-loop de retentativas de decriptografia (Baileys Best Practice)
 const msgRetryCounterCache = new NodeCache({ stdTTL: 300, useClones: false });
@@ -61,13 +79,18 @@ async function connectBot(options = {}) {
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
     msgRetryCounterCache, // Evita tempestades de retentativas de decriptografia
-    getMessage: async () => undefined,
+    getMessage: async (key) => {
+      const id = key?.id;
+      if (id && msgStore.has(id)) return msgStore.get(id);
+      return undefined;
+    },
     shouldIgnoreJid: (jid) => typeof jid === 'string' && (jid.endsWith('@newsletter') || jid.endsWith('@broadcast')),
-    browser: ['Ubuntu', 'Chrome', '20.0.04']
+    browser: ['Ubuntu', 'Chrome', '120.0.0']
   });
 
   currentSock = sock;
-  scheduler.updateSocket(sock);
+  // Nota: scheduler.updateSocket() é chamado somente após connection === 'open'
+  // para garantir que o socket está autenticado antes de qualquer tick agendado.
 
   // ==========================================
   // Fluxo de Autenticação: Pairing Code
@@ -142,6 +165,9 @@ async function connectBot(options = {}) {
       }
       console.log(`🛡️ Anti-Ban: ATIVO`);
       console.log('====================================================\n');
+
+      // Atualiza o scheduler com o socket autenticado (somente após conexão confirmada)
+      scheduler.updateSocket(sock);
 
       // Registra identidade do bot no mapa LID <-> Telefone
       if (sock.user) {
@@ -221,5 +247,6 @@ function getSocket() {
 
 module.exports = {
   connectBot,
-  getSocket
+  getSocket,
+  storeMsgForRetry
 };

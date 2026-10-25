@@ -229,21 +229,25 @@ class ConfigManager {
 
   isGroupBanned(groupJid) {
     if (!groupJid) return false;
-    const clean = groupJid.replace(/@.*$/, '').trim();
-    const fullJid = clean.includes('@') ? clean : `${clean}@g.us`;
+    // Normaliza para sempre ter formato numérico limpo e JID completo
+    const numOnly = groupJid.replace(/@.*$/, '').trim();
+    const fullJid = `${numOnly}@g.us`;
+
+    // 1. Checa na lista global de banidos (compara apenas a parte numérica)
     const inGlobal = Array.isArray(this.global.bannedGroups) && this.global.bannedGroups.some(g => {
-      const gClean = g.replace(/@.*$/, '').trim();
-      return gClean === clean;
+      return g.replace(/@.*$/, '').trim() === numOnly;
     });
     if (inGlobal) return true;
-    const group = this.groups.get(fullJid) || this.groups.get(groupJid);
+
+    // 2. Checa flag banned no registro do grupo (tenta todas as variações de chave)
+    const group = this.groups.get(fullJid) || this.groups.get(numOnly) || this.groups.get(groupJid);
     return group?.banned === true;
   }
 
   banGroup(groupJid, reason = '') {
     if (!groupJid) return false;
-    const clean = groupJid.replace(/@.*$/, '').trim();
-    const fullJid = clean.includes('@') ? clean : `${clean}@g.us`;
+    const numOnly = groupJid.replace(/@.*$/, '').trim();
+    const fullJid = `${numOnly}@g.us`;
 
     this.global.bannedGroups = this.global.bannedGroups || [];
     if (!this.global.bannedGroups.includes(fullJid)) {
@@ -262,19 +266,20 @@ class ConfigManager {
 
   unbanGroup(groupJid) {
     if (!groupJid) return false;
-    const clean = groupJid.replace(/@.*$/, '').trim();
-    const fullJid = clean.includes('@') ? clean : `${clean}@g.us`;
+    const numOnly = groupJid.replace(/@.*$/, '').trim();
+    const fullJid = `${numOnly}@g.us`;
 
     let removed = false;
     if (Array.isArray(this.global.bannedGroups)) {
-      const idx = this.global.bannedGroups.findIndex(g => g.replace(/@.*$/, '').trim() === clean);
+      const idx = this.global.bannedGroups.findIndex(g => g.replace(/@.*$/, '').trim() === numOnly);
       if (idx !== -1) {
         this.global.bannedGroups.splice(idx, 1);
         removed = true;
       }
     }
 
-    const group = this.groups.get(fullJid) || this.groups.get(groupJid);
+    // Tenta todas as variações de chave do grupo para garantir que a flag seja removida
+    const group = this.groups.get(fullJid) || this.groups.get(numOnly) || this.groups.get(groupJid);
     if (group && group.banned) {
       group.banned = false;
       delete group.bannedAt;

@@ -1,4 +1,4 @@
-const { groupCache } = require('../utils/cache');
+﻿const { groupCache } = require('../utils/cache');
 const { cleanJid, resolveParticipant } = require('../utils/jidResolver');
 const configManager = require('../core/configManager');
 const pluginLoader = require('../core/pluginLoader');
@@ -31,9 +31,24 @@ async function handleParticipantsUpdate(sock, update) {
     const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
     for (const rawParticipant of participants) {
-      const resolved = await resolveParticipant(sock, groupJid, rawParticipant);
-      const targetPhoneJid = resolved?.phoneJid || cleanJid(rawParticipant);
-      const targetGroupJid = resolved?.groupJid || cleanJid(rawParticipant);
+      let resolved = await resolveParticipant(sock, groupJid, rawParticipant);
+      let targetPhoneJid = resolved?.phoneJid || cleanJid(rawParticipant);
+      let targetGroupJid = resolved?.groupJid || cleanJid(rawParticipant);
+
+      // BAN-3: Se após a primeira resolução o phoneJid ainda for @lid (mapa não populado),
+      // força reload dos metadados e tenta resolver novamente.
+      // Evita falso positivo do antifake expulsando brasileiro legítimo por DDI não reconhecido.
+      if (targetPhoneJid.endsWith('@lid')) {
+        const { getGroupMetadata } = require('../utils/jidResolver');
+        await getGroupMetadata(sock, groupJid); // popula o mapa LID→Phone via cache
+        const reResolved = await resolveParticipant(sock, groupJid, rawParticipant);
+        if (reResolved?.phoneJid && !reResolved.phoneJid.endsWith('@lid')) {
+          targetPhoneJid = reResolved.phoneJid;
+          targetGroupJid = reResolved.groupJid;
+          resolved = reResolved;
+        }
+      }
+
       const participantNumber = resolved?.displayNum || targetPhoneJid.replace(/@.*$/, '').replace(/\D/g, '');
 
       // Não aplica boas-vindas nem punições ao próprio bot ao entrar no grupo

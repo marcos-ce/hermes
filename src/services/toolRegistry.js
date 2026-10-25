@@ -329,6 +329,22 @@ const TOOLS = [
   }
 ];
 
+// Descrição unificada (curta) para todo parâmetro "target": economiza tokens e reforça o uso de refs reais
+const TARGET_DESCRIPTION = 'Ref da mensagem do histórico (ex: "m123"), número com DDI, @menção ou "quoted". Nunca invente.';
+const MAX_ARG_STRING = 500;
+
+// Endurece os schemas: sem propriedades extras e com target padronizado
+for (const tool of TOOLS) {
+  const params = tool.function.parameters;
+  params.additionalProperties = false;
+  if (params.properties && params.properties.target) {
+    params.properties.target.description = TARGET_DESCRIPTION;
+  }
+  if (params.properties && params.properties.messageId) {
+    params.properties.messageId.description = 'Ref da mensagem do histórico (ex: "m123"), ou omita para apagar a mensagem respondida (quoted).';
+  }
+}
+
 class ToolRegistry {
   constructor() {
     this.tools = TOOLS;
@@ -336,6 +352,59 @@ class ToolRegistry {
 
   getTools() {
     return this.tools;
+  }
+
+  /**
+   * Valida e sanitiza os argumentos de uma tool call contra o schema JSON declarado.
+   * Remove propriedades desconhecidas, coage tipos simples e rejeita enum/required inválidos
+   * ANTES de executar qualquer ação (evita, por exemplo, abrir o grupo por um "action" ausente).
+   * @param {string} toolName
+   * @param {object} rawArgs
+   * @returns {{ ok: boolean, args?: object, error?: string }}
+   */
+  validateArgs(toolName, rawArgs) {
+    const tool = this.tools.find(t => t.function.name === toolName);
+    if (!tool) return { ok: false, error: `Ferramenta "${toolName}" não reconhecida.` };
+
+    const schema = tool.function.parameters;
+    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+    const clean = {};
+
+    for (const [key, def] of Object.entries(schema.properties || {})) {
+      let value = input[key];
+      if (value === undefined || value === null || value === '') continue;
+
+      if (def.type === 'string') {
+        if (typeof value === 'number') value = String(value);
+        if (typeof value !== 'string') return { ok: false, error: `Argumento "${key}" inválido.` };
+        value = value.trim().slice(0, MAX_ARG_STRING);
+        if (!value) continue;
+      } else if (def.type === 'integer') {
+        const num = typeof value === 'string' ? Number(value.trim()) : value;
+        if (!Number.isFinite(num)) return { ok: false, error: `Argumento "${key}" inválido.` };
+        value = Math.trunc(num);
+      } else if (def.type === 'boolean') {
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+        else if (typeof value !== 'boolean') return { ok: false, error: `Argumento "${key}" inválido.` };
+      }
+
+      if (Array.isArray(def.enum) && !def.enum.includes(value)) {
+        return { ok: false, error: `Valor inválido para "${key}".` };
+      }
+      clean[key] = value;
+    }
+
+    for (const req of schema.required || []) {
+      if (clean[req] === undefined) return { ok: false, error: `Argumento obrigatório ausente: "${req}".` };
+    }
+
+    // Ferramentas sem campos obrigatórios que não podem rodar vazias
+    if (toolName === 'set_group_schedule' && !['closeTime', 'openTime', 'enabled'].some(k => clean[k] !== undefined)) {
+      return { ok: false, error: 'Informe os horários de fechar/abrir ou ative/desative o agendamento.' };
+    }
+
+    return { ok: true, args: clean };
   }
 
   /**
@@ -391,6 +460,14 @@ class ToolRegistry {
                         realMsg?.documentMessage?.contextInfo ||
                         msg?.message?.extendedTextMessage?.contextInfo;
 
+    // 0. Ref explícito do histórico ("m123"): resolvido por lookup determinístico no SQLite (autor real da mensagem)
+    if (typeof targetArg === 'string' && /^m\d{1,9}$/i.test(targetArg.trim())) {
+      const refData = memoryEngine.getMessageByRef(from, targetArg.trim());
+      const refJid = refData ? cleanJid(refData.participant || refData.sender) : '';
+      if (!refJid || isBotIdentity(refJid)) return null;
+      return await resolveParticipant(sock, from, refJid);
+    }
+
     // 1. Menções na mensagem que NÃO sejam o próprio bot
     const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
     const nonBotMentions = mentions.filter(m => !isBotIdentity(m));
@@ -428,6 +505,79 @@ class ToolRegistry {
 
     // 5. Fallback padrão
     return await resolveTarget(sock, msg, from, targetArg);
+  }
+
+  /**
+   * Alvos EXPLÍCITOS da mensagem do admin: pessoas marcadas (@) ou autor da mensagem respondida (reply).
+   * Exclui o próprio bot. É a única origem aceita para remoções (ban / blacklist add).
+   * @returns {Promise<Array<object>>} participantes resolvidos (mesmo formato de resolveParticipant)
+   */
+  async _getExplicitTargets(sock, msg, from) {
+    const botJid = cleanJid(sock?.user?.id || '');
+    const botLid = cleanJid(sock?.user?.lid || '');
+    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+    const isBot = (jid) => {
+      const clean = cleanJid(jid);
+      const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      return clean === botJid || clean === botLid || (botNum && num === botNum) || (botLidNum && num === botLidNum);
+    };
+
+    const realMsg = msg?.message?.ephemeralMessage?.message ||
+                    msg?.message?.viewOnceMessage?.message ||
+                    msg?.message?.viewOnceMessageV2?.message ||
+                    msg?.message?.documentWithCaptionMessage?.message ||
+                    msg?.message;
+
+    const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                        realMsg?.imageMessage?.contextInfo ||
+                        realMsg?.videoMessage?.contextInfo ||
+                        realMsg?.documentMessage?.contextInfo ||
+                        msg?.message?.extendedTextMessage?.contextInfo;
+
+    const candidates = [];
+    const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
+    for (const m of mentions) {
+      if (m && !isBot(m)) candidates.push(cleanJid(m));
+    }
+    const quotedParticipant = contextInfo?.participant;
+    if (quotedParticipant && !isBot(quotedParticipant)) candidates.push(cleanJid(quotedParticipant));
+
+    const resolved = [];
+    for (const jid of [...new Set(candidates)]) {
+      const data = await resolveParticipant(sock, from, jid);
+      if (data) resolved.push(data);
+    }
+    return resolved;
+  }
+
+  /**
+   * Garante que a remoção só atinja quem o admin marcou (@) ou a quem respondeu (reply).
+   * Se o modelo escolheu o alvo só pelo contexto (ref "mNN", nome ou número), a ação é recusada.
+   * @returns {Promise<{ targetData?: object, error?: string }>}
+   */
+  async _requireExplicitTarget(sock, msg, from, targetArg, lang) {
+    const explicit = await this._getExplicitTargets(sock, msg, from);
+    if (explicit.length === 0) {
+      return { error: t(lang, 'hermes.need_explicit_target') };
+    }
+
+    const arg = String(targetArg || '').trim().toLowerCase();
+    if (!arg || arg === 'quoted' || arg === 'mentioned') {
+      return { targetData: explicit[0] };
+    }
+
+    const chosen = await this._resolveTargetSmart(sock, msg, from, targetArg);
+    if (!chosen) return { error: t(lang, 'common.not_found_target') };
+
+    const idsOf = (d) => [d.groupJid, d.phoneJid, d.displayNum].filter(Boolean).map(String);
+    const chosenIds = new Set(idsOf(chosen));
+    const match = explicit.find(e => idsOf(e).some(id => chosenIds.has(id)));
+    if (!match) {
+      return { error: t(lang, 'hermes.need_explicit_target') };
+    }
+    return { targetData: match };
   }
 
   /**
@@ -475,10 +625,12 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        // Remoção só com alvo explícito: marcado (@) ou reply (nunca inferido pelo modelo)
+        const guard = await this._requireExplicitTarget(sock, msg, from, args.target, lang);
+        if (guard.error) {
+          return { success: false, error: guard.error };
         }
+        const targetData = guard.targetData;
 
         const botJid = cleanJid(sock?.user?.id || '');
         const botLid = cleanJid(sock?.user?.lid || '');
@@ -754,9 +906,19 @@ class ToolRegistry {
       }
 
       case 'manage_blacklist': {
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        let targetData;
+        if (args.action === 'remove') {
+          targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
+          if (!targetData) {
+            return { success: false, error: t(lang, 'common.not_found_target') };
+          }
+        } else {
+          // Adicionar à blacklist expulsa o membro: exige alvo marcado (@) ou reply
+          const guard = await this._requireExplicitTarget(sock, msg, from, args.target, lang);
+          if (guard.error) {
+            return { success: false, error: guard.error };
+          }
+          targetData = guard.targetData;
         }
 
         if (args.action === 'remove') {
@@ -799,17 +961,27 @@ class ToolRegistry {
                             realMsg?.imageMessage?.contextInfo ||
                             msg?.message?.extendedTextMessage?.contextInfo;
 
-        const quotedStanzaId = args.messageId || contextInfo?.stanzaId;
-        const quotedParticipant = contextInfo?.participant;
+        let deleteId = contextInfo?.stanzaId;
+        let deleteParticipant = contextInfo?.participant;
 
-        if (!quotedStanzaId) {
+        // Ref do histórico ("m123"): chave real (id + participante) vem do SQLite; IDs inventados são ignorados
+        if (args.messageId && /^m\d{1,9}$/i.test(String(args.messageId).trim())) {
+          const refData = memoryEngine.getMessageByRef(from, String(args.messageId).trim());
+          if (!refData || !refData.msgId) {
+            return { success: false, error: t(lang, 'hermes.msg_not_found') };
+          }
+          deleteId = refData.msgId;
+          deleteParticipant = refData.participant || refData.sender;
+        }
+
+        if (!deleteId) {
           return { success: false, error: t(lang, 'clear.reply_required') };
         }
 
         await safeDelete(sock, from, {
           remoteJid: from,
-          id: quotedStanzaId,
-          participant: quotedParticipant
+          id: deleteId,
+          participant: deleteParticipant
         });
 
         return { success: true, message: t(lang, 'clear.success') };

@@ -1,4 +1,4 @@
-const configManager = require('../../core/configManager');
+﻿const configManager = require('../../core/configManager');
 const settings = require('../../config/settings');
 const { getGroupMetadata } = require('../../utils/jidResolver');
 
@@ -80,7 +80,9 @@ module.exports = {
     // ==========================================
     // Banir / Desbanir Grupo via !bot
     // ==========================================
-    if (sub === 'ban' || sub === 'bangrupo' || sub === 'banir') {
+    // M-5: 'ban'/'banir' aqui são SUBCOMANDOS de !bot (ex: !bot ban <id>), não aliases globais.
+  // O plugin ban.js usa aliases ['ban', 'kick', ...] — sem conflito pois o trigger chega como 'bot'.
+  if (sub === 'ban' || sub === 'bangrupo' || sub === 'banir') {
       if (!isOwner) return;
       const targetJid = (args[1] && (args[1].includes('@g.us') || /^\d{15,25}$/.test(args[1])))
         ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
