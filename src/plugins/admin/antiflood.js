@@ -148,7 +148,7 @@ module.exports = {
     let violationType = '';
 
     // 1. Checagem de Anti-Trava (Tamanho da mensagem)
-    // Extrai o texto completo incluindo legendas de mídia (imagem, vídeo, documento)
+    // Extrai o texto completo incluindo legendas de mídia (imagem, vídeo, documento) e contatos/vCards
     const realMsg = msg?.message?.ephemeralMessage?.message ||
                     msg?.message?.viewOnceMessage?.message ||
                     msg?.message?.viewOnceMessageV2?.message ||
@@ -156,7 +156,11 @@ module.exports = {
     const fullTextForTrava = text ||
       realMsg?.imageMessage?.caption ||
       realMsg?.videoMessage?.caption ||
-      realMsg?.documentMessage?.caption || '';
+      realMsg?.documentMessage?.caption ||
+      realMsg?.contactMessage?.vcard ||
+      (Array.isArray(realMsg?.contactsArrayMessage?.contacts) 
+        ? realMsg.contactsArrayMessage.contacts.map(c => c.vcard || '').join(' ') 
+        : '');
 
     if (fullTextForTrava && fullTextForTrava.length > maxChars) {
       isViolation = true;

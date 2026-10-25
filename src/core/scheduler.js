@@ -1,4 +1,4 @@
-﻿const configManager = require('./configManager');
+const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
 const settings = require('../config/settings');
 const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
@@ -9,6 +9,7 @@ class Scheduler {
   constructor() {
     this.sock = null;
     this.intervalId = null;
+    this.isTicking = false; // Trava de reentrância contra concorrência de ticks (P0.4)
     this.lastExecutedSchedule = new Map(); // Map<execKey, timestamp> para limpeza seletiva sem perda de estado
     this.lastAutoMsgTimes = new Map();
   }
@@ -42,7 +43,8 @@ class Scheduler {
   }
 
   async _tick() {
-    if (!this.sock) return;
+    if (!this.sock || this.isTicking) return;
+    this.isTicking = true;
 
     try {
       const now = new Date();
@@ -123,6 +125,9 @@ class Scheduler {
         try {
           if (typeof item.run === 'function') {
             await item.run();
+            if (typeof item.onSuccess === 'function') {
+              item.onSuccess();
+            }
           } else if (item.type === 'license_expired') {
             await sendSafeMessage(this.sock, item.groupJid, { text: t(item.lang, 'saas.license_expired') });
             configManager.markExpiryNotified(item.groupJid, true);
@@ -141,6 +146,8 @@ class Scheduler {
       }
     } catch (err) {
       logger.error({ err }, 'Erro no loop do scheduler');
+    } finally {
+      this.isTicking = false;
     }
   }
 }

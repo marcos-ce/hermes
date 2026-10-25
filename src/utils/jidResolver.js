@@ -339,8 +339,16 @@ async function getGroupMetadata(sock, groupJid) {
     return cached;
   }
 
+  let timer = null;
   try {
-    const metadata = await sock.groupMetadata(groupJid);
+    const metaPromise = sock.groupMetadata(groupJid);
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout_metadata')), 5000);
+    });
+
+    const metadata = await Promise.race([metaPromise, timeoutPromise]);
+    if (timer) clearTimeout(timer);
+
     if (metadata) {
       groupCache.set(groupJid, metadata);
       if (Array.isArray(metadata.participants)) {
@@ -351,6 +359,7 @@ async function getGroupMetadata(sock, groupJid) {
     }
     return metadata;
   } catch (_err) {
+    if (timer) clearTimeout(timer);
     return null;
   }
 }

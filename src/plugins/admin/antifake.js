@@ -2,6 +2,7 @@ const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
+const logger = require('../../utils/logger');
 
 module.exports = {
   name: 'antifake',
@@ -45,6 +46,13 @@ module.exports = {
 
     const antifakeCfg = configManager.getPluginConfig(groupJid, 'antifake');
     if (antifakeCfg && antifakeCfg.enabled) {
+      // Blindagem AntiFake para contas @lid: Se o WhatsApp ocultou o telefone real por privacidade,
+      // o identificador retornado é um LID arbitrário e não possui DDI. Não expulsar falsamente (P0.2).
+      if (targetPhoneJid.endsWith('@lid') || (participantNumber && participantNumber.length > 14)) {
+        logger.info({ groupJid, targetPhoneJid, participantNumber }, 'AntiFake: participante @lid ignorado (DDI não revelável por privacidade)');
+        return false;
+      }
+
       const allowedDdis = Array.isArray(antifakeCfg.allowedDdis) && antifakeCfg.allowedDdis.length > 0
         ? antifakeCfg.allowedDdis
         : ['55', '351', '1', '34', '54', '52'];

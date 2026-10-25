@@ -299,7 +299,8 @@ module.exports = {
                           realMsg?.videoMessage?.contextInfo ||
                           realMsg?.documentMessage?.contextInfo;
 
-      await this.processAIInteraction({
+      // Desacopla o processamento assíncrono da IA para não bloquear o pipeline de mensagens do bot (P1.1)
+      this.processAIInteraction({
         sock,
         msg,
         from,
@@ -309,6 +310,8 @@ module.exports = {
         lang,
         cfg,
         contextInfo
+      }).catch(err => {
+        logger.error({ err, from, sender }, 'Erro assíncrono na execução do comando manual do Hermes IA');
       });
       return;
     }
@@ -504,7 +507,8 @@ module.exports = {
 
     const cfg = configManager.getPluginConfig(from, 'hermes') || {};
 
-    await this.processAIInteraction({
+    // Desacopla o processamento assíncrono da IA para não bloquear o pipeline de mensagens do bot (P1.1)
+    this.processAIInteraction({
       sock,
       msg,
       from,
@@ -514,9 +518,11 @@ module.exports = {
       lang,
       cfg,
       contextInfo
+    }).catch(err => {
+      logger.error({ err, from, sender }, 'Erro assíncrono na interação do Hermes IA');
     });
 
-    return true; // Interrompe o pipeline com sucesso
+    return true; // Interrompe o pipeline com sucesso imediatamente
   },
 
   /**

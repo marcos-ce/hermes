@@ -34,8 +34,9 @@ class ConfigManager {
     }
 
     let loaded = false;
+    const fileExisted = fs.existsSync(this.filePath);
 
-    if (fs.existsSync(this.filePath)) {
+    if (fileExisted) {
       try {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
         const parsed = JSON.parse(raw);
@@ -43,6 +44,11 @@ class ConfigManager {
         loaded = true;
       } catch (err) {
         logger.error({ err }, 'Erro ao ler data/groups.json. Tentando restaurar do backup...');
+        try {
+          const corruptPath = `${this.filePath}.corrupted.${Date.now()}`;
+          fs.copyFileSync(this.filePath, corruptPath);
+          logger.warn(`Arquivo corrompido preservado em ${corruptPath} para recuperação manual.`);
+        } catch (_) {}
       }
     }
 
@@ -59,9 +65,14 @@ class ConfigManager {
     }
 
     if (!loaded) {
-      // Inicia com estrutura global padrão
       this.global.allowPrivateCmds = settings.allowPrivateCmds || false;
-      this.flushSync();
+      // Prevenção de Wipe Acidental (P0.5): se o arquivo já existia mas falhou o parse em ambos,
+      // NUNCA sobrescreve o arquivo no disco com um JSON vazio.
+      if (!fileExisted) {
+        this.flushSync();
+      } else {
+        logger.fatal('ALERTA DE SEGURANÇA: data/groups.json existente não pôde ser carregado. Flush automático cancelado para evitar perda de dados.');
+      }
     }
   }
 
@@ -131,16 +142,27 @@ class ConfigManager {
         await fs.promises.copyFile(this.filePath, this.bakPath);
       }
 
-      await fs.promises.rename(this.tmpPath, this.filePath);
+      try {
+        await fs.promises.rename(this.tmpPath, this.filePath);
+      } catch (renameErr) {
+        // Fallback para Windows/OneDrive onde rename pode sofrer EPERM temporário por lock do SO
+        if (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY') {
+          await fs.promises.copyFile(this.tmpPath, this.filePath);
+          try { await fs.promises.unlink(this.tmpPath); } catch (_) {}
+        } else {
+          throw renameErr;
+        }
+      }
     } catch (err) {
       logger.error({ err }, 'Erro ao salvar atomicamente data/groups.json');
       this.isDirty = true;
+      // Reagenda nova tentativa com backoff para garantir que os dados em RAM não sejam esquecidos
+      setTimeout(() => this.scheduleSave(), 2000);
     } finally {
       this.isSaving = false;
       if (this.pendingSave) {
         this.pendingSave = false;
-        this.isDirty = true;
-        await this.saveAsync();
+        this.scheduleSave();
       }
     }
   }
@@ -165,7 +187,16 @@ class ConfigManager {
         fs.copyFileSync(this.filePath, this.bakPath);
       }
 
-      fs.renameSync(this.tmpPath, this.filePath);
+      try {
+        fs.renameSync(this.tmpPath, this.filePath);
+      } catch (renameErr) {
+        if (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY') {
+          fs.copyFileSync(this.tmpPath, this.filePath);
+          try { fs.unlinkSync(this.tmpPath); } catch (_) {}
+        } else {
+          throw renameErr;
+        }
+      }
       this.isDirty = false;
     } catch (err) {
       logger.error({ err }, 'Erro no flushSync de data/groups.json');

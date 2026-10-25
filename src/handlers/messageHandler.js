@@ -1,4 +1,4 @@
-﻿const { wizardCache } = require('../utils/cache');
+const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
 const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
@@ -69,7 +69,6 @@ async function processSingleMessage(sock, msg) {
   const sender = await resolveSender(sock, msg);
   const isGroup = from.endsWith('@g.us');
   const text = extractText(msg.message).trim();
-  if (!text) return;
 
   // ========================================================
   // Detecção de Menção ao Bot como Prefixo Simultâneo
@@ -273,6 +272,12 @@ async function processSingleMessage(sock, msg) {
   // Registra atividade recente do grupo para o AutoMsg (após hooks, só se a msg passou pelos filtros)
   if (isGroup) {
     configManager.touchGroupActivity(from);
+  }
+
+  // Se a mensagem não possui conteúdo textual (ex: sticker, áudio, mídia sem legenda),
+  // encerra o pipeline aqui após ser devidamente verificada e contabilizada pelos hooks de proteção (AntiFlood).
+  if (!text) {
+    return;
   }
 
   // ========================================================

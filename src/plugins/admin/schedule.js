@@ -1,4 +1,4 @@
-﻿const configManager = require('../../core/configManager');
+const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { sendSafeMessage } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
@@ -60,13 +60,21 @@ module.exports = {
     if (closeTime && closeTime === currentHHMM && closeTime !== '0') {
       const execKey = `${groupJid}:close:${currentDateKey}:${currentHHMM}`;
       if (!lastExecuted.has(execKey)) {
-        lastExecuted.set(execKey, Date.now());
+        lastExecuted.set(execKey, -1); // Marca em progresso para não enfileirar duplicado
         queueTask({
           type: 'schedule_close',
           groupJid,
           run: async () => {
-            await sock.groupSettingUpdate(groupJid, 'announcement');
-            await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.closed') });
+            try {
+              await sock.groupSettingUpdate(groupJid, 'announcement');
+              await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.closed') });
+            } catch (err) {
+              lastExecuted.delete(execKey); // Libera para retentativa em caso de erro de conexão
+              throw err;
+            }
+          },
+          onSuccess: () => {
+            lastExecuted.set(execKey, Date.now());
           }
         });
       }
@@ -76,13 +84,21 @@ module.exports = {
     if (openTime && openTime === currentHHMM && openTime !== '0') {
       const execKey = `${groupJid}:open:${currentDateKey}:${currentHHMM}`;
       if (!lastExecuted.has(execKey)) {
-        lastExecuted.set(execKey, Date.now());
+        lastExecuted.set(execKey, -1); // Marca em progresso para não enfileirar duplicado
         queueTask({
           type: 'schedule_open',
           groupJid,
           run: async () => {
-            await sock.groupSettingUpdate(groupJid, 'not_announcement');
-            await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.opened') });
+            try {
+              await sock.groupSettingUpdate(groupJid, 'not_announcement');
+              await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.opened') });
+            } catch (err) {
+              lastExecuted.delete(execKey); // Libera para retentativa em caso de erro de conexão
+              throw err;
+            }
+          },
+          onSuccess: () => {
+            lastExecuted.set(execKey, Date.now());
           }
         });
       }
