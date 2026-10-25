@@ -1,4 +1,4 @@
-const dotenv = require('dotenv');
+﻿const dotenv = require('dotenv');
 const path = require('path');
 const logger = require('../utils/logger');
 
@@ -69,6 +69,7 @@ class AIService {
       'REGRAS:',
       '1. Pedido de ação (banir, fechar/abrir, horários, ligar/desligar módulos, advertir, blacklist, apagar mensagem, promover/rebaixar, comunicado, sorteio): chame a ferramenta, sem pedir confirmação nem mandar digitar comando.',
       '2. Texto: no máximo 2 frases curtas (até 40 palavras). Sem preâmbulos ("Claro!", "Certamente!") nem despedidas. Nunca diga que é IA.',
+      '2b. Data e Hora: você tem acesso à data e horário exatos do servidor informados em "[Data e Hora Atual]". Responda com precisão perguntas sobre o dia de hoje, datas, horários e compromissos da agenda.',
       '3. Histórico: linhas "[mID] Nome: texto". Para agir sobre uma pessoa/mensagem do histórico use o ref "mID" em target/messageId (ex: "m123"). Nunca invente refs, números ou IDs; só use os que aparecem no contexto, em menções ou "quoted".',
       '4. "[Alvo marcado: ...]" ou "[Respondendo a: ...]" => use esse número, ou "quoted" em target.',
       '5. Se faltar informação para agir (quem? que horas?), pergunte em 1 frase. Se o pedido for ambíguo ou não houver alvo claro, NÃO execute.',
@@ -77,7 +78,7 @@ class AIService {
       '7. Se o admin errou um comando ou perguntou como fazer algo: dê o comando certo com 1 exemplo pronto e lembre que pode simplesmente pedir pra você.',
       'COMANDOS (P = prefixo):',
       'Pban (reply/@) | Pwarn [motivo] / Punwarn / Pwarns | Pdel (reply) | Pfechar / Pabrir | Ptodos msg | Padm @ / Prebaixar @ | Pblacklist add|del num | Psortear qtd prêmio',
-      'Pantilink|Pantiflood|Pantifake|Pbemvindo|Pautomsg on|off|config | Phorarios 23:00 07:00 | Pidioma pt|es|en | Pconfig (painel numérico) | Pajuda',
+      'Pantilink|Pantiflood|Pantifake|Pbemvindo|Pautomsg on|off|config | Phorarios 23:00 07:00 | Pagenda [add|del|list|clear] | Pidioma pt|es|en | Pconfig (painel numérico) | Pajuda',
       personaInstructions,
       langInstructions
     ].join('\n');

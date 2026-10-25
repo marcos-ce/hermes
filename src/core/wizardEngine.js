@@ -233,7 +233,7 @@ class WizardEngine {
     }
 
     // Lista plugins que possuem schema ou são configuráveis
-    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'automsg', 'ban', 'schedule', 'warn', 'welcome'];
+    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'automsg', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'hermes'];
     const modules = [];
     for (const [name, schema] of pluginLoader.schemas.entries()) {
       const isEnabled = configManager.isPluginEnabled(from, name);
@@ -261,6 +261,7 @@ class WizardEngine {
         antilink: 'ANTILINK',
         automsg: 'AUTOMSG',
         ban: 'BAN',
+        calendar: 'CALENDÁRIO',
         schedule: 'HORÁRIOS',
         warn: 'ADVERTÊNCIAS',
         welcome: 'BOAS-VINDAS'
@@ -271,6 +272,7 @@ class WizardEngine {
         antilink: 'ANTILINK',
         automsg: 'AUTOMSG',
         ban: 'BAN',
+        calendar: 'CALENDARIO',
         schedule: 'HORARIOS',
         warn: 'ADVERTENCIAS',
         welcome: 'BIENVENIDA'
@@ -281,6 +283,7 @@ class WizardEngine {
         antilink: 'ANTILINK',
         automsg: 'AUTOMSG',
         ban: 'BAN',
+        calendar: 'CALENDAR',
         schedule: 'SCHEDULE',
         warn: 'WARN',
         welcome: 'WELCOME'
@@ -479,7 +482,30 @@ class WizardEngine {
         } catch (_) {}
       }
       wizardCache.del(sessionKey);
+      await sendSafeMessage(sock, from, { text: t(lang, 'wizard.cancelled') });
       return true;
+    }
+
+    // Se o usuário estava com decisão de foco pendente e optou por continuar
+    if (session.focusSwitchPending) {
+      const lower = text.toLowerCase().trim();
+      if (['1', 'continuar', 'sim', 'seguir', 'voltar', 'manter'].includes(lower)) {
+        session.focusSwitchPending = false;
+        wizardCache.set(sessionKey, session);
+        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.continued') }, { quoted: msg });
+        if (session.type === 'config_menu') {
+          return await this.startConfigPanel(sock, msg, from, sender);
+        } else if (session.type === 'wizard') {
+          return await this._sendStepPrompt(sock, msg, from, sender, session, lang);
+        } else if (session.type === 'wizard_select_field') {
+          return await this._sendFieldSelectionPrompt(sock, msg, from, sender, session, lang);
+        } else if (session.type === 'lang_selection') {
+          return await this.startLangSelection(sock, msg, from, sender);
+        } else if (session.type === 'mute_selection') {
+          return await this.startMuteSelection(sock, msg, from, sender);
+        }
+        return true;
+      }
     }
 
     // ==========================================
@@ -494,7 +520,15 @@ class WizardEngine {
     const hasMentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0;
 
     if (isChoiceStep && (text.length > 15 || hasMentions)) {
-      // Ignora silenciosamente conversa paralela do admin no grupo sem poluir o chat
+      // Detecta mudança de foco do admin durante a etapa de escolha e pergunta se deseja cancelar ou continuar
+      if (!session.focusSwitchPending) {
+        session.focusSwitchPending = true;
+        wizardCache.set(sessionKey, session);
+        const moduleName = session.pluginName ? session.pluginName.toUpperCase() : 'PAINEL DE CONFIGURAÇÕES';
+        await sendSafeMessage(sock, from, {
+          text: t(lang, 'wizard.focus_switch_prompt', { module: moduleName })
+        }, { quoted: msg });
+      }
       return true;
     }
 

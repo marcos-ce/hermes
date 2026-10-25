@@ -172,6 +172,21 @@ const dictionaries = {
     'wizard.cancel_hint': 'âŒ Envie *X* a qualquer momento para cancelar.',
     'wizard.out_of_range': 'âš ï¸ Valor fora do intervalo permitido{range}. Tente novamente.',
     'wizard.session_expired': '⏱️ *Sessão expirada!* O menu de configuração ficou inativo por muito tempo e foi encerrado. Use o comando novamente quando quiser configurar.',
+    'wizard.focus_switch_prompt': '⚠️ Você está com uma configuração ativa em andamento (*{module}*).\n\nDeseja cancelar ou continuar?\n• Digite *X* para cancelar e fechar\n• Digite *1* para continuar configurando',
+    'wizard.hermes_focus_detected': '⚠️ @{user}, notei que você me chamou, mas você ainda está com o menu de *{module}* aberto!\n\nDeseja cancelar a configuração ou continuar de onde parou?\n• Digite *X* para cancelar o menu e liberar a conversa\n• Digite *1* para continuar configurando',
+    'wizard.cancelled': '✅ *Configuração cancelada com sucesso.* Menu fechado!',
+    'wizard.continued': '👍 *Continuando configuração...*',
+
+    // Calendar & Agendamentos
+    'calendar.added': '📅 *Evento agendado com sucesso!*\n\n📌 *Data/Hora:* {date} às {time}\n📝 *Compromisso:* {text}\n🆔 *ID:* #{id}',
+    'calendar.list_title': '📅 *CALENDÁRIO DE AGENDAMENTOS DO GRUPO*',
+    'calendar.list_empty': '📅 Nenhum agendamento ou evento marcado no calendário.\n\n💡 Para agendar, use:\n{prefix}agenda add DD/MM HH:MM Mensagem do evento',
+    'calendar.item': '🔹 *[#{id}]* 🗓️ {date} às {time} — {text}',
+    'calendar.deleted': '🗑️ *Agendamento #{id} removido do calendário.*',
+    'calendar.not_found': '⚠️ Agendamento #{id} não encontrado no calendário.',
+    'calendar.cleared': '🧹 *Todos os agendamentos do calendário foram removidos.*',
+    'calendar.invalid_format': '⚠️ Formato inválido.\nUse: {prefix}agenda add DD/MM HH:MM Sua mensagem aqui\nExemplo: {prefix}agenda add 28/10 20:00 Aula ao vivo da mentoria',
+    'calendar.event_announcement': '📅 *[LEMBRETE DA AGENDA / EVENTO]*\n\n⏰ *Horário:* {time}\n📌 *Compromisso:* {text}',
 
     // Hermes IA
     'hermes.on_ok': 'ðŸ¤– *Hermes IA:* ATIVADO com sucesso!\nðŸŽ­ *Personalidade:* `{personality}`\nðŸ§  *MemÃ³ria Local:* `{memory}`\n\nðŸ‘‰ Para conversar, envie *@hermes*, chame por *hermes* ou responda a qualquer mensagem minha!',
@@ -557,6 +572,21 @@ const dictionaries = {
     'wizard.cancel_hint': 'âŒ Send *X* at any time to cancel.',
     'wizard.out_of_range': 'âš ï¸ Value out of allowed range{range}. Please try again.',
     'wizard.session_expired': '⏱️ *Session expired!* The configuration menu was inactive for too long and was closed. Use the command again whenever you want to configure.',
+    'wizard.focus_switch_prompt': '⚠️ You have an active configuration session in progress (*{module}*).\n\nDo you want to cancel or continue?\n• Type *X* to cancel and exit\n• Type *1* to continue configuring',
+    'wizard.hermes_focus_detected': '⚠️ @{user}, I noticed you called me, but you still have the *{module}* menu open.\n\nDo you want to cancel the configuration or continue where you left off?\n• Type *X* to cancel the menu\n• Type *1* to continue configuring',
+    'wizard.cancelled': '✅ *Configuration successfully cancelled.* Menu closed!',
+    'wizard.continued': '👍 *Continuing configuration...*',
+
+    // Calendar & Agendamentos
+    'calendar.added': '📅 *Event scheduled successfully!*\n\n📌 *Date/Time:* {date} at {time}\n📝 *Event:* {text}\n🆔 *ID:* #{id}',
+    'calendar.list_title': '📅 *GROUP CALENDAR & SCHEDULED EVENTS*',
+    'calendar.list_empty': '📅 No scheduled events in the calendar.\n\n💡 To schedule, use:\n{prefix}agenda add DD/MM HH:MM Event announcement text',
+    'calendar.item': '🔹 *[#{id}]* 🗓️ {date} at {time} — {text}',
+    'calendar.deleted': '🗑️ *Scheduled event #{id} removed from calendar.*',
+    'calendar.not_found': '⚠️ Event #{id} not found in the calendar.',
+    'calendar.cleared': '🧹 *All scheduled calendar events have been cleared.*',
+    'calendar.invalid_format': '⚠️ Invalid format.\nUse: {prefix}agenda add DD/MM HH:MM Your announcement message here\nExample: {prefix}agenda add 28/10 20:00 Live mentoring call',
+    'calendar.event_announcement': '📅 *[CALENDAR REMINDER / EVENT]*\n\n⏰ *Time:* {time}\n📌 *Event:* {text}',
 
     // Hermes IA
     'hermes.on_ok': 'ðŸ¤– *Hermes AI:* ENABLED successfully!\nðŸŽ­ *Personality:* `{personality}`\nðŸ§  *Local Memory:* `{memory}`\n\nðŸ‘‰ To chat, send *@hermes*, call *hermes* or reply to any of my messages!',
