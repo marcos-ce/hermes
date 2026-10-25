@@ -24,7 +24,23 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|\d{1,2}[:h]\d{0,2}/i;
+
+// Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
+const REVERSIBLE_TOOLS = new Set([
+  'set_group_mute',
+  'pin_group_message',
+  'warn_member',
+  'promote_member',
+  'demote_member',
+  'toggle_module',
+  'set_group_description'
+]);
+
+const lastGroupActions = new Map();
+
+// Sessões de perguntas de clarificação ativas por admin (< 60s) para continuidade em 2 etapas (Ideia 5)
+const pendingClarifications = new Map();
 
 /**
  * Consome 1 unidade da cota horária de chamadas à IA do grupo
@@ -390,7 +406,22 @@ module.exports = {
     const hasNameTag = lowerText.includes('@hermes') || lowerText.includes('@bot');
     const startsWithName = /^hermes[\s,.:!?-]/i.test(lowerText) || lowerText === 'hermes';
 
-    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || isUnknownCommandAttempt;
+    // D. Continuidade em duas etapas (Ideia 5): Se o bot fez uma pergunta recente (< 60s) para este admin
+    // e o admin respondeu apontando alguém (quote), mencionando (@) ou com resposta confirmativa/curta
+    let isContinuation = false;
+    const clarifKey = `${from}:${sender}`;
+    const activeClarif = pendingClarifications.get(clarifKey);
+    if (activeClarif && (Date.now() - activeClarif.timestamp < 60000)) {
+      const isShortResponse = lowerText.length <= 40 &&
+        /^(\b(esse|ele|ela|esse aqui|essa|essa daqui|sim|pode|confirmo|este|esta|bora|vai|isso|isso mesmo|o proprio)\b|@|\d+)/i.test(lowerText);
+      const hasQuotedTarget = Boolean(contextInfo?.quotedMessage && !isReplyToBot);
+
+      if (isShortResponse || hasQuotedTarget) {
+        isContinuation = true;
+      }
+    }
+
+    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || isUnknownCommandAttempt || isContinuation;
 
     // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
@@ -685,6 +716,20 @@ module.exports = {
       );
     }
 
+    // Ideia 4: Injeção da última ação recente para o mecanismo de Desfazer (Undo)
+    const lastAction = lastGroupActions.get(from);
+    if (lastAction && (Date.now() - lastAction.timestamp < 30 * 60 * 1000)) {
+      const minutesAgo = Math.max(1, Math.round((Date.now() - lastAction.timestamp) / 60000));
+      userPromptParts.push(`[Última ação executada pelo Hermes há ${minutesAgo} min: ferramenta=${lastAction.tool}, args=${JSON.stringify(lastAction.args)}]`);
+    }
+
+    // Ideia 5: Se havia clarificação recente ativa, injeta a dica de contexto para resolução rápida
+    const clarifKey = `${from}:${sender}`;
+    if (pendingClarifications.has(clarifKey)) {
+      userPromptParts.push(`[Continuação de conversa: o admin está respondendo à pergunta anterior que você fez]`);
+      pendingClarifications.delete(clarifKey);
+    }
+
     // Pedido atual do admin (único trecho tratado como instrução)
     userPromptParts.push(`[Pedido do admin] ${msg.pushName || 'Admin'}: ${queryText}`);
 
@@ -814,6 +859,16 @@ module.exports = {
               : {};
             await reply(execResult.message, mentionOpts);
             memoryEngine.saveMessage(from, 'hermes@bot', execResult.message, null, 'Hermes');
+
+            // Ideia 4: Registra ação reversível para o mecanismo de Desfazer (Undo)
+            if (REVERSIBLE_TOOLS.has(call.name)) {
+              lastGroupActions.set(from, {
+                tool: call.name,
+                args: call.args,
+                timestamp: Date.now(),
+                message: execResult.message
+              });
+            }
           } else if (execResult?.error) {
             await reply(execResult.error);
           }
@@ -827,6 +882,15 @@ module.exports = {
         const finalReply = humanizeAIText(aiResponse.content.trim());
         await reply(`${notice}${finalReply}`);
         memoryEngine.saveMessage(from, 'hermes@bot', finalReply, null, 'Hermes');
+
+        // Ideia 5: Se o Hermes terminou a resposta fazendo uma pergunta de clarificação,
+        // ativa a janela de continuidade de 60 segundos para este admin
+        if (/\?(\s*)$/.test(finalReply)) {
+          pendingClarifications.set(`${from}:${sender}`, {
+            timestamp: Date.now(),
+            question: finalReply
+          });
+        }
       } else if (degraded) {
         await reply(tr(lang, 'hermes.degraded'));
       }
