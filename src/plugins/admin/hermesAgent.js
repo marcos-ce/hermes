@@ -1,4 +1,4 @@
-﻿const configManager = require('../../core/configManager');
+const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const pluginLoader = require('../../core/pluginLoader');
 const aiService = require('../../services/aiService');
@@ -142,6 +142,7 @@ module.exports = {
       delete require.cache[require.resolve('../../services/aiService')];
       delete require.cache[require.resolve('../../services/toolRegistry')];
       delete require.cache[require.resolve('../../services/humanizer')];
+      delete require.cache[require.resolve('../../services/timeParser')];
     } catch (_) {}
   },
 

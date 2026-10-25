@@ -7,6 +7,7 @@ const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, c
 const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
 const memoryEngine = require('./memoryEngine');
+const { parseRelativeTime } = require('./timeParser');
 
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
@@ -37,14 +38,22 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_mute',
-      description: 'Tranca o grupo imediatamente para apenas administradores falarem, ou abre o grupo imediatamente para todos os membros.',
+      description: 'Tranca o grupo para apenas administradores falarem, ou abre o grupo para todos os membros (pode ser imediato ou programado para daqui a X minutos / horário específico).',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
             enum: ['close', 'open'],
-            description: '"close" para trancar/fechar o grupo agora ou "open" para abrir o grupo agora.'
+            description: '"close" para trancar/fechar o grupo ou "open" para abrir o grupo.'
+          },
+          delayMinutes: {
+            type: 'integer',
+            description: 'Quantidade de minutos para esperar antes de fechar ou abrir o grupo (ex: 30 para "daqui a meia hora", 60 para "em 1 hora", 15 para "em 15 minutos"). Use para ações futuras.'
+          },
+          time: {
+            type: 'string',
+            description: 'Horário ou tempo relativo para fechar ou abrir o grupo (ex: "18:00", "22h", "daqui a meia hora", "em 1 hora").'
           }
         },
         required: ['action']
@@ -310,7 +319,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'manage_calendar',
-      description: 'Adiciona, lista ou remove eventos/agendamentos do calendário do grupo com avisos automáticos na data e hora marcada.',
+      description: 'Adiciona, lista ou remove eventos/agendamentos e lembretes do calendário do grupo com avisos automáticos na data e hora marcada ou tempo relativo.',
       parameters: {
         type: 'object',
         properties: {
@@ -321,15 +330,19 @@ const TOOLS = [
           },
           date: {
             type: 'string',
-            description: 'Data do evento (ex: "25/10", "28/10/2026", "amanhã" ou "hoje"). Obrigatório para action="add".'
+            description: 'Data do evento (ex: "25/10", "28/10/2026", "amanhã" ou "hoje"). Opcional se delayMinutes for informado.'
           },
           time: {
             type: 'string',
-            description: 'Horário do evento no formato HH:MM (ex: "14:30", "19:00" ou "19h"). Obrigatório para action="add".'
+            description: 'Horário do evento no formato HH:MM (ex: "14:30", "19:00" ou "19h") ou relativo (ex: "daqui a meia hora", "em 1 hora").'
+          },
+          delayMinutes: {
+            type: 'integer',
+            description: 'Minutos a partir de agora para o lembrete/evento (ex: 30 para meia hora, 60 para 1 hora, 15 para 15 minutos). Use quando o pedido for relativo.'
           },
           text: {
             type: 'string',
-            description: 'Descrição ou comunicado do evento a ser divulgado no grupo. Obrigatório para action="add".'
+            description: 'Descrição ou comunicado do lembrete/evento a ser divulgado no grupo. Obrigatório para action="add".'
           },
           eventId: {
             type: 'string',
@@ -741,6 +754,68 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
+        const delayArg = args.delayMinutes || args.time;
+        if (delayArg) {
+          const rel = parseRelativeTime(delayArg);
+          if (rel.success && rel.delayMinutes > 0) {
+            const calendarAction = args.action === 'close' ? 'close_group' : 'open_group';
+            const cfg = configManager.getPluginConfig(from, 'calendar') || {};
+            const events = Array.isArray(cfg.events) ? cfg.events : [];
+            const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
+            const newId = String(maxId + 1);
+
+            const isClose = args.action === 'close';
+            const actionLabel = isClose ? 'Fechamento do grupo' : 'Abertura do grupo';
+            const scheduledEvent = {
+              id: newId,
+              action: calendarAction,
+              date: rel.formattedDate,
+              time: rel.formattedTime,
+              text: `${actionLabel} programado pelo administrador`,
+              createdBy: sender.replace(/@.*$/, ''),
+              createdAt: Date.now(),
+              executed: false
+            };
+
+            events.push(scheduledEvent);
+            configManager.updatePluginConfig(from, 'calendar', { events, enabled: true });
+
+            // Se for atraso curto (até 120 minutos), agenda timer de alta precisão em memória
+            // além da persistência no calendar.js (que garante recuperação mesmo se o bot reiniciar)
+            if (rel.delayMs <= 120 * 60 * 1000) {
+              const timer = setTimeout(async () => {
+                try {
+                  const currentCfg = configManager.getPluginConfig(from, 'calendar') || {};
+                  const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
+                  const ev = currentEvents.find(e => String(e.id) === newId);
+                  if (ev && !ev.executed) {
+                    ev.executed = true;
+                    ev.executedAt = Date.now();
+                    configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
+
+                    const waAction = isClose ? 'announcement' : 'not_announcement';
+                    await sock.groupSettingUpdate(from, waAction);
+                    const msgKey = isClose ? 'mute.closed' : 'mute.opened';
+                    await sendSafeMessage(sock, from, { text: t(lang, msgKey) });
+                  }
+                } catch (err) {
+                  logger.error({ err, from, newId }, 'Erro ao executar fechamento/abertura temporizado do grupo');
+                }
+              }, rel.delayMs);
+              if (timer.unref) timer.unref();
+            }
+
+            const responseText = isClose
+              ? `🔒 *Fechamento Programado:*\nO grupo será fechado ${rel.humanLabel}.`
+              : `🔓 *Abertura Programada:*\nO grupo será aberto ${rel.humanLabel}.`;
+
+            return {
+              success: true,
+              message: responseText
+            };
+          }
+        }
+
         const action = args.action === 'close' ? 'announcement' : 'not_announcement';
         await sock.groupSettingUpdate(from, action);
 
@@ -1130,54 +1205,70 @@ class ToolRegistry {
         const events = Array.isArray(cfg.events) ? cfg.events : [];
 
         if (action === 'add') {
-          if (!args.date || !args.time || !args.text) {
-            return { success: false, error: 'Para agendar, informe data, hora e a mensagem do evento.' };
+          let parsedDate = null;
+          let parsedTime = null;
+          let relDelayMs = null;
+
+          // 1. Tentar parse relativo se houver delayMinutes ou se time/date for expressão relativa
+          const relCandidate = args.delayMinutes || args.time || args.date;
+          if (args.delayMinutes || (typeof relCandidate === 'string' && /(?:daqui|em\s+\d+|meia\s+hora|minutos?|horas?|amanh[aã]|hoje|\+\d+)/i.test(relCandidate))) {
+            const rel = parseRelativeTime(args.delayMinutes || relCandidate);
+            if (rel.success) {
+              parsedDate = rel.formattedDate;
+              parsedTime = rel.formattedTime;
+              relDelayMs = rel.delayMs;
+            }
           }
 
-          const lowerDate = String(args.date).toLowerCase().trim();
-          const now = new Date();
-          const tz = settings.timezone || 'America/Sao_Paulo';
-          let parsedDate = null;
+          // 2. Se não foi relativo, usar parsing padrão de date/time
+          if (!parsedDate || !parsedTime) {
+            const lowerDate = String(args.date || 'hoje').toLowerCase().trim();
+            const now = new Date();
+            const tz = settings.timezone || 'America/Sao_Paulo';
 
-          if (lowerDate === 'hoje' || lowerDate === 'today' || lowerDate === 'hoy') {
-            try {
-              const parts = now.toLocaleDateString('pt-BR', { timeZone: tz }).split('/');
-              parsedDate = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
-            } catch (_) {
-              parsedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+            if (lowerDate === 'hoje' || lowerDate === 'today' || lowerDate === 'hoy') {
+              try {
+                const parts = now.toLocaleDateString('pt-BR', { timeZone: tz }).split('/');
+                parsedDate = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+              } catch (_) {
+                parsedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+              }
+            } else if (lowerDate === 'amanha' || lowerDate === 'amanhã' || lowerDate === 'tomorrow' || lowerDate === 'mañana') {
+              const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+              try {
+                const parts = tomorrow.toLocaleDateString('pt-BR', { timeZone: tz }).split('/');
+                parsedDate = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+              } catch (_) {
+                parsedDate = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}`;
+              }
+            } else {
+              const dateMatch = lowerDate.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
+              if (dateMatch) {
+                const d = parseInt(dateMatch[1], 10);
+                const m = parseInt(dateMatch[2], 10);
+                if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+                  parsedDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+                }
+              }
             }
-          } else if (lowerDate === 'amanha' || lowerDate === 'amanhã' || lowerDate === 'tomorrow' || lowerDate === 'mañana') {
-            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-            try {
-              const parts = tomorrow.toLocaleDateString('pt-BR', { timeZone: tz }).split('/');
-              parsedDate = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
-            } catch (_) {
-              parsedDate = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}`;
-            }
-          } else {
-            const dateMatch = lowerDate.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-]\d{2,4})?$/);
-            if (dateMatch) {
-              const d = parseInt(dateMatch[1], 10);
-              const m = parseInt(dateMatch[2], 10);
-              if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
-                parsedDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+
+            if (!parsedTime && args.time) {
+              const timeMatch = String(args.time).match(/^(\d{1,2})(?:[:hH](\d{2})?)?$/);
+              if (timeMatch) {
+                const h = parseInt(timeMatch[1], 10);
+                const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+                if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+                  parsedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                }
               }
             }
           }
 
-          let parsedTime = null;
-          const timeMatch = String(args.time).match(/^(\d{1,2})(?:[:hH](\d{2})?)?$/);
-          if (timeMatch) {
-            const h = parseInt(timeMatch[1], 10);
-            const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-              parsedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            }
+          if (!parsedDate || !parsedTime) {
+            return { success: false, error: 'Data ou hora inválida. Use formatos como "daqui a meia hora", "em 1 hora", "amanhã às 10h" ou data DD/MM e hora HH:MM.' };
           }
 
-          if (!parsedDate || !parsedTime) {
-            return { success: false, error: 'Data ou hora inválida. Use data DD/MM (ou hoje/amanhã) e hora HH:MM.' };
-          }
+          const reminderText = String(args.text || args.message || 'Lembrete agendado pelo administrador').trim();
 
           const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
           const newId = String(maxId + 1);
@@ -1185,7 +1276,7 @@ class ToolRegistry {
             id: newId,
             date: parsedDate,
             time: parsedTime,
-            text: String(args.text).trim(),
+            text: reminderText,
             createdBy: sender.replace(/@.*$/, ''),
             createdAt: Date.now(),
             executed: false
@@ -1193,6 +1284,46 @@ class ToolRegistry {
 
           events.push(newEvent);
           configManager.updatePluginConfig(from, 'calendar', { events, enabled: true });
+
+          // Se for atraso curto com delayMs calculado (até 120 minutos), agenda timer em memória
+          if (relDelayMs && relDelayMs <= 120 * 60 * 1000) {
+            const timer = setTimeout(async () => {
+              try {
+                const currentCfg = configManager.getPluginConfig(from, 'calendar') || {};
+                const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
+                const ev = currentEvents.find(e => String(e.id) === newId);
+                if (ev && !ev.executed) {
+                  ev.executed = true;
+                  ev.executedAt = Date.now();
+                  configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
+
+                  const body = t(lang, 'calendar.event_announcement', {
+                    time: parsedTime,
+                    text: reminderText
+                  });
+
+                  let mentions = [];
+                  if (Boolean(currentCfg.mentionAll)) {
+                    const meta = await getGroupMetadata(sock, from);
+                    if (meta && Array.isArray(meta.participants)) {
+                      const allMembers = new Set();
+                      meta.participants.forEach(p => {
+                        if (p.id) allMembers.add(p.id);
+                        if (p.jid) allMembers.add(p.jid);
+                        if (p.lid) allMembers.add(p.lid);
+                      });
+                      mentions = Array.from(allMembers);
+                    }
+                  }
+
+                  await sendSafeMessage(sock, from, { text: body, mentions });
+                }
+              } catch (err) {
+                logger.error({ err, from, newId }, 'Erro ao disparar lembrete agendado temporizado');
+              }
+            }, relDelayMs);
+            if (timer.unref) timer.unref();
+          }
 
           return {
             success: true,

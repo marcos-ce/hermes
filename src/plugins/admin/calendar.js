@@ -135,32 +135,56 @@ module.exports = {
         const eventTime = event.time;
         const mentionAll = Boolean(config.mentionAll);
 
-        queueTask({
-          type: 'calendar_event',
-          groupJid,
-          run: async () => {
-            const body = t(lang, 'calendar.event_announcement', {
-              time: eventTime,
-              text: eventText
-            });
-
-            let mentions = [];
-            if (mentionAll) {
-              const meta = await getGroupMetadata(sock, groupJid);
-              if (meta && Array.isArray(meta.participants)) {
-                const allMembers = new Set();
-                meta.participants.forEach(p => {
-                  if (p.id) allMembers.add(p.id);
-                  if (p.jid) allMembers.add(p.jid);
-                  if (p.lid) allMembers.add(p.lid);
-                });
-                mentions = Array.from(allMembers);
-              }
+        if (event.action === 'close_group') {
+          queueTask({
+            type: 'calendar_mute_close',
+            groupJid,
+            run: async () => {
+              try {
+                await sock.groupSettingUpdate(groupJid, 'announcement');
+                await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.closed') });
+              } catch (_) {}
             }
+          });
+        } else if (event.action === 'open_group') {
+          queueTask({
+            type: 'calendar_mute_open',
+            groupJid,
+            run: async () => {
+              try {
+                await sock.groupSettingUpdate(groupJid, 'not_announcement');
+                await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.opened') });
+              } catch (_) {}
+            }
+          });
+        } else {
+          queueTask({
+            type: 'calendar_event',
+            groupJid,
+            run: async () => {
+              const body = t(lang, 'calendar.event_announcement', {
+                time: eventTime,
+                text: eventText
+              });
 
-            await sendSafeMessage(sock, groupJid, { text: body, mentions });
-          }
-        });
+              let mentions = [];
+              if (mentionAll) {
+                const meta = await getGroupMetadata(sock, groupJid);
+                if (meta && Array.isArray(meta.participants)) {
+                  const allMembers = new Set();
+                  meta.participants.forEach(p => {
+                    if (p.id) allMembers.add(p.id);
+                    if (p.jid) allMembers.add(p.jid);
+                    if (p.lid) allMembers.add(p.lid);
+                  });
+                  mentions = Array.from(allMembers);
+                }
+              }
+
+              await sendSafeMessage(sock, groupJid, { text: body, mentions });
+            }
+          });
+        }
       }
     }
 
