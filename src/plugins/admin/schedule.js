@@ -5,7 +5,7 @@ const { t } = require('../../utils/i18n');
 
 module.exports = {
   name: 'schedule',
-  aliases: ['schedule', 'horarios', 'horario', 'agendar', 'timer', 'programar'],
+  aliases: ['schedule', 'horarios', 'horario', 'timer', 'programar', 'rotina'],
   description: 'Agendamento automático para abrir e fechar o grupo diariamente por horário',
   ownerOnly: false,
   adminOnly: true,

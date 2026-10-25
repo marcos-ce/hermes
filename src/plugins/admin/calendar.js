@@ -67,7 +67,7 @@ function parseTime(timeStr) {
 
 module.exports = {
   name: 'calendar',
-  aliases: ['calendar', 'agenda', 'calendario', 'calendário', 'agendamento', 'agendamentos', 'eventos'],
+  aliases: ['calendar', 'agenda', 'agendar', 'calendario', 'calendário', 'agendamento', 'agendamentos', 'eventos', 'evento'],
   description: 'Agendamento de compromissos e eventos futuros com avisos automáticos na data e hora marcada',
   ownerOnly: false,
   adminOnly: true,

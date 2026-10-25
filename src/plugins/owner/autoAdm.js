@@ -119,7 +119,7 @@ async function promoteOwnerInGroup(sock, gid, ownerPhoneJid, ownerLidJid, preloa
 
 module.exports = {
   name: 'autoadm',
-  aliases: ['autoadm', 'admdono', 'daradm', 'admall', 'promotedono', 'owneradm'],
+  aliases: ['autoadm', 'admdono', 'admall', 'promotedono', 'owneradm'],
   usage: 'autoadm <id | all>',
   description: 'Promove você (Dono) a Admin (por ID ou em todos os grupos onde o bot é admin)',
   ownerOnly: true,

@@ -3,7 +3,7 @@ const { sendSafeMessage } = require('../../utils/antiBan');
 
 module.exports = {
   name: 'hidetag',
-  aliases: ['hidetag', 'totag', 'aviso', 'todos', 'marcar', 'notificar', 'all'],
+  aliases: ['hidetag', 'totag', 'comunicado', 'todos', 'marcar', 'notificar', 'all'],
   usage: 'all [texto]',
   description: 'Marca todos os membros do grupo de forma oculta',
   ownerOnly: false,
