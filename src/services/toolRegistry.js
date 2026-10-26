@@ -564,6 +564,35 @@ class ToolRegistry {
     const quotedParticipant = contextInfo?.participant || contextInfo?.quotedMessage?.participant;
     if (quotedParticipant && !isBotIdentity(quotedParticipant)) {
       return await resolveParticipant(sock, from, cleanJid(quotedParticipant));
+    } else if (quotedParticipant && isBotIdentity(quotedParticipant)) {
+      // Se a citação foi em uma mensagem do próprio bot (ex: aviso de infração),
+      // verifica se havia um participante mencionado na mensagem citada do bot
+      const rawQuoted = contextInfo?.quotedMessage;
+      const unwrapped = rawQuoted?.ephemeralMessage?.message ||
+                        rawQuoted?.viewOnceMessage?.message ||
+                        rawQuoted?.viewOnceMessageV2?.message ||
+                        rawQuoted?.documentWithCaptionMessage?.message ||
+                        rawQuoted;
+      const botQuotedMentions = Array.isArray(unwrapped?.extendedTextMessage?.contextInfo?.mentionedJid)
+        ? unwrapped.extendedTextMessage.contextInfo.mentionedJid
+        : [];
+      for (const m of botQuotedMentions) {
+        if (m && !isBotIdentity(m)) {
+          return await resolveParticipant(sock, from, cleanJid(m));
+        }
+      }
+      const botText = (unwrapped?.conversation ||
+                      unwrapped?.extendedTextMessage?.text ||
+                      unwrapped?.imageMessage?.caption ||
+                      unwrapped?.videoMessage?.caption || '').trim();
+      const textMatches = botText.match(/@(\d{8,15})\b/g) || [];
+      for (const tm of textMatches) {
+        const rawNum = tm.replace('@', '');
+        const jid = `${rawNum}@s.whatsapp.net`;
+        if (!isBotIdentity(jid)) {
+          return await resolveParticipant(sock, from, jid);
+        }
+      }
     }
 
     // 4. Busca por nome no histórico de conversas do grupo (ex: "Hermes, adverte o João")
@@ -616,7 +645,33 @@ class ToolRegistry {
       if (m && !isBot(m)) candidates.push(cleanJid(m));
     }
     const quotedParticipant = contextInfo?.participant;
-    if (quotedParticipant && !isBot(quotedParticipant)) candidates.push(cleanJid(quotedParticipant));
+    if (quotedParticipant && !isBot(quotedParticipant)) {
+      candidates.push(cleanJid(quotedParticipant));
+    } else if (quotedParticipant && isBot(quotedParticipant)) {
+      // Se respondeu a uma mensagem do próprio bot, extrai os membros mencionados naquela mensagem do bot
+      const rawQuoted = contextInfo?.quotedMessage;
+      const unwrapped = rawQuoted?.ephemeralMessage?.message ||
+                        rawQuoted?.viewOnceMessage?.message ||
+                        rawQuoted?.viewOnceMessageV2?.message ||
+                        rawQuoted?.documentWithCaptionMessage?.message ||
+                        rawQuoted;
+      const botQuotedMentions = Array.isArray(unwrapped?.extendedTextMessage?.contextInfo?.mentionedJid)
+        ? unwrapped.extendedTextMessage.contextInfo.mentionedJid
+        : [];
+      for (const m of botQuotedMentions) {
+        if (m && !isBot(m)) candidates.push(cleanJid(m));
+      }
+      const botText = (unwrapped?.conversation ||
+                      unwrapped?.extendedTextMessage?.text ||
+                      unwrapped?.imageMessage?.caption ||
+                      unwrapped?.videoMessage?.caption || '').trim();
+      const textMatches = botText.match(/@(\d{8,15})\b/g) || [];
+      for (const tm of textMatches) {
+        const rawNum = tm.replace('@', '');
+        const jid = `${rawNum}@s.whatsapp.net`;
+        if (!isBot(jid)) candidates.push(jid);
+      }
+    }
 
     const resolved = [];
     for (const jid of [...new Set(candidates)]) {

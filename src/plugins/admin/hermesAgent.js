@@ -688,6 +688,38 @@ module.exports = {
 
       if (isQuotingBot) {
         userPromptParts.push(`[Respondendo à mensagem anterior do próprio bot (Hermes): "${snippet}"]`);
+
+        // Extrai alvos ou membros que o próprio bot havia mencionado/punido na mensagem citada
+        const quotedMentions = Array.isArray(unwrappedQuoted?.extendedTextMessage?.contextInfo?.mentionedJid)
+          ? unwrappedQuoted.extendedTextMessage.contextInfo.mentionedJid
+          : [];
+        const botQuotedTargets = [];
+        for (const qm of quotedMentions) {
+          const cleanM = cleanJid(qm);
+          const numM = cleanM.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+          if (cleanM !== botJid && cleanM !== botLid && (!botNum || numM !== botNum) && (!botLidNum || numM !== botLidNum)) {
+            const res = await resolveParticipant(sock, from, cleanM);
+            const name = res?.name || memoryEngine.getParticipantName(from, cleanM) || memoryEngine.getParticipantName(from, res?.phoneJid) || '';
+            const disp = res?.displayNum || numM;
+            botQuotedTargets.push(name ? `${name} (@${disp})` : `@${disp}`);
+          }
+        }
+
+        if (botQuotedTargets.length === 0 && snippet) {
+          const numMatches = snippet.match(/@(\d{8,15})\b/g) || [];
+          for (const m of numMatches) {
+            const rawNum = m.replace('@', '');
+            if (rawNum !== botNum && rawNum !== botLidNum) {
+              const res = await resolveParticipant(sock, from, `${rawNum}@s.whatsapp.net`);
+              const name = res?.name || memoryEngine.getParticipantName(from, `${rawNum}@s.whatsapp.net`) || '';
+              botQuotedTargets.push(name ? `${name} (@${res?.displayNum || rawNum})` : `@${rawNum}`);
+            }
+          }
+        }
+
+        if (botQuotedTargets.length > 0) {
+          userPromptParts.push(`[Membro(s) citado(s) no aviso anterior do Hermes: ${[...new Set(botQuotedTargets)].join(', ')}]`);
+        }
       } else if (quotedAuthor) {
         if (snippet && !isQuotedImage) {
           userPromptParts.push(`[Respondendo a ${quotedAuthor}: "${snippet}"]`);
@@ -1033,7 +1065,14 @@ module.exports = {
       // Resposta em texto direto (com aviso curto se estiver no modo sem ferramentas)
       const notice = degraded ? `${tr(lang, 'hermes.degraded')}\n` : '';
       if (aiResponse.content && aiResponse.content.trim().length > 0) {
-        const finalReply = humanizeAIText(aiResponse.content.trim());
+        const rawContent = aiResponse.content.trim();
+        const cleanSilence = rawContent.replace(/[*_"`']/g, '').trim();
+        if (/^\[SIL[EÊ]NCIO\]/i.test(cleanSilence)) {
+          logger.info({ from, sender }, 'Hermes identificou conversa direcionada a terceiros ou comentário de referência e manteve silêncio natural.');
+          return;
+        }
+
+        const finalReply = humanizeAIText(rawContent);
         await reply(`${notice}${finalReply}`);
         memoryEngine.saveMessage(from, 'hermes@bot', finalReply, null, 'Hermes');
 
