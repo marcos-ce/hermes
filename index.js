@@ -65,9 +65,54 @@ async function main() {
   const isSetupForced = process.argv.includes('--setup');
   const envExists = fs.existsSync(path.resolve(process.cwd(), '.env'));
 
+  const authDir = path.resolve(process.cwd(), 'src', 'auth');
+  const resetTriggerPath = path.resolve(process.cwd(), 'RESET_AUTH');
+  const hasResetTrigger = fs.existsSync(resetTriggerPath);
+
+  // Suporte a reset completo da pasta de autenticação (--reset-auth, env RESET_AUTH ou arquivo RESET_AUTH)
+  const shouldFullResetAuth =
+    hasResetTrigger ||
+    process.argv.includes('--reset-auth') ||
+    process.argv.includes('--clear-auth') ||
+    process.env.RESET_AUTH === 'true' ||
+    process.env.CLEAR_AUTH === 'true';
+
+  if (shouldFullResetAuth) {
+    if (fs.existsSync(authDir)) {
+      try {
+        fs.rmSync(authDir, { recursive: true, force: true });
+        console.log('🧹 [Reset Auth] Pasta src/auth removida com sucesso para novo pareamento limpo.');
+      } catch (err) {
+        console.error('❌ [Reset Auth] Erro ao remover src/auth:', err.message);
+      }
+    }
+    if (hasResetTrigger) {
+      try {
+        fs.unlinkSync(resetTriggerPath);
+        console.log('🗑️ [Reset Auth] Gatilho RESET_AUTH consumido e removido.');
+      } catch (_) {}
+    }
+  }
+
+  // Auto-cura preventiva: se creds.json estiver corrompido ou vazio (0 bytes), limpa src/auth
+  const credsPath = path.join(authDir, 'creds.json');
+  if (fs.existsSync(credsPath)) {
+    try {
+      const rawCreds = fs.readFileSync(credsPath, 'utf-8');
+      if (!rawCreds || !rawCreds.trim()) {
+        throw new Error('creds.json vazio (0 bytes)');
+      }
+      JSON.parse(rawCreds);
+    } catch (err) {
+      console.log(`⚠️ [Auto-Healing] creds.json corrompido detectado (${err.message}). Limpando pasta src/auth...`);
+      try {
+        fs.rmSync(authDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+  }
+
   // Suporte a comando de reparo de sessões corrompidas (--fix-sessions ou env FIX_SESSIONS)
   if (process.argv.includes('--fix-sessions') || process.env.FIX_SESSIONS === 'true') {
-    const authDir = path.resolve(process.cwd(), 'src', 'auth');
     if (fs.existsSync(authDir)) {
       const files = fs.readdirSync(authDir);
       let count = 0;

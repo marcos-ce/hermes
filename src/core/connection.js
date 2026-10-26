@@ -4,6 +4,7 @@ const {
   DisconnectReason, 
   fetchLatestBaileysVersion 
 } = require('@whiskeysockets/baileys');
+const fs = require('fs');
 const path = require('path');
 const NodeCache = require('node-cache');
 const qrcode = require('qrcode-terminal');
@@ -107,7 +108,19 @@ async function connectBot(options = {}) {
   }
 
   const authDir = path.resolve(process.cwd(), 'src', 'auth');
-  const { state, saveCreds } = await useMultiFileAuthState(authDir);
+  let authState;
+  try {
+    authState = await useMultiFileAuthState(authDir);
+  } catch (authErr) {
+    logger.error({ authErr: authErr.message }, 'Erro ao carregar autenticação em src/auth. Limpando pasta corrompida...');
+    try {
+      if (fs.existsSync(authDir)) {
+        fs.rmSync(authDir, { recursive: true, force: true });
+      }
+    } catch (_) {}
+    authState = await useMultiFileAuthState(authDir);
+  }
+  const { state, saveCreds } = authState;
   let version = [2, 3000, 1015901307];
   let isLatest = false;
   try {
@@ -205,17 +218,32 @@ async function connectBot(options = {}) {
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
-      logger.warn(`Conexão encerrada. Motivo: ${statusCode || 'Desconhecido'}. Reconectar: ${shouldReconnect}`);
+      logger.warn(`Conexão encerrada. Motivo: ${statusCode || 'Desconhecido'}. Desconectado por Logout: ${isLoggedOut}`);
 
-      if (shouldReconnect) {
+      if (isLoggedOut) {
+        console.log('\n====================================================');
+        console.log('🛑 [LOGOUT DETECTADO] Sessão desconectada pelo WhatsApp (Código 401).');
+        console.log('🧹 Limpando src/auth automaticamente e mantendo bot ONLINE...');
+        console.log('🔄 Gerando novo QR Code / Pairing Code em 3 segundos...');
+        console.log('====================================================\n');
+
+        try {
+          if (fs.existsSync(authDir)) {
+            fs.rmSync(authDir, { recursive: true, force: true });
+          }
+        } catch (err) {
+          logger.error({ err }, 'Erro ao limpar pasta auth pós-logout');
+        }
+
+        reconnectAttempts = 0;
+        reconnectTimer = setTimeout(() => connectBot(options), 3000);
+      } else {
         const delay = Math.min(3000 * Math.pow(1.3, reconnectAttempts), 30000);
         reconnectAttempts++;
         console.log(`🔄 Reconectando ao WhatsApp em ${(delay / 1000).toFixed(1)} segundos (tentativa ${reconnectAttempts})...`);
         reconnectTimer = setTimeout(() => connectBot(options), delay);
-      } else {
-        console.log('🛑 Sessão encerrada (Logout). Apague a pasta src/auth e reinicie para novo login.');
       }
     } else if (connection === 'open') {
       reconnectAttempts = 0;

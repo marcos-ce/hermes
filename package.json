@@ -8,7 +8,9 @@
     "start": "node --max-old-space-size=280 index.js",
     "setup": "node index.js --setup",
     "code": "node --max-old-space-size=280 index.js --code",
-    "fix-sessions": "node index.js --fix-sessions"
+    "fix-sessions": "node index.js --fix-sessions",
+    "clean-auth": "node index.js --reset-auth",
+    "reset-auth": "node index.js --reset-auth"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
