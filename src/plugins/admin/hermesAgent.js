@@ -446,27 +446,14 @@ module.exports = {
       return false;
     }
 
-    // Proteção 1 (Wizard ativo): Se o admin chamou o Hermes enquanto está no meio de um Wizard,
-    // pergunta amigavelmente se deseja cancelar o menu ou continuar configurando
+    // Proteção 1 (Wizard ativo): Se o admin possui uma sessão de Wizard ou Onboarding ativa,
+    // as respostas dele (incluindo quotes/replies de opções numéricas) pertencem ao wizardEngine.
+    // A IA não deve interceptar nem apagar o wizard ativo!
     const activeWizard = wizardCache.get(`${from}:${sender}`) ||
       (rawSender && (wizardCache.get(`${from}:${cleanJid(rawSender)}`) || wizardCache.get(`${from}:${rawSender}`)));
 
     if (activeWizard) {
-      // Libera e encerra o wizard anterior automaticamente para não engessar nem prender a conversa
-      wizardCache.del(`${from}:${sender}`);
-      if (rawSender) {
-        wizardCache.del(`${from}:${cleanJid(rawSender)}`);
-        wizardCache.del(`${from}:${rawSender}`);
-      }
-
-      // Se o usuário falou apenas para cancelar/fechar o menu ativo
-      if (/^(cancel|cancela|cancelar|sair|fecha|fechar|x)$/i.test(trimmedText)) {
-        await reply(tr(lang, 'wizard.cancelled'));
-        return true;
-      }
-
-      // Se o admin fez uma pergunta ou deu uma instrução natural (ex: "Queria agendar fechamento automático"),
-      // a sessão antiga é descartada e o fluxo segue DIRETO para a IA atender o pedido na hora sem burocracia!
+      return false; // Permite que o wizardEngine.handleInput processe a resposta do menu
     }
 
     // 2.1 Gatilho exclusivo de administradores: a IA permanece 100% adormecida para membros comuns
