@@ -528,6 +528,88 @@ class ConfigManager {
   }
 
   // ==========================================
+  // Gestão de Membros Silenciados (Mute Member)
+  // ==========================================
+
+  muteMember(groupJid, userJid, untilTimestamp, reason = '', by = '') {
+    const group = this.getOrCreateGroup(groupJid);
+    if (!group.mutedMembers) group.mutedMembers = {};
+    const clean = userJid.replace(/@.*$/, '').replace(/\D/g, '');
+    const key = `${clean}@s.whatsapp.net`;
+    group.mutedMembers[key] = {
+      until: untilTimestamp,
+      reason: reason || '',
+      by: by || '',
+      mutedAt: Date.now()
+    };
+    this.scheduleSave();
+    return group.mutedMembers[key];
+  }
+
+  unmuteMember(groupJid, userJid) {
+    const group = this.groups.get(groupJid);
+    if (!group || !group.mutedMembers) return false;
+    const clean = userJid.replace(/@.*$/, '').replace(/\D/g, '');
+    const key = `${clean}@s.whatsapp.net`;
+    if (group.mutedMembers[key]) {
+      delete group.mutedMembers[key];
+      this.scheduleSave();
+      return true;
+    }
+    return false;
+  }
+
+  isMemberMuted(groupJid, userJid) {
+    const group = this.groups.get(groupJid);
+    if (!group || !group.mutedMembers) return false;
+    const clean = userJid.replace(/@.*$/, '').replace(/\D/g, '');
+    const key = `${clean}@s.whatsapp.net`;
+    const record = group.mutedMembers[key];
+    if (!record) return false;
+    if (Date.now() > record.until) {
+      delete group.mutedMembers[key];
+      this.scheduleSave();
+      return false;
+    }
+    return true;
+  }
+
+  getMutedMemberData(groupJid, userJid) {
+    const group = this.groups.get(groupJid);
+    if (!group || !group.mutedMembers) return null;
+    const clean = userJid.replace(/@.*$/, '').replace(/\D/g, '');
+    const key = `${clean}@s.whatsapp.net`;
+    const record = group.mutedMembers[key];
+    if (!record) return null;
+    if (Date.now() > record.until) {
+      delete group.mutedMembers[key];
+      this.scheduleSave();
+      return null;
+    }
+    return record;
+  }
+
+  getAllMutedMembers(groupJid) {
+    const group = this.groups.get(groupJid);
+    if (!group || !group.mutedMembers) return {};
+    const now = Date.now();
+    let modified = false;
+    const result = {};
+    for (const [key, data] of Object.entries(group.mutedMembers)) {
+      if (now > data.until) {
+        delete group.mutedMembers[key];
+        modified = true;
+      } else {
+        result[key] = data;
+      }
+    }
+    if (modified) {
+      this.scheduleSave();
+    }
+    return result;
+  }
+
+  // ==========================================
   // Configurações de Plugins (Merge Não-Destrutivo)
   // ==========================================
 

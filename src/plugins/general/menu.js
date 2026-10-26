@@ -69,6 +69,7 @@ module.exports = {
       // Lista limpa e consistente de comandos rápidos
       const quickActions = [
         { cmd: `${p}fechar | ${p}abrir`, desc: { pt: 'Trancar ou abrir o grupo', es: 'Cerrar o abrir el grupo', en: 'Lock or unlock the group' } },
+        { cmd: `${p}mutar @user [tempo]`, desc: { pt: 'Silenciar membro por até 24h (!desmutar)', es: 'Silenciar miembro por hasta 24h (!desmutar)', en: 'Mute member for up to 24h (!unmute)' } },
         { cmd: `${p}ban @user`, desc: { pt: 'Banir membro (ou via resposta)', es: 'Expulsar miembro (o respondiendo)', en: 'Kick member (or via reply)' } },
         { cmd: `${p}warn @user`, desc: { pt: 'Advertir membro (!unwarn, !warns)', es: 'Advertir miembro (!unwarn, !warns)', en: 'Warn member (!unwarn, !warns)' } },
         { cmd: `${p}del`, desc: { pt: 'Apagar mensagem respondida', es: 'Borrar mensaje respondido', en: 'Delete replied message' } },

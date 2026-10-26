@@ -3,7 +3,7 @@ const wizardEngine = require('../../core/wizardEngine');
 module.exports = {
   name: 'mute',
   cmdNumber: 12,
-  aliases: ['mute', 'unmute', 'fechar', 'abrir', 'cerrar', 'lock', 'unlock', 'grupo', 'mutar', 'desmutar'],
+  aliases: ['mute', 'unmute', 'fechar', 'abrir', 'cerrar', 'lock', 'unlock', 'grupo'],
   usage: 'fechar | /abrir',
   description: 'Abre e fecha o grupo imediatamente para envio de mensagens',
   ownerOnly: false,

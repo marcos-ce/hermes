@@ -75,7 +75,7 @@ const TOOLS = [
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar'],
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember'],
             description: 'Nome do plugin.'
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
@@ -133,6 +133,36 @@ const TOOLS = [
     function: {
       name: 'unwarn_member',
       description: 'Remove 1 advertência de um membro (perdoa).',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: TARGET_DESCRIPTION }
+        },
+        required: ['target']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mute_member',
+      description: 'Silencia um membro temporariamente por até 24h, apagando todas as mensagens dele em tempo real.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: TARGET_DESCRIPTION },
+          duration: { type: 'string', description: 'Tempo do silenciamento (ex: "10m", "30m", "1h", "2h", "24h"). Padrão: "15m".' },
+          reason: { type: 'string', description: 'Motivo do silenciamento.' }
+        },
+        required: ['target']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unmute_member',
+      description: 'Remove o silenciamento de um membro no grupo, permitindo que ele volte a mandar mensagens.',
       parameters: {
         type: 'object',
         properties: {
@@ -1104,6 +1134,109 @@ class ToolRegistry {
         return {
           success: true,
           message: t(lang, 'warn.removed', { user: this._formatUserDisplay(from, targetData), warns: remaining, max: maxWarns }),
+          mentions: [targetData.groupJid]
+        };
+      }
+
+      case 'mute_member': {
+        if (!isBotAdmin) {
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
+        }
+
+        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
+        if (!targetData) {
+          return { success: false, error: t(lang, 'common.not_found_target') };
+        }
+
+        const botJid = cleanJid(sock?.user?.id || '');
+        const botLid = cleanJid(sock?.user?.lid || '');
+        const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+        if (targetData.groupJid === botJid || targetData.groupJid === botLid || (botNum && targetData.displayNum === botNum)) {
+          return { success: false, error: t(lang, 'mutemember.cannot_mute_bot') };
+        }
+
+        if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
+          return { success: false, error: t(lang, 'mutemember.cannot_mute_owner') };
+        }
+
+        const targetAdminCheck = await checkAdminStatus(sock, from, targetData.phoneJid);
+        if (targetAdminCheck.isAdmin) {
+          return { success: false, error: t(lang, 'mutemember.cannot_mute_admin') };
+        }
+
+        let parsedDuration = null;
+        if (args.duration) {
+          const raw = String(args.duration).toLowerCase().trim();
+          const match = raw.match(/^(\d+)\s*(m|min|mins|minuto|minutos|h|hr|hrs|hora|horas|d|dia|dias|s|seg|segundos)?$/i);
+          if (match) {
+            const val = parseInt(match[1], 10);
+            const unit = (match[2] || 'm').toLowerCase();
+            let minutes = 15;
+            if (['m', 'min', 'mins', 'minuto', 'minutos'].includes(unit)) minutes = val;
+            else if (['h', 'hr', 'hrs', 'hora', 'horas'].includes(unit)) minutes = val * 60;
+            else if (['d', 'dia', 'dias'].includes(unit)) minutes = val * 1440;
+            else if (['s', 'seg', 'segundos'].includes(unit)) minutes = Math.max(1, Math.round(val / 60));
+            else minutes = val;
+
+            const capped = Math.min(Math.max(minutes, 1), 1440);
+            const hours = Math.floor(capped / 60);
+            const mins = capped % 60;
+            let formatted = '';
+            if (hours > 0 && mins > 0) formatted = `${hours}h ${mins}m`;
+            else if (hours > 0) formatted = `${hours}h`;
+            else formatted = `${mins}m`;
+
+            parsedDuration = { minutes: capped, ms: capped * 60 * 1000, formatted };
+          }
+        }
+
+        if (!parsedDuration) {
+          parsedDuration = { minutes: 15, ms: 15 * 60 * 1000, formatted: '15m' };
+        }
+
+        const reason = args.reason ? String(args.reason).trim() : '';
+        const until = Date.now() + parsedDuration.ms;
+
+        configManager.muteMember(from, targetData.phoneJid, until, reason, sender);
+
+        const adminNum = sender.replace(/@.*$/, '').replace(/\D/g, '');
+        const adminText = `\n👮 *Por:* @${adminNum}`;
+        const reasonText = reason ? `\n📝 *Motivo:* ${reason}` : '';
+
+        const muteMsg = t(lang, 'mutemember.muted', {
+          user: this._formatUserDisplay(from, targetData),
+          duration: parsedDuration.formatted,
+          admin: adminText,
+          reason: reasonText
+        });
+
+        return {
+          success: true,
+          message: muteMsg,
+          mentions: [targetData.groupJid, sender]
+        };
+      }
+
+      case 'unmute_member': {
+        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
+        if (!targetData) {
+          return { success: false, error: t(lang, 'common.not_found_target') };
+        }
+
+        const isMuted = configManager.isMemberMuted(from, targetData.phoneJid);
+        if (!isMuted) {
+          return {
+            success: true,
+            message: t(lang, 'mutemember.not_muted', { user: this._formatUserDisplay(from, targetData) }),
+            mentions: [targetData.groupJid]
+          };
+        }
+
+        configManager.unmuteMember(from, targetData.phoneJid);
+        return {
+          success: true,
+          message: t(lang, 'mutemember.unmuted', { user: this._formatUserDisplay(from, targetData) }),
           mentions: [targetData.groupJid]
         };
       }
