@@ -10,6 +10,7 @@ const pollTracker = require('../utils/pollTracker');
 const pinTracker = require('../utils/pinTracker');
 const memoryEngine = require('./memoryEngine');
 const { parseRelativeTime } = require('./timeParser');
+const { executeCalendarAction } = require('../plugins/admin/calendar');
 
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
@@ -216,15 +217,21 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'manage_calendar',
-      description: 'Gerencia lembretes e agendamentos no calendário do grupo.',
+      description: 'Gerencia lembretes, apurações de enquetes, sorteios e ações agendadas no grupo.',
       parameters: {
         type: 'object',
         properties: {
           action: { type: 'string', enum: ['add', 'list', 'delete', 'clear'], description: 'Ação: "add", "list", "delete" ou "clear".' },
+          actionType: {
+            type: 'string',
+            enum: ['reminder', 'poll_result', 'close_group', 'open_group', 'raffle', 'unpin'],
+            description: 'Tipo de ação para "add": "poll_result" (apurar e mandar resultado de enquete), "close_group" (fechar grupo), "open_group" (abrir grupo), "raffle" (sorteio), "unpin" (desafixar mensagens), "reminder" (lembrete de texto normal).'
+          },
           date: { type: 'string', description: 'Data (DD/MM, "hoje" ou "amanhã").' },
           time: { type: 'string', description: 'Horário (HH:MM, "14h" ou relativo "em 30 min").' },
           delayMinutes: { type: 'integer', description: 'Minutos a partir de agora (ex: 15, 30, 60).' },
-          text: { type: 'string', description: 'Texto do lembrete (obrigatório para "add").' },
+          text: { type: 'string', description: 'Texto do lembrete, prêmio do sorteio ou detalhe da ação.' },
+          quantity: { type: 'integer', description: 'Quantidade de ganhadores se actionType for "raffle" (padrão: 1).' },
           eventId: { type: 'string', description: 'ID numérico do evento para "delete" (ex: "1").' }
         },
         required: ['action']
@@ -1279,7 +1286,7 @@ class ToolRegistry {
 
           // 1. Tentar parse relativo se houver delayMinutes ou se time/date for expressão relativa
           const relCandidate = args.delayMinutes || args.time || args.date;
-          if (args.delayMinutes || (typeof relCandidate === 'string' && /(?:daqui|em\s+\d+|meia\s+hora|minutos?|horas?|amanh[aã]|hoje|\+\d+)/i.test(relCandidate))) {
+          if (args.delayMinutes || (typeof relCandidate === 'string' && /(?:daqui|dq|em\s+\d+|meia\s+hora|minutos?|horas?|amanh[aã]|hoje|\+\d+)/i.test(relCandidate))) {
             const rel = parseRelativeTime(args.delayMinutes || relCandidate);
             if (rel.success) {
               parsedDate = rel.formattedDate;
@@ -1338,6 +1345,25 @@ class ToolRegistry {
 
           const reminderText = String(args.text || args.message || 'Lembrete agendado pelo administrador').trim();
 
+          // Detecção e inferência inteligente do tipo de ação agendada:
+          let actionType = String(args.actionType || args.type || '').toLowerCase();
+          if (!actionType || actionType === 'reminder') {
+            const combinedText = `${reminderText} ${String(args.action || '')}`.toLowerCase();
+            if (/enquete|poll|resultado|voto|vota[cç][aã]o|placar|parcial|ganh|apur/i.test(combinedText)) {
+              actionType = 'poll_result';
+            } else if (/sorte|raffle|sortear|ganhador/i.test(combinedText)) {
+              actionType = 'raffle';
+            } else if (/desfix|unpin|despin/i.test(combinedText)) {
+              actionType = 'unpin';
+            } else if (/fech|tranc|mute|lock/i.test(combinedText) && !/abrir/i.test(combinedText)) {
+              actionType = 'close_group';
+            } else if (/abr|unmute|unlock/i.test(combinedText)) {
+              actionType = 'open_group';
+            } else {
+              actionType = 'reminder';
+            }
+          }
+
           const creatorData = await resolveParticipant(sock, from, sender);
           const creatorNum = creatorData?.displayNum || sender.replace(/@.*$/, '').replace(/\D/g, '');
           const creatorDisplay = creatorData?.displayUser || creatorNum;
@@ -1351,6 +1377,9 @@ class ToolRegistry {
             date: parsedDate,
             time: parsedTime,
             text: reminderText,
+            action: actionType,
+            raffleQuantity: args.quantity ? parseInt(args.quantity, 10) : 1,
+            rafflePrize: args.text || args.prize || '',
             createdBy: creatorNum,
             creatorDisplay,
             creatorJid,
@@ -1374,61 +1403,39 @@ class ToolRegistry {
                   ev.executedAt = Date.now();
                   configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
 
-                  let creatorMention = '';
-                  let eventCreatorJid = ev.creatorJid || '';
-                  if (!eventCreatorJid && ev.createdBy) {
-                    eventCreatorJid = ev.createdBy.includes('@') ? ev.createdBy : `${ev.createdBy}@s.whatsapp.net`;
-                  }
-
-                  const eventCreatorDisplay = ev.creatorDisplay || ev.createdBy || '';
-                  if (eventCreatorDisplay) {
-                    creatorMention = t(lang, 'calendar.creator_tag', { user: eventCreatorDisplay });
-                  }
-
-                  const body = t(lang, 'calendar.event_announcement', {
-                    time: parsedTime,
-                    text: reminderText,
-                    creator: creatorMention
-                  });
-
-                  let mentions = [];
-                  if (Boolean(currentCfg.mentionAll)) {
-                    const meta = await getGroupMetadata(sock, from);
-                    if (meta && Array.isArray(meta.participants)) {
-                      const allMembers = new Set();
-                      meta.participants.forEach(p => {
-                        if (p.id) allMembers.add(p.id);
-                        if (p.jid) allMembers.add(p.jid);
-                        if (p.lid) allMembers.add(p.lid);
-                      });
-                      mentions = Array.from(allMembers);
-                    }
-                  }
-
-                  if (eventCreatorJid && !mentions.includes(eventCreatorJid)) {
-                    mentions.push(eventCreatorJid);
-                  }
-                  if (ev.creatorPhoneJid && !mentions.includes(ev.creatorPhoneJid)) {
-                    mentions.push(ev.creatorPhoneJid);
-                  }
-
-                  await sendSafeMessage(sock, from, { text: body, mentions });
+                  await executeCalendarAction({ sock, groupJid: from, event: ev, lang, config: currentCfg });
                 }
               } catch (err) {
-                logger.error({ err, from, newId }, 'Erro ao disparar lembrete agendado temporizado');
+                logger.error({ err, from, newId }, 'Erro ao disparar ação agendada temporizada');
               }
             }, relDelayMs);
             if (timer.unref) timer.unref();
           }
 
-          return {
-            success: true,
-            message: t(lang, 'calendar.added', {
+          let confirmMsg = '';
+          if (actionType === 'poll_result') {
+            confirmMsg = `📊 Apuração da enquete agendada com sucesso para ${parsedTime} (${parsedDate}). No horário, os votos serão apurados e o resultado oficial será publicado aqui no grupo!`;
+          } else if (actionType === 'raffle') {
+            const prizeInfo = args.text ? ` (${args.text})` : '';
+            confirmMsg = `🎲 Sorteio agendado com sucesso para ${parsedTime} (${parsedDate})${prizeInfo}. No horário marcado, o ganhador será anunciado!`;
+          } else if (actionType === 'unpin') {
+            confirmMsg = `📌 Desafixação de mensagens agendada com sucesso para ${parsedTime} (${parsedDate}).`;
+          } else if (actionType === 'close_group') {
+            confirmMsg = `🔒 Fechamento do grupo agendado com sucesso para ${parsedTime} (${parsedDate}).`;
+          } else if (actionType === 'open_group') {
+            confirmMsg = `🔓 Abertura do grupo agendada com sucesso para ${parsedTime} (${parsedDate}).`;
+          } else {
+            confirmMsg = t(lang, 'calendar.added', {
               id: newId,
               date: parsedDate,
               time: parsedTime,
               text: newEvent.text
-            })
+            });
+          }
+
+          return {
+            success: true,
+            message: confirmMsg
           };
         }
 

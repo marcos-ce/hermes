@@ -4,6 +4,9 @@ const settings = require('../../config/settings');
 const { sendSafeMessage } = require('../../utils/antiBan');
 const { getGroupMetadata, resolveParticipant, cleanJid } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
+const pollTracker = require('../../utils/pollTracker');
+const pinTracker = require('../../utils/pinTracker');
+const logger = require('../../utils/logger');
 
 /**
  * Normaliza e valida data no formato DD/MM
@@ -65,6 +68,166 @@ function parseTime(timeStr) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
+/**
+ * Executa de forma autônoma a ação agendada no evento
+ * Suporta apuração de enquetes, sorteios, desafixar mensagens, trancar/abrir grupo e lembretes
+ * @param {object} params
+ * @param {object} params.sock
+ * @param {string} params.groupJid
+ * @param {object} params.event
+ * @param {string} [params.lang]
+ * @param {object} [params.config]
+ */
+async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', config = {} }) {
+  const actionType = event.action || event.actionType || 'reminder';
+
+  // 1. Apuração e publicação do resultado de enquete
+  if (actionType === 'poll_result') {
+    const pollResults = pollTracker.getPollResults(groupJid);
+    if (!pollResults) {
+      await sendSafeMessage(sock, groupJid, {
+        text: '📊 *[APURAÇÃO AUTOMÁTICA DE ENQUETE]*\n\nNenhuma votação recente com votos computados foi encontrada neste grupo.'
+      });
+      return;
+    }
+    const winnerStr = pollResults.winner
+      ? `🏆 *Vencedor Oficial:* "${pollResults.winner.name}" com ${pollResults.winner.votes} voto(s)`
+      : (pollResults.isTie ? '⚖️ *Resultado:* Empate entre as opções mais votadas' : 'Nenhum voto computado ainda');
+    const body =
+      `📊 *[RESULTADO OFICIAL DA ENQUETE]*\n\n` +
+      `📌 *"${pollResults.title}"*\n\n` +
+      `${pollResults.summary.split(' | ').map(s => `  ▪️ ${s}`).join('\n')}\n\n` +
+      `${winnerStr}\n` +
+      `_(Total de votos apurados: ${pollResults.totalVotes})_`;
+    await sendSafeMessage(sock, groupJid, { text: body });
+    return;
+  }
+
+  // 2. Trancar grupo
+  if (actionType === 'close_group') {
+    try {
+      await sock.groupSettingUpdate(groupJid, 'announcement');
+      await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.closed') });
+    } catch (_) {}
+    return;
+  }
+
+  // 3. Abrir grupo
+  if (actionType === 'open_group') {
+    try {
+      await sock.groupSettingUpdate(groupJid, 'not_announcement');
+      await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.opened') });
+    } catch (_) {}
+    return;
+  }
+
+  // 4. Desafixar todas as mensagens fixadas
+  if (actionType === 'unpin') {
+    try {
+      const pinnedList = pinTracker.getPinned(groupJid);
+      if (pinnedList && pinnedList.length > 0) {
+        let count = 0;
+        for (const key of pinnedList) {
+          try {
+            await sock.sendMessage(groupJid, { pin: key, type: 2 });
+            count++;
+            await new Promise(r => setTimeout(r, 400));
+          } catch (_) {}
+        }
+        pinTracker.clearPins(groupJid);
+        await sendSafeMessage(sock, groupJid, {
+          text: `📌 *[DESAFIXAÇÃO AUTOMÁTICA]*\n\nTodas as ${count} mensagem(ns) fixada(s) foram desafixadas conforme programado.`
+        });
+      }
+    } catch (_) {}
+    return;
+  }
+
+  // 5. Sorteio aleatório agendado
+  if (actionType === 'raffle') {
+    try {
+      let metadata = await getGroupMetadata(sock, groupJid);
+      if (!metadata || !Array.isArray(metadata.participants)) {
+        try { metadata = await sock.groupMetadata(groupJid); } catch (_) {}
+      }
+      if (!metadata || !Array.isArray(metadata.participants) || metadata.participants.length <= 1) {
+        await sendSafeMessage(sock, groupJid, { text: t(lang, 'raffle.not_enough') });
+        return;
+      }
+      const botJid = sock?.user?.id ? cleanJid(sock.user.id) : '';
+      const botLid = sock?.user?.lid ? cleanJid(sock.user.lid) : '';
+      const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      let pool = metadata.participants.filter(p => {
+        const pId = cleanJid(p.id);
+        const pLid = p.lid ? cleanJid(p.lid) : '';
+        const pJid = p.jid ? cleanJid(p.jid) : '';
+        const pNum = pJid.replace(/@.*$/, '').replace(/\D/g, '') || pId.replace(/@.*$/, '').replace(/\D/g, '');
+        if (pId === botJid || pLid === botLid || (botNum && pNum === botNum)) return false;
+        if (p.admin === 'admin' || p.admin === 'superadmin') return false;
+        return true;
+      });
+      if (pool.length === 0) {
+        pool = metadata.participants.filter(p => {
+          const pId = cleanJid(p.id);
+          const pLid = p.lid ? cleanJid(p.lid) : '';
+          const pJid = p.jid ? cleanJid(p.jid) : '';
+          const pNum = pJid.replace(/@.*$/, '').replace(/\D/g, '') || pId.replace(/@.*$/, '').replace(/\D/g, '');
+          if (pId === botJid || pLid === botLid || (botNum && pNum === botNum)) return false;
+          return true;
+        });
+      }
+      const qty = Math.max(1, Math.min(event.raffleQuantity || 1, pool.length));
+      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      const winners = shuffled.slice(0, qty);
+      const winnerMentions = winners.map(w => cleanJid(w.id || w.jid));
+      const winnerText = winners.map(w => {
+        const num = cleanJid(w.id || w.jid).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        return `🎉 @${num}`;
+      }).join('\n');
+      const prizeStr = event.rafflePrize || event.text || '';
+      const body =
+        `🎲 *[SORTEIO AUTOMÁTICO AGENDADO]*\n\n` +
+        (prizeStr ? `🎁 *Prêmio:* ${prizeStr}\n\n` : '') +
+        `🏆 *Ganhador(es):*\n${winnerText}\n\n` +
+        `✨ _Parabéns aos sorteados!_`;
+      await sendSafeMessage(sock, groupJid, { text: body, mentions: winnerMentions });
+      return;
+    } catch (_) {}
+  }
+
+  // 6. Lembrete / Comunicado de texto padrão
+  let creatorMention = '';
+  let creatorJid = event.creatorJid || '';
+  if (!creatorJid && event.createdBy) {
+    creatorJid = event.createdBy.includes('@') ? event.createdBy : `${event.createdBy}@s.whatsapp.net`;
+  }
+  const creatorDisplay = event.creatorDisplay || event.createdBy || '';
+  if (creatorDisplay) {
+    creatorMention = t(lang, 'calendar.creator_tag', { user: creatorDisplay });
+  }
+  const body = t(lang, 'calendar.event_announcement', {
+    time: event.time,
+    text: event.text,
+    creator: creatorMention
+  });
+  let mentions = [];
+  if (Boolean(config.mentionAll)) {
+    const meta = await getGroupMetadata(sock, groupJid);
+    if (meta && Array.isArray(meta.participants)) {
+      const allMembers = new Set();
+      meta.participants.forEach(p => {
+        if (p.id) allMembers.add(p.id);
+        if (p.jid) allMembers.add(p.jid);
+        if (p.lid) allMembers.add(p.lid);
+      });
+      mentions = Array.from(allMembers);
+    }
+  }
+  if (creatorJid && !mentions.includes(creatorJid)) mentions.push(creatorJid);
+  if (event.creatorPhoneJid && !mentions.includes(event.creatorPhoneJid)) mentions.push(event.creatorPhoneJid);
+  await sendSafeMessage(sock, groupJid, { text: body, mentions });
+}
+
 module.exports = {
   name: 'calendar',
   aliases: ['calendar', 'agenda', 'agendar', 'calendario', 'calendário', 'agendamento', 'agendamentos', 'eventos', 'evento'],
@@ -72,6 +235,7 @@ module.exports = {
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: false,
+  executeCalendarAction,
 
   configSchema: {
     title: {
@@ -131,79 +295,17 @@ module.exports = {
         event.executedAt = Date.now();
         modified = true;
 
-        const eventText = event.text;
-        const eventTime = event.time;
-        const mentionAll = Boolean(config.mentionAll);
-
-        if (event.action === 'close_group') {
-          queueTask({
-            type: 'calendar_mute_close',
-            groupJid,
-            run: async () => {
-              try {
-                await sock.groupSettingUpdate(groupJid, 'announcement');
-                await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.closed') });
-              } catch (_) {}
+        queueTask({
+          type: `calendar_${event.action || event.actionType || 'event'}`,
+          groupJid,
+          run: async () => {
+            try {
+              await executeCalendarAction({ sock, groupJid, event, lang, config });
+            } catch (err) {
+              logger.error({ err, groupJid, eventId: event.id }, 'Erro ao executar ação agendada no calendário');
             }
-          });
-        } else if (event.action === 'open_group') {
-          queueTask({
-            type: 'calendar_mute_open',
-            groupJid,
-            run: async () => {
-              try {
-                await sock.groupSettingUpdate(groupJid, 'not_announcement');
-                await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.opened') });
-              } catch (_) {}
-            }
-          });
-        } else {
-          queueTask({
-            type: 'calendar_event',
-            groupJid,
-            run: async () => {
-              let creatorMention = '';
-              let creatorJid = event.creatorJid || '';
-              if (!creatorJid && event.createdBy) {
-                creatorJid = event.createdBy.includes('@') ? event.createdBy : `${event.createdBy}@s.whatsapp.net`;
-              }
-
-              const creatorDisplay = event.creatorDisplay || event.createdBy || '';
-              if (creatorDisplay) {
-                creatorMention = t(lang, 'calendar.creator_tag', { user: creatorDisplay });
-              }
-
-              const body = t(lang, 'calendar.event_announcement', {
-                time: eventTime,
-                text: eventText,
-                creator: creatorMention
-              });
-
-              let mentions = [];
-              if (mentionAll) {
-                const meta = await getGroupMetadata(sock, groupJid);
-                if (meta && Array.isArray(meta.participants)) {
-                  const allMembers = new Set();
-                  meta.participants.forEach(p => {
-                    if (p.id) allMembers.add(p.id);
-                    if (p.jid) allMembers.add(p.jid);
-                    if (p.lid) allMembers.add(p.lid);
-                  });
-                  mentions = Array.from(allMembers);
-                }
-              }
-
-              if (creatorJid && !mentions.includes(creatorJid)) {
-                mentions.push(creatorJid);
-              }
-              if (event.creatorPhoneJid && !mentions.includes(event.creatorPhoneJid)) {
-                mentions.push(event.creatorPhoneJid);
-              }
-
-              await sendSafeMessage(sock, groupJid, { text: body, mentions });
-            }
-          });
-        }
+          }
+        });
       }
     }
 

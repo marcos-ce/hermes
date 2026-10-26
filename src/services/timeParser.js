@@ -43,15 +43,15 @@ function parseRelativeTime(input, baseDate = new Date()) {
   let delayMinutes = null;
 
   // Meia hora / Uma hora e meia
-  if (/(?:daqui\s+a\s+|em\s+)?meia\s+hora/i.test(rawStr) || /half\s+an\s+hour/i.test(rawStr) || /media\s+hora/i.test(rawStr)) {
+  if (/(?:daqui\s+a\s+|dq\s+a\s+|daqui\s+|dq\s+|em\s+)?meia\s+hora/i.test(rawStr) || /half\s+an\s+hour/i.test(rawStr) || /media\s+hora/i.test(rawStr)) {
     delayMinutes = 30;
-  } else if (/(?:daqui\s+a\s+|em\s+)?(?:1|uma|una|one)\s+hora\s+e\s+meia/i.test(rawStr)) {
+  } else if (/(?:daqui\s+a\s+|dq\s+a\s+|daqui\s+|dq\s+|em\s+)?(?:1|uma|una|one)\s+hora\s+e\s+meia/i.test(rawStr)) {
     delayMinutes = 90;
   }
 
-  // "X horas" ou "Xh" com prefixo relativo ("daqui a", "em", "+", "depois de")
+  // "X horas" ou "Xh" com prefixo relativo ("daqui a", "dq a", "em", "+", "depois de")
   if (delayMinutes === null) {
-    const hoursMatch = rawStr.match(/(?:daqui\s+a\s+|em\s+|depois\s+de\s+|\+)(\d+(?:[.,]\d+)?)\s*(?:horas?|hrs?|hs?|h)\b/i);
+    const hoursMatch = rawStr.match(/(?:daqui\s+a\s+|dq\s+a\s+|daqui\s+|dq\s+|em\s+|depois\s+de\s+|\+)(\d+(?:[.,]\d+)?)\s*(?:horas?|hrs?|hs?|h)\b/i);
     if (hoursMatch) {
       const hoursVal = parseFloat(hoursMatch[1].replace(',', '.'));
       if (!isNaN(hoursVal) && hoursVal > 0) {
@@ -61,13 +61,13 @@ function parseRelativeTime(input, baseDate = new Date()) {
   }
 
   // "uma hora" por extenso com prefixo relativo
-  if (delayMinutes === null && /(?:daqui\s+a\s+|em\s+|depois\s+de\s+)(?:uma|una|one)\s+hora\b/i.test(rawStr)) {
+  if (delayMinutes === null && /(?:daqui\s+a\s+|dq\s+a\s+|daqui\s+|dq\s+|em\s+|depois\s+de\s+)(?:uma|una|one)\s+hora\b/i.test(rawStr)) {
     delayMinutes = 60;
   }
 
   // "X minutos" ou "Xm" / "Xmin" com prefixo relativo
   if (delayMinutes === null) {
-    const minsMatch = rawStr.match(/(?:daqui\s+a\s+|em\s+|depois\s+de\s+|\+)(\d+)\s*(?:minutos?|mins?|m)\b/i);
+    const minsMatch = rawStr.match(/(?:daqui\s+a\s+|dq\s+a\s+|daqui\s+|dq\s+|em\s+|depois\s+de\s+|\+)(\d+)\s*(?:minutos?|mins?|m)\b/i);
     if (minsMatch) {
       const minsVal = parseInt(minsMatch[1], 10);
       if (!isNaN(minsVal) && minsVal > 0) {

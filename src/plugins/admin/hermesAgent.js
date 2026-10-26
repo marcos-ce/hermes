@@ -25,7 +25,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -878,7 +878,7 @@ module.exports = {
     }
 
     // Injeção de Enquete / Votação sob demanda (apenas quando relevante para economizar tokens)
-    const pollKeywords = /enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh/i;
+    const pollKeywords = /enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|placar|voto|votos|venceu|disputa|parcial|frente|opç[oõ]es/i;
     const isPollRelated = pollKeywords.test(queryText || '') ||
                           pollKeywords.test(snippet || '') ||
                           Boolean(quotedPoll);
