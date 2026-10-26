@@ -1,3 +1,0 @@
-# Arquivo Gatilho de Reset de Autenticação
-# Ao inicializar na hospedagem (Discloud/VPS), o bot detectará este arquivo,
-# apagará a pasta src/auth corrompida/antiga e removerá este gatilho automaticamente.

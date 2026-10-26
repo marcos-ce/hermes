@@ -4,6 +4,7 @@ node_modules/
 # Autenticação e Sessão Baileys
 src/auth/
 auth/
+RESET_AUTH
 
 # Dados e Persistência
 data/
