@@ -25,7 +25,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|m[oó]dulo|antilink|antiflood|antifake|warn|advert|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -650,19 +650,22 @@ module.exports = {
                             rawQuotedMsg?.documentWithCaptionMessage?.message ||
                             rawQuotedMsg;
 
+    let snippet = '';
+    let quotedPoll = null;
+
     if (unwrappedQuoted) {
       const isQuotedImage = Boolean(unwrappedQuoted.imageMessage || unwrappedQuoted.stickerMessage);
       const isQuotedVideo = Boolean(unwrappedQuoted.videoMessage);
-      const quotedPoll = unwrappedQuoted.pollCreationMessage ||
-                         unwrappedQuoted.pollCreationMessageV2 ||
-                         unwrappedQuoted.pollCreationMessageV3;
+      quotedPoll = unwrappedQuoted.pollCreationMessage ||
+                   unwrappedQuoted.pollCreationMessageV2 ||
+                   unwrappedQuoted.pollCreationMessageV3;
 
       const quotedContent = (unwrappedQuoted.conversation ||
                             unwrappedQuoted.extendedTextMessage?.text ||
                             unwrappedQuoted.imageMessage?.caption ||
                             unwrappedQuoted.videoMessage?.caption ||
                             '').trim();
-      const snippet = quotedContent.length > 250 ? `${quotedContent.slice(0, 250)}…` : quotedContent;
+      snippet = quotedContent.length > 250 ? `${quotedContent.slice(0, 250)}…` : quotedContent;
 
       if (isQuotedImage) {
         userPromptParts.push(`[A mensagem citada contém uma FOTO/IMAGEM${snippet ? ` com legenda: "${snippet}"` : ' (sem legenda)'}]`);
@@ -818,11 +821,42 @@ module.exports = {
       );
     }
 
-    // Ideia 4: Injeção da última ação recente para o mecanismo de Desfazer (Undo)
-    const lastAction = wizardCache.get(`undo:${from}`);
-    if (lastAction) {
-      const minutesAgo = Math.max(1, Math.round((Date.now() - lastAction.timestamp) / 60000));
-      userPromptParts.push(`[Última ação executada pelo Hermes há ${minutesAgo} min: ferramenta=${lastAction.tool}, args=${JSON.stringify(lastAction.args)}]`);
+    // Ideia 4: Injeção da Pilha de Desfazer (Undo Stack) apenas sob demanda (economiza tokens)
+    const isUndoRequest = /desfa[zç]|desfazer|cancela|reverte|desfaz tudo|volta atr[aá]s|despina|desfixa/i.test(queryText || '');
+    if (isUndoRequest) {
+      const undoStack = wizardCache.get(`undo_stack:${from}`) || (wizardCache.get(`undo:${from}`) ? [wizardCache.get(`undo:${from}`)] : []);
+      if (undoStack.length > 0) {
+        const stackSummary = undoStack.slice(0, 5).map((act, i) => {
+          const minutesAgo = Math.max(1, Math.round((Date.now() - act.timestamp) / 60000));
+          return `${i + 1}. [há ${minutesAgo}m] ${act.tool}(${JSON.stringify(act.args)})`;
+        }).join(' | ');
+        userPromptParts.push(`[Ações recentes do Hermes que podem ser desfeitas (ordem LIFO, 1 é a mais recente)]: ${stackSummary}`);
+      }
+    }
+
+    // Injeção de Enquete / Votação sob demanda (apenas quando relevante para economizar tokens)
+    const pollKeywords = /enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh/i;
+    const isPollRelated = pollKeywords.test(queryText || '') ||
+                          pollKeywords.test(snippet || '') ||
+                          Boolean(quotedPoll);
+
+    if (isPollRelated) {
+      const targetPollId = (contextInfo?.stanzaId && pollTracker.getPoll(contextInfo.stanzaId))
+        ? contextInfo.stanzaId
+        : null;
+      const pollData = pollTracker.getPollResults(from, targetPollId);
+      if (pollData) {
+        const winnerDesc = pollData.winner
+          ? `VENCEDOR CLARO: "${pollData.winner.name}" com ${pollData.winner.votes} voto(s)`
+          : (pollData.isTie ? 'EMPATE entre as opções mais votadas' : 'NENHUM VOTO computado ainda');
+        userPromptParts.push(
+          `[Resultado Atual da Enquete no Grupo: "${pollData.title}" | Opções e Votos: ${pollData.summary} | ${winnerDesc}]`
+        );
+      } else {
+        userPromptParts.push(
+          `[Aviso de Enquete: Nenhuma enquete com votos registrada recentemente neste grupo. Chame get_poll_results para verificar ou informe o admin]`
+        );
+      }
     }
 
     // Ideia 5: Continuação ativa — TTL 60s garantido pelo node-cache (zero leak)
@@ -965,14 +999,18 @@ module.exports = {
             await reply(execResult.message, mentionOpts);
             memoryEngine.saveMessage(from, 'hermes@bot', execResult.message, null, 'Hermes');
 
-            // Ideia 4: Registra ação reversível — TTL 1800s, zero memory leak
+            // Ideia 4: Registra ação na Pilha de Desfazer (Undo Stack) — TTL 1800s, zero memory leak
             if (REVERSIBLE_TOOLS.has(call.name)) {
-              wizardCache.set(`undo:${from}`, {
+              const stack = wizardCache.get(`undo_stack:${from}`) || [];
+              stack.unshift({
                 tool: call.name,
                 args: call.args,
                 timestamp: Date.now(),
                 message: execResult.message
-              }, 1800);
+              });
+              if (stack.length > 8) stack.pop();
+              wizardCache.set(`undo_stack:${from}`, stack, 1800);
+              wizardCache.set(`undo:${from}`, stack[0], 1800);
             }
           } else if (execResult?.error) {
             await reply(execResult.error);

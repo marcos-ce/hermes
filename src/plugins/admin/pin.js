@@ -1,4 +1,5 @@
 const { cleanJid } = require('../../utils/jidResolver');
+const pinTracker = require('../../utils/pinTracker');
 const logger = require('../../utils/logger');
 
 module.exports = {
@@ -17,6 +18,28 @@ module.exports = {
 
   async execute({ sock, msg, from, args, command, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
+
+    const cmdName = (command || '').toLowerCase();
+    const subArg = (args[0] || '').toLowerCase();
+
+    // Suporte a desafixar todas as mensagens do grupo (!unpin all / !desafixar todas)
+    const isUnpinAll = (['unpin', 'desafixar', 'despinar'].includes(cmdName) && ['all', 'todas', 'todos', 'tudo'].includes(subArg)) ||
+                       (['all', 'todas', 'todos', 'tudo'].includes(args[1]?.toLowerCase()));
+
+    if (isUnpinAll) {
+      const pinnedList = pinTracker.getPinned(from);
+      if (pinnedList.length === 0) {
+        return reply('📌 Não há mensagens fixadas registradas neste grupo.');
+      }
+      for (const k of pinnedList) {
+        try {
+          await sock.sendMessage(from, { pin: k, type: 2 });
+          await new Promise(r => setTimeout(r, 400));
+        } catch (_) {}
+      }
+      pinTracker.clearPins(from);
+      return reply(`📌 Todas as mensagens fixadas registradas foram desafixadas com sucesso!`);
+    }
 
     const realMsg = msg?.message?.ephemeralMessage?.message ||
                     msg?.message?.viewOnceMessage?.message ||
@@ -54,8 +77,6 @@ module.exports = {
       participant: isFromMe ? (participantJid || botJid || undefined) : (contextInfo?.participant || undefined)
     };
 
-    const cmdName = (command || '').toLowerCase();
-    const subArg = (args[0] || '').toLowerCase();
     const isUnpin = ['unpin', 'desafixar', 'despinar'].includes(cmdName) ||
                     ['unpin', 'desafixar', 'despinar', 'del', 'remover', 'tirar', 'off', '2'].includes(subArg);
 
@@ -65,6 +86,7 @@ module.exports = {
           pin: targetKey,
           type: 2 // 2 = UNPIN_FOR_ALL
         });
+        pinTracker.removePin(from, targetKey.id);
         return reply(t('pin.unpinned'));
       } catch (err) {
         logger.error({ err, from, stanzaId }, 'Erro ao desafixar mensagem');
@@ -94,6 +116,7 @@ module.exports = {
         type: 1, // 1 = PIN_FOR_ALL
         time: durationSecs
       });
+      pinTracker.addPin(from, targetKey);
       return reply(t('pin.pinned', { duration: durationLabel }));
     } catch (err) {
       logger.error({ err, from, stanzaId }, 'Erro ao fixar mensagem');

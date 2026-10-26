@@ -7,6 +7,7 @@ const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, c
 const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
 const pollTracker = require('../utils/pollTracker');
+const pinTracker = require('../utils/pinTracker');
 const memoryEngine = require('./memoryEngine');
 const { parseRelativeTime } = require('./timeParser');
 
@@ -277,11 +278,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'pin_group_message',
-      description: 'Fixa ("pin") ou desafixa ("unpin") mensagem respondida ou por ref "m123".',
+      description: 'Fixa ("pin"), desafixa ("unpin") mensagem respondida ou desafixa todas as mensagens ("unpin_all").',
       parameters: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['pin', 'unpin'], description: '"pin" para fixar ou "unpin" para desafixar.' },
+          action: { type: 'string', enum: ['pin', 'unpin', 'unpin_all'], description: '"pin" para fixar, "unpin" para desafixar a mensagem ou "unpin_all" para desafixar todas as mensagens fixadas do grupo.' },
           duration: { type: 'string', enum: ['24h', '7d', '30d'], description: 'Duração: "24h", "7d" ou "30d" (padrão: "24h").' },
           messageId: { type: 'string', description: 'Ref "m123" ou omita para a mensagem respondida.' }
         },
@@ -309,10 +310,12 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_poll_results',
-      description: 'Consulta o resultado, opções, votos computados e vencedor da enquete mais recente do grupo.',
+      description: 'Consulta o resultado, opções, votos computados e vencedor da enquete do grupo.',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          pollId: { type: 'string', description: 'ID opcional da enquete a consultar (se omitido, consulta a mais recente do grupo).' }
+        },
         required: []
       }
     }
@@ -1578,6 +1581,32 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
+        const action = args.action || 'pin';
+
+        // 1. Desafixar todas as mensagens fixadas do grupo
+        if (action === 'unpin_all') {
+          const pinnedList = pinTracker.getPinned(from);
+          if (pinnedList.length === 0) {
+            return {
+              success: true,
+              message: '📌 Não há mensagens fixadas registradas neste grupo.'
+            };
+          }
+          let count = 0;
+          for (const key of pinnedList) {
+            try {
+              await sock.sendMessage(from, { pin: key, type: 2 });
+              count += 1;
+              await new Promise(r => setTimeout(r, 400));
+            } catch (_) {}
+          }
+          pinTracker.clearPins(from);
+          return {
+            success: true,
+            message: `📌 Todas as ${count} mensagem(ns) fixada(s) foram desafixadas com sucesso!`
+          };
+        }
+
         const realMsg = msg?.message?.ephemeralMessage?.message ||
                         msg?.message?.viewOnceMessage?.message ||
                         msg?.message?.viewOnceMessageV2?.message ||
@@ -1592,17 +1621,38 @@ class ToolRegistry {
         let targetStanzaId = null;
         let targetParticipant = null;
 
-        // 1. Prioridade absoluta: mensagem citada diretamente no chat (reply)
+        // Prioridade absoluta: mensagem citada diretamente no chat (reply)
         if (contextInfo?.stanzaId) {
           targetStanzaId = contextInfo.stanzaId;
           targetParticipant = contextInfo.participant;
         } else if (args.messageId && /^m\d{1,9}$/i.test(args.messageId.trim())) {
-          // 2. Ref explícito do histórico (ex: "m123") quando NÃO houve citação física
+          // Ref explícito do histórico (ex: "m123") quando NÃO houve citação física
           const refData = memoryEngine.getMessageByRef(from, args.messageId.trim());
           if (refData?.msgId) {
             targetStanzaId = refData.msgId;
             targetParticipant = refData.participant || refData.sender;
           }
+        }
+
+        // Se pediu para desafixar mas não apontou mensagem, tenta desafixar as conhecidas do grupo
+        if (action === 'unpin' && !targetStanzaId) {
+          const pinnedList = pinTracker.getPinned(from);
+          if (pinnedList.length > 0) {
+            let count = 0;
+            for (const key of pinnedList) {
+              try {
+                await sock.sendMessage(from, { pin: key, type: 2 });
+                count += 1;
+                await new Promise(r => setTimeout(r, 400));
+              } catch (_) {}
+            }
+            pinTracker.clearPins(from);
+            return {
+              success: true,
+              message: `📌 ${count} mensagem(ns) fixada(s) foram desafixadas com sucesso!`
+            };
+          }
+          return { success: false, error: t(lang, 'pin.reply_required') };
         }
 
         if (!targetStanzaId) {
@@ -1629,13 +1679,13 @@ class ToolRegistry {
           participant: isFromMe ? (cleanParticipant || botJid || undefined) : (targetParticipant || undefined)
         };
 
-        const action = args.action || 'pin';
         if (action === 'unpin') {
           try {
             await sock.sendMessage(from, {
               pin: targetKey,
               type: 2 // 2 = UNPIN_FOR_ALL
             });
+            pinTracker.removePin(from, targetKey.id);
             return {
               success: true,
               message: t(lang, 'pin.unpinned')
@@ -1662,6 +1712,7 @@ class ToolRegistry {
             type: 1, // 1 = PIN_FOR_ALL
             time: durationSecs
           });
+          pinTracker.addPin(from, targetKey);
           return {
             success: true,
             message: t(lang, 'pin.pinned', { duration: durationLabel })
@@ -1718,7 +1769,8 @@ class ToolRegistry {
       }
 
       case 'get_poll_results': {
-        const pollResults = pollTracker.getPollResults(from);
+        const targetId = typeof args.pollId === 'string' ? args.pollId.trim() : null;
+        const pollResults = pollTracker.getPollResults(from, targetId);
         if (!pollResults) {
           return {
             success: true,

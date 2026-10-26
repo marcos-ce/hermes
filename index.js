@@ -18,6 +18,7 @@ const configManager = require('./src/core/configManager');
 const pluginLoader = require('./src/core/pluginLoader');
 const { connectBot } = require('./src/core/connection');
 const scheduler = require('./src/core/scheduler');
+const pollTracker = require('./src/utils/pollTracker');
 const logger = require('./src/utils/logger');
 
 // ==========================================
@@ -32,6 +33,7 @@ function handleExit(signal) {
   console.log(`\n🛑 Recebido sinal de finalização (${signal}). Salvando dados com segurança...`);
   try {
     configManager.flushSync();
+    pollTracker.flushSync();
     console.log('💾 Dados persistidos com sucesso.');
   } catch (err) {
     console.error('❌ Erro ao salvar dados no encerramento:', err);
@@ -44,6 +46,7 @@ process.on('SIGTERM', () => handleExit('SIGTERM'));
 process.on('exit', () => {
   try {
     configManager.flushSync();
+    pollTracker.flushSync();
   } catch (_) {}
 });
 

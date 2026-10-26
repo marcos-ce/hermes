@@ -12,6 +12,7 @@ const logger = require('../utils/logger');
 const { groupCache } = require('../utils/cache');
 const { registerParticipantLid } = require('../utils/jidResolver');
 const pollTracker = require('../utils/pollTracker');
+const pinTracker = require('../utils/pinTracker');
 const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
@@ -273,9 +274,30 @@ async function connectBot(options = {}) {
   // Mensagens recebidas
   sock.ev.on('messages.upsert', async (m) => {
     try {
-      // Auto-healing de sessões corrompidas (Over 2000 messages into the future / No matching sessions)
+      // Auto-healing de sessões corrompidas e rastreamento de pins em grupos
       if (Array.isArray(m?.messages)) {
         for (const msg of m.messages) {
+          const from = msg?.key?.remoteJid;
+          if (from && from.endsWith('@g.us')) {
+            const realMsg = msg?.message?.ephemeralMessage?.message ||
+                            msg?.message?.viewOnceMessage?.message ||
+                            msg?.message?.viewOnceMessageV2?.message ||
+                            msg?.message?.documentWithCaptionMessage?.message ||
+                            msg?.message;
+
+            if (realMsg?.pinInChatMessage) {
+              pinTracker.handlePinMessage(from, realMsg.pinInChatMessage);
+            }
+
+            if (realMsg?.pollCreationMessage || realMsg?.pollCreationMessageV2 || realMsg?.pollCreationMessageV3) {
+              pollTracker.savePoll(from, msg);
+            }
+
+            if (realMsg?.pollUpdateMessage) {
+              await pollTracker.processIncomingVote(sock, msg, realMsg.pollUpdateMessage);
+            }
+          }
+
           if (msg?.messageStubType === 2 /* CIPHERTEXT */ && Array.isArray(msg?.messageStubParameters)) {
             const errStr = msg.messageStubParameters.join(' ');
             if (errStr.includes('2000') || errStr.includes('future') || errStr.includes('No matching sessions')) {
