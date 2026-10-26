@@ -95,6 +95,16 @@ module.exports = {
           en: 'Default mute duration in minutes (default: 15, max: 1440):'
         },
         default: 15
+      },
+      {
+        name: 'maxInsistence',
+        type: 'number',
+        question: {
+          pt: 'Máximo de mensagens apagadas por insistência antes de expulsar (padrão: 8, mínimo: 3):',
+          es: 'Máximo de mensajes eliminados por insistencia antes de expulsar (por defecto: 8, mínimo: 3):',
+          en: 'Maximum deleted messages from insistence before kicking (default: 8, min: 3):'
+        },
+        default: 8
       }
     ]
   },
@@ -118,13 +128,19 @@ module.exports = {
       logger.error({ err, from, sender }, 'Erro ao apagar mensagem de membro silenciado');
     }
 
-    // Proteção Anti-Abuso: detecta se o membro tenta floodar de birra (> 5 mensagens em 3 segundos)
+    // Contabiliza total acumulado de mensagens apagadas durante o silenciamento deste membro
+    const deleteCount = configManager.incrementMutedDeleteCount(from, sender);
+
+    // Proteção Anti-Abuso 1: detecção de flood / birra súbita (> 5 mensagens em 3 segundos)
     const now = Date.now();
     const trackerKey = `${from}:${sender}`;
     let timestamps = spamTracker.get(trackerKey) || [];
     timestamps = timestamps.filter(t => now - t < 3000);
     timestamps.push(now);
     spamTracker.set(trackerKey, timestamps);
+
+    const cfg = configManager.getPluginConfig(from, 'mutemember') || {};
+    const maxInsistence = Math.min(Math.max(parseInt(cfg.maxInsistence, 10) || 8, 3), 50);
 
     if (timestamps.length > 5) {
       spamTracker.delete(trackerKey);
@@ -135,6 +151,20 @@ module.exports = {
         await reply(t('mutemember.abuse_banned', { user: cleanNum }), { mentions: [sender] });
       } catch (err) {
         logger.error({ err, from, sender }, 'Erro ao expulsar membro silenciado abusivo');
+      }
+      return true;
+    }
+
+    // Proteção Anti-Abuso 2: detecção de insistência acumulada (atingiu o teto total de mensagens apagadas)
+    if (deleteCount >= maxInsistence) {
+      spamTracker.delete(trackerKey);
+      configManager.unmuteMember(from, sender);
+      try {
+        await safeKick(sock, from, sender);
+        const cleanNum = sender.replace(/@.*$/, '').replace(/\D/g, '');
+        await reply(t('mutemember.insistence_banned', { user: cleanNum, count: maxInsistence }), { mentions: [sender] });
+      } catch (err) {
+        logger.error({ err, from, sender }, 'Erro ao expulsar membro silenciado por insistência acumulada');
       }
       return true;
     }
@@ -175,8 +205,9 @@ module.exports = {
         else if (mins > 0) timeStr = `${mins}m ${secs}s`;
         else timeStr = `${secs}s`;
 
+        const countStr = data.deleteCount ? ` • ${data.deleteCount} msgs apagadas` : '';
         const reasonStr = data.reason ? ` - _${data.reason}_` : '';
-        listText += `• @${userNum} (restam ${timeStr})${reasonStr}\n`;
+        listText += `• @${userNum} (restam ${timeStr}${countStr})${reasonStr}\n`;
       }
       return reply(listText.trim(), { mentions: keys });
     }

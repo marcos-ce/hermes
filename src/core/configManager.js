@@ -540,10 +540,23 @@ class ConfigManager {
       until: untilTimestamp,
       reason: reason || '',
       by: by || '',
-      mutedAt: Date.now()
+      mutedAt: Date.now(),
+      deleteCount: 0
     };
     this.scheduleSave();
     return group.mutedMembers[key];
+  }
+
+  incrementMutedDeleteCount(groupJid, userJid) {
+    const group = this.groups.get(groupJid);
+    if (!group || !group.mutedMembers) return 0;
+    const clean = userJid.replace(/@.*$/, '').replace(/\D/g, '');
+    const key = `${clean}@s.whatsapp.net`;
+    const record = group.mutedMembers[key];
+    if (!record) return 0;
+    record.deleteCount = (record.deleteCount || 0) + 1;
+    this.scheduleSave();
+    return record.deleteCount;
   }
 
   unmuteMember(groupJid, userJid) {
