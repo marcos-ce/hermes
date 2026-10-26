@@ -1021,12 +1021,7 @@ wizardCache.on('expired', async (key, session) => {
       } catch (_) {}
     }
 
-    // Envia aviso de expiração mencionando o admin
-    const { sendSafeMessage } = require('../utils/antiBan');
-    await sendSafeMessage(sock, session.groupJid, {
-      text: timeoutMsg,
-      mentions: [session.sender]
-    });
+    // Encerramento silencioso: limpa prompts órfãos sem poluir o chat com mensagem de expiração
   } catch (_) {}
 });
 

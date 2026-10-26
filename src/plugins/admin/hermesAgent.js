@@ -358,12 +358,23 @@ module.exports = {
       }
     } else if (/^@[a-zA-Z0-9_:.-]+\s+/i.test(trimmedText)) {
       let afterMention = trimmedText.replace(/^@[a-zA-Z0-9_:.-]+\s+/i, '').trim();
-      if (afterMention.startsWith(groupPrefix) || afterMention.startsWith('/') || afterMention.startsWith('!')) {
+      const hasPrefixChar = afterMention.startsWith(groupPrefix) || afterMention.startsWith('/') || afterMention.startsWith('!');
+      if (hasPrefixChar) {
         afterMention = afterMention.slice(1).trim();
       }
-      const firstWord = afterMention.split(/\s+/)[0]?.toLowerCase();
+      const words = afterMention.split(/\s+/).filter(Boolean);
+      const firstWord = words[0]?.toLowerCase();
       const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
-      if (cmdPlugin && cmdPlugin.name !== 'hermes') {
+
+      // Se começar com prefixo explícito (ex: "@bot !fechar") ou for comando simples de até 3 palavras
+      // sem conectivos de linguagem natural (ex: "@bot ping", "@bot fechar", "@bot ban @user"):
+      // delega para o plugin tradicional determinístico.
+      // MAS se contiver linguagem natural, múltiplos pedidos ou frases (ex: "feche o grupo e reabra amanhã",
+      // "com um lembrete", "se chover"), entrega para a IA do Hermes atender o pedido composto completo!
+      const hasNaturalLanguage = /\b(e|com|para|pra|que|quando|se|amanh[aã]|depois|daqui|horas?|lembrete|aviso|ver|favor|por favor)\b/i.test(afterMention);
+      const isSimpleDeterministicCmd = cmdPlugin && cmdPlugin.name !== 'hermes' && (hasPrefixChar || (!hasNaturalLanguage && words.length <= 3));
+
+      if (isSimpleDeterministicCmd) {
         return false;
       }
     }
@@ -787,9 +798,9 @@ module.exports = {
       const activeEvents = Array.isArray(calCfg.events)
         ? calCfg.events.filter(e => !e.executed).slice(0, 5).map(e => `${e.date} às ${e.time}: ${e.text}`)
         : [];
-      const calSummary = calActive
-        ? (activeEvents.length > 0 ? activeEvents.join('; ') : 'nenhum evento pendente')
-        : 'off';
+      const calSummary = activeEvents.length > 0
+        ? activeEvents.join('; ')
+        : (calActive ? 'nenhum evento pendente' : 'off');
       const schedSummary = schedActive
         ? `fecha ${schedCfg.closeTime || '23:00'}/abre ${schedCfg.openTime || '07:00'}`
         : 'off';
