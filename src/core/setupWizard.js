@@ -35,6 +35,7 @@ DEFAULT_PREFIX=!
 DEFAULT_LANG=pt
 AUTH_MODE=owner
 ALLOW_PRIVATE_CMDS=false
+MARK_READ_ON_REPLY=false
 LOG_LEVEL=warn
 `;
       fs.writeFileSync(envPath, defaultEnv, 'utf-8');
@@ -125,6 +126,7 @@ DEFAULT_PREFIX=${defaultPrefix}
 DEFAULT_LANG=${defaultLang}
 AUTH_MODE=${authMode}
 ALLOW_PRIVATE_CMDS=${allowPrivateCmds}
+MARK_READ_ON_REPLY=false
 LOG_LEVEL=warn
 `;
 

@@ -32,6 +32,7 @@ class Settings {
     this.defaultLang = (process.env.DEFAULT_LANG || 'pt').toLowerCase();
     this.authMode = (process.env.AUTH_MODE || 'owner').toLowerCase();
     this.allowPrivateCmds = process.env.ALLOW_PRIVATE_CMDS === 'true';
+    this.markReadOnReply = process.env.MARK_READ_ON_REPLY === 'true';
     this.timezone = process.env.TIMEZONE || 'America/Sao_Paulo';
     this.logLevel = process.env.LOG_LEVEL || 'warn';
   }

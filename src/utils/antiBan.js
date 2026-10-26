@@ -1,6 +1,7 @@
 const { cooldownCache } = require('./cache');
 const { cleanJid } = require('./jidResolver');
 const logger = require('./logger');
+const settings = require('../config/settings');
 
 /**
  * Aguarda um período em milissegundos
@@ -56,7 +57,7 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
 
   // 1b. Confirmação de Leitura Cirúrgica Anti-Ban:
   // Marca como lida exclusivamente a mensagem a que o bot está respondendo (evita flood no grupo e simula humano abrindo o chat)
-  if (options.markAsRead !== false) {
+  if (settings.markReadOnReply && options.markAsRead !== false) {
     const targetKey = options.quoted?.key || (options.key?.id ? options.key : null);
     if (targetKey?.id && !targetKey.fromMe && typeof sock.readMessages === 'function') {
       sock.readMessages([targetKey]).catch(() => {});
