@@ -73,6 +73,7 @@ module.exports = {
         { cmd: `${p}ban @user`, desc: { pt: 'Banir membro (ou via resposta)', es: 'Expulsar miembro (o respondiendo)', en: 'Kick member (or via reply)' } },
         { cmd: `${p}warn @user`, desc: { pt: 'Advertir membro (!unwarn, !warns)', es: 'Advertir miembro (!unwarn, !warns)', en: 'Warn member (!unwarn, !warns)' } },
         { cmd: `${p}del`, desc: { pt: 'Apagar mensagem respondida', es: 'Borrar mensaje respondido', en: 'Delete replied message' } },
+        { cmd: `${p}link [reset]`, desc: { pt: 'Obter ou redefinir link de convite', es: 'Obtener o restablecer enlace de invitación', en: 'Get or reset group invite link' } },
         { cmd: `${p}pin [24h|7d|30d]`, desc: { pt: 'Fixar mensagem (!unpin desfixa)', es: 'Fijar mensaje (!unpin desfija)', en: 'Pin message (!unpin unpins)' } },
         { cmd: `${p}enquete [opções]`, desc: { pt: 'Criar votação interativa', es: 'Crear encuesta interactiva', en: 'Create interactive poll' } },
         { cmd: `${p}foto`, desc: { pt: 'Definir foto do grupo (com imagem)', es: 'Cambiar foto del grupo (con imagen)', en: 'Change group icon (with image)' } },

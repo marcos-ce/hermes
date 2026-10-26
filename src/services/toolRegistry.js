@@ -314,6 +314,24 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_group_invite_link',
+      description: 'Obtém o link oficial de convite do grupo ou revoga/gera um novo se solicitado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['get', 'revoke'],
+            description: '"get" para obter o link atual, "revoke" para cancelar o antigo e gerar um novo link.'
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'pin_group_message',
       description: 'Fixa ("pin"), desafixa ("unpin") mensagem respondida ou desafixa todas as mensagens ("unpin_all").',
       parameters: {
@@ -1915,6 +1933,32 @@ class ToolRegistry {
         } catch (err) {
           logger.error({ err, from }, 'Erro ao fixar mensagem via Hermes');
           return { success: false, error: t(lang, 'pin.error') };
+        }
+      }
+
+      case 'get_group_invite_link': {
+        if (!isBotAdmin) {
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
+        }
+
+        const action = args.action || 'get';
+        try {
+          if (action === 'revoke') {
+            const code = await sock.groupRevokeInvite(from);
+            return {
+              success: true,
+              message: t(lang, 'link.revoked', { code })
+            };
+          }
+
+          const code = await sock.groupInviteCode(from);
+          return {
+            success: true,
+            message: t(lang, 'link.success', { code })
+          };
+        } catch (err) {
+          logger.error({ err, from, action }, 'Erro ao obter/revogar link de convite via Hermes');
+          return { success: false, error: t(lang, 'link.error') };
         }
       }
 
