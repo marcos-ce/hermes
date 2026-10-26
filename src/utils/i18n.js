@@ -632,7 +632,7 @@ function t(lang = 'pt', key, vars = {}, style = null) {
   const targetLang = (lang || 'pt').toLowerCase();
 
   // Resolve estilo ('natural' ou 'formal')
-  const resolvedStyle = style || vars?._style || vars?.style || 'natural';
+  const resolvedStyle = style || vars?._style || (['natural', 'formal'].includes(vars?.style) ? vars.style : 'natural');
 
   let text = null;
   if (resolvedStyle === 'formal') {
@@ -647,7 +647,7 @@ function t(lang = 'pt', key, vars = {}, style = null) {
   // Substituição de placeholders dinâmicos: {variavel}
   if (vars && typeof vars === 'object') {
     for (const [varKey, varValue] of Object.entries(vars)) {
-      if (varKey === '_style' || varKey === 'style') continue;
+      if (varKey === '_style') continue;
       const regex = new RegExp(`\\{${varKey}\\}`, 'g');
       text = text.replace(regex, String(varValue !== undefined && varValue !== null ? varValue : ''));
     }

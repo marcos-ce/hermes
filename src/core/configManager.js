@@ -683,7 +683,7 @@ class ConfigManager {
     group.plugins[pluginName] = {
       ...existing,
       ...newAnswers,
-      enabled: true,
+      enabled: newAnswers.enabled !== undefined ? Boolean(newAnswers.enabled) : true,
       configured: true
     };
     this.scheduleSave();

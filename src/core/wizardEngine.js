@@ -850,8 +850,11 @@ class WizardEngine {
       const memStatus = session.answers.memory 
         ? t(lang, 'common.enabled', {}, chosenStyle) 
         : t(lang, 'common.disabled', {}, chosenStyle);
-      const styleDisplay = chosenStyle === 'formal' ? 'Formal *[Tag]*' : 'Natural (Emojis)';
+      const styleDisplay = chosenStyle === 'formal' ? 'Formal' : 'Natural';
       const prefix = configManager.getGroupPrefix(from);
+
+      // Garante que as configurações foram salvas em disco no exato instante da conclusão
+      configManager.flushSync();
 
       const finishedText = t(lang, 'onboarding.finished', {
         ai: aiStatus,
