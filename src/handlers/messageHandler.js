@@ -150,15 +150,16 @@ async function processSingleMessage(sock, msg) {
     }
   }
 
-  // Define prefixo e idioma do contexto
+  // Define prefixo, idioma e estilo do contexto
   const groupPrefix = isGroup ? configManager.getGroupPrefix(from) : settings.defaultPrefix;
   const groupLang = isGroup ? configManager.getGroupLang(from) : settings.defaultLang;
+  const groupStyle = isGroup ? configManager.getGroupStyle(from) : 'natural';
 
   // Helpers injetados
   const reply = async (content, options = {}) => {
     return await sendSafeMessage(sock, from, content, { quoted: msg, ...options });
   };
-  const translate = (key, vars = {}) => t(groupLang, key, vars);
+  const translate = (key, vars = {}) => t(groupLang, key, vars, groupStyle);
 
   // ========================================================
   // Resolução Dinâmica de Prefixo e Comando (Totalmente Desacoplada)
@@ -369,6 +370,7 @@ async function processSingleMessage(sock, msg) {
       reply,
       t: translate,
       lang: groupLang,
+      style: groupStyle,
       prefix: groupPrefix,
       isOwner: isSenderOwner,
       isAdmin,

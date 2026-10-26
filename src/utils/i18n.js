@@ -4,6 +4,8 @@
  * Sem placeholders ou omissões de tradução.
  */
 
+const i18nFormal = require('./i18nFormal');
+
 const dictionaries = {
   pt: {
     'common.bot_name': "Hermes Admin Bot",
@@ -196,7 +198,17 @@ const dictionaries = {
     'hermes.need_explicit_target': "⚠️ Para remover alguém, marque a pessoa (@) ou responda à mensagem dela com o pedido.",
     'hermes.fact_learned': "🧠 Anotado na memória permanente do grupo: *{key}* = *{value}*",
     'hermes.fact_forgotten': "🗑️ Fato *{key}* removido da memória do grupo com sucesso.",
-    'hermes.fact_not_found': "ℹ️ O fato *{key}* não foi encontrado na memória do grupo."
+    'hermes.fact_not_found': "ℹ️ O fato *{key}* não foi encontrado na memória do grupo.",
+
+    // Onboarding Wizard Keys (Estilo Natural)
+    'onboarding.welcome': "🎉 *GRUPO ATIVADO COM SUCESSO!*\nValidade: *{expiry}*\n\n🧙‍♂️ Vamos fazer uma configuração inicial rápida de 3 passos para ajustar o bot a este grupo!",
+    'onboarding.step1_header': "🧙‍♂️ *CONFIGURAÇÃO INICIAL (Passo 1/3)*",
+    'onboarding.step1_question': "🤖 Deseja ativar a Inteligência Artificial (Hermes IA) neste grupo?\n\n*[1]* ✅ Sim (Ativar IA para conversar e executar comandos por texto)\n*[2]* ❌ Não (Apenas moderação tradicional sem IA)\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
+    'onboarding.step2_header': "🧙‍♂️ *CONFIGURAÇÃO INICIAL (Passo 2/3)*",
+    'onboarding.step2_question': "🧠 Deseja que a IA leia e lembre o contexto das conversas recentes do grupo?\n\n*[1]* ✅ Sim (Respostas mais inteligentes e comandos por contexto)\n*[2]* ❌ Não (Privacidade total: só lê quando marcarem ela)\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
+    'onboarding.step3_header': "🧙‍♂️ *CONFIGURAÇÃO INICIAL (Passo 3/3)*",
+    'onboarding.step3_question': "🎭 Qual estilo de mensagens e avisos você prefere para o bot?\n\n*[1]* 🌈 *Natural* (Estilo amigável com emojis e avisos visuais)\n*[2]* 💼 *Formal* (Estilo corporativo com etiquetas *[Moderação]* e avisos limpos)\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
+    'onboarding.finished': "🎉 *CONFIGURAÇÃO CONCLUÍDA COM SUCESSO!*\nO bot está pronto para operar no grupo!\n\n🤖 Inteligência Artificial: *{ai}*\n🧠 Memória de Contexto: *{memory}*\n🎭 Estilo de Mensagens: *{style}*\n\n📖 Envie *{prefix}menu* para ver os comandos ou *{prefix}config* para o painel completo!"
   },
 
   es: {
@@ -390,7 +402,17 @@ const dictionaries = {
     'hermes.need_explicit_target': "⚠️ Para expulsar a alguien, menciona a la persona (@) o responde a su mensaje con la solicitud.",
     'hermes.fact_learned': "🧠 Anotado en la memoria permanente del grupo: *{key}* = *{value}*",
     'hermes.fact_forgotten': "🗑️ Dato *{key}* eliminado de la memoria del grupo con éxito.",
-    'hermes.fact_not_found': "ℹ️ El dato *{key}* no se encontró en la memoria del grupo."
+    'hermes.fact_not_found': "ℹ️ El dato *{key}* no se encontró en la memoria del grupo.",
+
+    // Onboarding Wizard Keys (Estilo Natural)
+    'onboarding.welcome': "🎉 *¡GRUPO ACTIVADO CON ÉXITO!*\nValidez: *{expiry}*\n\n🧙‍♂️ ¡Vamos a hacer una configuración inicial rápida de 3 pasos!",
+    'onboarding.step1_header': "🧙‍♂️ *CONFIGURACIÓN INICIAL (Paso 1/3)*",
+    'onboarding.step1_question': "🤖 ¿Deseas activar la Inteligencia Artificial (Hermes IA) en este grupo?\n\n*[1]* ✅ Sí (Activar IA para conversar y comandos por texto)\n*[2]* ❌ No (Solo moderación tradicional sin IA)\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
+    'onboarding.step2_header': "🧙‍♂️ *CONFIGURACIÓN INICIAL (Paso 2/3)*",
+    'onboarding.step2_question': "🧠 ¿Deseas que la IA lea y recuerde el contexto de las conversaciones recientes?\n\n*[1]* ✅ Sí (Respuestas y comandos por contexto)\n*[2]* ❌ No (Privacidad total: solo procesa menciones directas)\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
+    'onboarding.step3_header': "🧙‍♂️ *CONFIGURACIÓN INICIAL (Paso 3/3)*",
+    'onboarding.step3_question': "🎭 ¿Qué estilo de mensajes y avisos prefieres para el bot?\n\n*[1]* 🌈 *Natural* (Estilo amigable con emojis y avisos visuales)\n*[2]* 💼 *Formal* (Estilo corporativo con etiquetas *[Moderación]* y lenguaje sobrio)\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
+    'onboarding.finished': "🎉 *¡CONFIGURACIÓN FINALIZADA CON ÉXITO!*\n¡El bot está listo para operar en el grupo!\n\n🤖 Inteligencia Artificial: *{ai}*\n🧠 Memoria de Contexto: *{memory}*\n🎭 Estilo de Mensajes: *{style}*\n\n📖 Envía *{prefix}menu* para ver comandos o *{prefix}config* para el panel completo!"
   },
 
   en: {
@@ -584,25 +606,48 @@ const dictionaries = {
     'hermes.need_explicit_target': "⚠️ To remove someone, mention the person (@) or reply to their message with the request.",
     'hermes.fact_learned': "🧠 Learned to group permanent memory: *{key}* = *{value}*",
     'hermes.fact_forgotten': "🗑️ Fact *{key}* successfully removed from group memory.",
-    'hermes.fact_not_found': "ℹ️ Fact *{key}* was not found in group memory."
+    'hermes.fact_not_found': "ℹ️ Fact *{key}* was not found in group memory.",
+
+    // Onboarding Wizard Keys (Estilo Natural)
+    'onboarding.welcome': "🎉 *GROUP ACTIVATED SUCCESSFULLY!*\nExpires: *{expiry}*\n\n🧙‍♂️ Let's do a quick 3-step initial setup for this group!",
+    'onboarding.step1_header': "🧙‍♂️ *INITIAL SETUP (Step 1/3)*",
+    'onboarding.step1_question': "🤖 Enable Artificial Intelligence (Hermes AI) in this group?\n\n*[1]* ✅ Yes (Enable AI for conversation and text commands)\n*[2]* ❌ No (Keep traditional bot moderation only)\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
+    'onboarding.step2_header': "🧙‍♂️ *INITIAL SETUP (Step 2/3)*",
+    'onboarding.step2_question': "🧠 Allow the AI to read and remember recent group conversation context?\n\n*[1]* ✅ Yes (Smarter answers and contextual actions)\n*[2]* ❌ No (Strict privacy: processes direct mentions only)\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
+    'onboarding.step3_header': "🧙‍♂️ *INITIAL SETUP (Step 3/3)*",
+    'onboarding.step3_question': "🎭 Which message and alert style do you prefer for the bot?\n\n*[1]* 🌈 *Natural* (Friendly visual with emojis and casual language)\n*[2]* 💼 *Formal* (Corporate visual with bold *[Moderation]* tags and clean phrasing)\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
+    'onboarding.finished': "🎉 *SETUP COMPLETED SUCCESSFULLY!*\nThe bot is ready to operate in the group!\n\n🤖 Artificial Intelligence: *{ai}*\n🧠 Context Memory: *{memory}*\n🎭 Message Style: *{style}*\n\n📖 Send *{prefix}menu* to view commands or *{prefix}config* for the full panel!"
   }
 };
 
 /**
- * Traduz uma chave para o idioma solicitado com interpolação de variáveis
+ * Traduz uma chave para o idioma solicitado com interpolação de variáveis e suporte a estilo
  * @param {string} lang Idioma ('pt', 'es', 'en')
  * @param {string} key Chave da mensagem (ex: 'common.bot_name')
  * @param {object} vars Variáveis dinâmicas para substituição: { user: 'Fulano' }
+ * @param {string} [style='natural'] Estilo de texto: 'natural' | 'formal'
  * @returns {string} Texto formatado com fallback para português
  */
-function t(lang = 'pt', key, vars = {}) {
+function t(lang = 'pt', key, vars = {}, style = null) {
   const targetLang = (lang || 'pt').toLowerCase();
-  const dict = dictionaries[targetLang] || dictionaries.pt;
-  let text = dict[key] || dictionaries.pt[key] || key;
+
+  // Resolve estilo ('natural' ou 'formal')
+  const resolvedStyle = style || vars?._style || vars?.style || 'natural';
+
+  let text = null;
+  if (resolvedStyle === 'formal') {
+    text = i18nFormal.dictionaries[targetLang]?.[key] || i18nFormal.dictionaries.pt?.[key];
+  }
+
+  if (!text) {
+    const dict = dictionaries[targetLang] || dictionaries.pt;
+    text = dict[key] || dictionaries.pt[key] || key;
+  }
 
   // Substituição de placeholders dinâmicos: {variavel}
   if (vars && typeof vars === 'object') {
     for (const [varKey, varValue] of Object.entries(vars)) {
+      if (varKey === '_style' || varKey === 'style') continue;
       const regex = new RegExp(`\\{${varKey}\\}`, 'g');
       text = text.replace(regex, String(varValue !== undefined && varValue !== null ? varValue : ''));
     }

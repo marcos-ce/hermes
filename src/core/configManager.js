@@ -401,6 +401,30 @@ class ConfigManager {
     this.scheduleSave();
   }
 
+  getGroupStyle(groupJid) {
+    const group = this.groups.get(groupJid);
+    return group?.style || 'natural';
+  }
+
+  setGroupStyle(groupJid, style) {
+    const group = this.getOrCreateGroup(groupJid);
+    group.style = style === 'formal' ? 'formal' : 'natural';
+    this.scheduleSave();
+    return group;
+  }
+
+  isGroupOnboarded(groupJid) {
+    const group = this.groups.get(groupJid);
+    return group?.onboarded === true;
+  }
+
+  setGroupOnboarded(groupJid, onboarded = true) {
+    const group = this.getOrCreateGroup(groupJid);
+    group.onboarded = Boolean(onboarded);
+    this.scheduleSave();
+    return group;
+  }
+
   touchGroupActivity(groupJid) {
     const group = this.groups.get(groupJid);
     if (group) {

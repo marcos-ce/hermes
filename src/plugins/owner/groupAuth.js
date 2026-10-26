@@ -1,11 +1,11 @@
-﻿const configManager = require('../../core/configManager');
+const configManager = require('../../core/configManager');
 const settings = require('../../config/settings');
 const { getGroupMetadata } = require('../../utils/jidResolver');
 
 module.exports = {
   name: 'bot',
-  aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm'],
-  usage: 'bot on/off/add/list/pv',
+  aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm', 'setup', 'onboarding', 'estilo', 'style'],
+  usage: 'bot on/off/add/list/pv/setup/estilo',
   description: 'Gestão de licenças SaaS e ativação do bot no grupo',
   ownerOnly: false, // Checado dinamicamente conforme authMode no execute
   adminOnly: false,
@@ -169,7 +169,39 @@ module.exports = {
         }
       } catch (_) {}
 
+      // Se for a primeira ativação no grupo, dispara o Onboarding de 3 passos automaticamente
+      if (!configManager.isGroupOnboarded(from)) {
+        const wizardEngine = require('../../core/wizardEngine');
+        return await wizardEngine.startOnboarding(sock, _msg, from, sender, expiryDisplay);
+      }
+
       return reply(t('saas.activated', { expiry: expiryDisplay }));
+    }
+
+    // ==========================================
+    // Onboarding Manual (!bot setup ou !onboarding)
+    // ==========================================
+    if (cmd === 'setup' || cmd === 'onboarding' || sub === 'setup' || sub === 'onboarding') {
+      const wizardEngine = require('../../core/wizardEngine');
+      return await wizardEngine.startOnboarding(sock, _msg, from, sender);
+    }
+
+    // ==========================================
+    // Alternar Estilo de Mensagens (!estilo [natural|formal] ou !bot estilo)
+    // ==========================================
+    if (cmd === 'estilo' || cmd === 'style' || sub === 'estilo' || sub === 'style') {
+      const targetStyle = (cmd === 'estilo' || cmd === 'style' ? (args[0] || '') : (args[1] || '')).toLowerCase();
+      if (['formal', 'f', '2'].includes(targetStyle)) {
+        configManager.setGroupStyle(from, 'formal');
+        return reply('*[Sistema]* Estilo de mensagens alterado para: *Formal (Etiquetas)*');
+      } else if (['natural', 'n', '1', 'emojis', 'emoji'].includes(targetStyle)) {
+        configManager.setGroupStyle(from, 'natural');
+        return reply('🌈 *Estilo de mensagens alterado para:* *Natural (Emojis)*');
+      } else {
+        const currentStyle = configManager.getGroupStyle(from);
+        const display = currentStyle === 'formal' ? 'Formal *[Tag]*' : 'Natural (Emojis)';
+        return reply(`🎭 *Estilo Atual:* ${display}\nPara alterar, envie:\n• \`!estilo natural\` (com emojis)\n• \`!estilo formal\` (com etiquetas em negrito)`);
+      }
     }
 
     // ==========================================

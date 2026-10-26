@@ -89,6 +89,7 @@ module.exports = {
         { cmd: `${p}sortear [qtd] [prêmio]`, desc: { pt: 'Sorteio rápido e justo entre membros', es: 'Sorteo rápido entre miembros', en: 'Raffle draw among members' } },
         { cmd: `${p}blacklist add/del`, desc: { pt: 'Lista negra que expulsa ao entrar', es: 'Lista negra que expulsa al entrar', en: 'Blacklist auto-kick on join' } },
         { cmd: `${p}idioma [pt|es|en]`, desc: { pt: 'Alterar o idioma do bot', es: 'Cambiar idioma del bot', en: 'Change bot language' } },
+        { cmd: `${p}estilo [natural|formal]`, desc: { pt: 'Alternar estilo (Emojis ou Etiquetas)', es: 'Cambiar estilo (Emojis o Etiquetas)', en: 'Toggle message style (Emojis or Tags)' } },
         { cmd: `${p}ping`, desc: { pt: 'Status, latência e memória do bot', es: 'Estado, latencia y memoria', en: 'Bot status, latency and memory' } }
       ];
 
