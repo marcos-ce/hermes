@@ -201,13 +201,13 @@ const dictionaries = {
     'hermes.fact_not_found': "ℹ️ O fato *{key}* não foi encontrado na memória do grupo.",
 
     // Onboarding Wizard Keys (Estilo Natural)
-    'onboarding.welcome': "🎉 *GRUPO ATIVADO COM SUCESSO!*\nValidade: *{expiry}*\n\n🧙‍♂️ Vamos fazer uma configuração inicial rápida de 3 passos para ajustar o bot a este grupo!",
-    'onboarding.step1_header': "🧙‍♂️ *CONFIGURAÇÃO INICIAL (Passo 1/3)*",
-    'onboarding.step1_question': "🤖 Deseja ativar a Inteligência Artificial (Hermes IA) neste grupo?\n\n*[1]* ✅ Sim (Ativar IA para conversar e executar comandos por texto)\n*[2]* ❌ Não (Apenas moderação tradicional sem IA)\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
-    'onboarding.step2_header': "🧙‍♂️ *CONFIGURAÇÃO INICIAL (Passo 2/3)*",
-    'onboarding.step2_question': "🧠 Deseja que a IA leia e lembre o contexto das conversas recentes do grupo?\n\n*[1]* ✅ Sim (Respostas mais inteligentes e comandos por contexto)\n*[2]* ❌ Não (Privacidade total: só lê quando marcarem ela)\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
-    'onboarding.step3_header': "🧙‍♂️ *CONFIGURAÇÃO INICIAL (Passo 3/3)*",
-    'onboarding.step3_question': "🎭 Qual estilo de mensagens e avisos você prefere para o bot?\n\n*[1]* 🌈 *Natural* (Estilo amigável com emojis e avisos visuais)\n*[2]* 💼 *Formal* (Estilo corporativo com etiquetas *[Moderação]* e avisos limpos)\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
+    'onboarding.welcome': "🎉 *GRUPO ATIVADO COM SUCESSO!*\nValidade: *{expiry}*\n\nVamos fazer uma configuração inicial rápida de 3 passos para ajustar o bot a este grupo!",
+    'onboarding.step1_header': "*CONFIGURAÇÃO INICIAL (Passo 1/3)*",
+    'onboarding.step1_question': "Deseja ativar a IA neste grupo?\n\n*[1]* ✅ *Sim* - Ativar IA para conversar e executar comandos por texto, como um assistente.\n*[2]* ❌ *Não* - Apenas moderação tradicional usando prefixos, como por exemplo: /menu\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
+    'onboarding.step2_header': "*CONFIGURAÇÃO INICIAL (Passo 2/3)*",
+    'onboarding.step2_question': "🧠 Deseja que a IA leia e lembre o contexto das conversas do grupo?\n\n*[1]* ✅ *Sim* - Respostas mais inteligentes e comandos por contexto, a IA entende e aprende a dinâmica do grupo.\n*[2]* ❌*Não* - Nenhum dado é coletado pela IA.\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
+    'onboarding.step3_header': "*CONFIGURAÇÃO INICIAL (Passo 3/3)*",
+    'onboarding.step3_question': "Qual estilo de mensagens e avisos você prefere para o bot?\n\n*[1]* *Natural* - Estilo amigável com emojis e avisos visuais.\n*[2]* 💼 *Formal* - Mais robótico com etiquetas *[Moderação]* e avisos limpos e diretos.\n\n👉 Responda com *1* ou *2* (ou envie *.* para padrão [1])",
     'onboarding.finished': "🎉 *CONFIGURAÇÃO CONCLUÍDA COM SUCESSO!*\nO bot está pronto para operar no grupo!\n\n🤖 Inteligência Artificial: *{ai}*\n🧠 Memória de Contexto: *{memory}*\n🎭 Estilo de Mensagens: *{style}*\n\n📖 Envie *{prefix}menu* para ver os comandos ou *{prefix}config* para o painel completo!"
   },
 
@@ -405,13 +405,13 @@ const dictionaries = {
     'hermes.fact_not_found': "ℹ️ El dato *{key}* no se encontró en la memoria del grupo.",
 
     // Onboarding Wizard Keys (Estilo Natural)
-    'onboarding.welcome': "🎉 *¡GRUPO ACTIVADO CON ÉXITO!*\nValidez: *{expiry}*\n\n🧙‍♂️ ¡Vamos a hacer una configuración inicial rápida de 3 pasos!",
-    'onboarding.step1_header': "🧙‍♂️ *CONFIGURACIÓN INICIAL (Paso 1/3)*",
-    'onboarding.step1_question': "🤖 ¿Deseas activar la Inteligencia Artificial (Hermes IA) en este grupo?\n\n*[1]* ✅ Sí (Activar IA para conversar y comandos por texto)\n*[2]* ❌ No (Solo moderación tradicional sin IA)\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
-    'onboarding.step2_header': "🧙‍♂️ *CONFIGURACIÓN INICIAL (Paso 2/3)*",
-    'onboarding.step2_question': "🧠 ¿Deseas que la IA lea y recuerde el contexto de las conversaciones recientes?\n\n*[1]* ✅ Sí (Respuestas y comandos por contexto)\n*[2]* ❌ No (Privacidad total: solo procesa menciones directas)\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
-    'onboarding.step3_header': "🧙‍♂️ *CONFIGURACIÓN INICIAL (Paso 3/3)*",
-    'onboarding.step3_question': "🎭 ¿Qué estilo de mensajes y avisos prefieres para el bot?\n\n*[1]* 🌈 *Natural* (Estilo amigable con emojis y avisos visuales)\n*[2]* 💼 *Formal* (Estilo corporativo con etiquetas *[Moderación]* y lenguaje sobrio)\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
+    'onboarding.welcome': "🎉 *¡GRUPO ACTIVADO CON ÉXITO!*\nValidez: *{expiry}*\n\n¡Vamos a hacer una configuración inicial rápida de 3 pasos!",
+    'onboarding.step1_header': "*CONFIGURACIÓN INICIAL (Paso 1/3)*",
+    'onboarding.step1_question': "¿Deseas activar la IA en este grupo?\n\n*[1]* ✅ *Sí* - Activar IA para conversar y ejecutar comandos por texto, como un asistente.\n*[2]* ❌ *No* - Solo moderación tradicional usando prefijos, como por ejemplo: /menu\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
+    'onboarding.step2_header': "*CONFIGURACIÓN INICIAL (Paso 2/3)*",
+    'onboarding.step2_question': "🧠 ¿Deseas que la IA lea y recuerde el contexto de las conversaciones del grupo?\n\n*[1]* ✅ *Sí* - Respuestas más inteligentes y comandos por contexto, la IA entiende y aprende la dinámica del grupo.\n*[2]* ❌*No* - Ningún dato es recopilado por la IA.\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
+    'onboarding.step3_header': "*CONFIGURACIÓN INICIAL (Paso 3/3)*",
+    'onboarding.step3_question': "¿Qué estilo de mensajes y avisos prefieres para el bot?\n\n*[1]* *Natural* - Estilo amigable con emojis y avisos visuales.\n*[2]* 💼 *Formal* - Más robótico con etiquetas *[Moderación]* y avisos limpos y directos.\n\n👉 Responde con *1* o *2* (o envía *.* para predeterminado [1])",
     'onboarding.finished': "🎉 *¡CONFIGURACIÓN FINALIZADA CON ÉXITO!*\n¡El bot está listo para operar en el grupo!\n\n🤖 Inteligencia Artificial: *{ai}*\n🧠 Memoria de Contexto: *{memory}*\n🎭 Estilo de Mensajes: *{style}*\n\n📖 Envía *{prefix}menu* para ver comandos o *{prefix}config* para el panel completo!"
   },
 
@@ -609,13 +609,13 @@ const dictionaries = {
     'hermes.fact_not_found': "ℹ️ Fact *{key}* was not found in group memory.",
 
     // Onboarding Wizard Keys (Estilo Natural)
-    'onboarding.welcome': "🎉 *GROUP ACTIVATED SUCCESSFULLY!*\nExpires: *{expiry}*\n\n🧙‍♂️ Let's do a quick 3-step initial setup for this group!",
-    'onboarding.step1_header': "🧙‍♂️ *INITIAL SETUP (Step 1/3)*",
-    'onboarding.step1_question': "🤖 Enable Artificial Intelligence (Hermes AI) in this group?\n\n*[1]* ✅ Yes (Enable AI for conversation and text commands)\n*[2]* ❌ No (Keep traditional bot moderation only)\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
-    'onboarding.step2_header': "🧙‍♂️ *INITIAL SETUP (Step 2/3)*",
-    'onboarding.step2_question': "🧠 Allow the AI to read and remember recent group conversation context?\n\n*[1]* ✅ Yes (Smarter answers and contextual actions)\n*[2]* ❌ No (Strict privacy: processes direct mentions only)\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
-    'onboarding.step3_header': "🧙‍♂️ *INITIAL SETUP (Step 3/3)*",
-    'onboarding.step3_question': "🎭 Which message and alert style do you prefer for the bot?\n\n*[1]* 🌈 *Natural* (Friendly visual with emojis and casual language)\n*[2]* 💼 *Formal* (Corporate visual with bold *[Moderation]* tags and clean phrasing)\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
+    'onboarding.welcome': "🎉 *GROUP ACTIVATED SUCCESSFULLY!*\nExpires: *{expiry}*\n\nLet's do a quick 3-step initial setup for this group!",
+    'onboarding.step1_header': "*INITIAL SETUP (Step 1/3)*",
+    'onboarding.step1_question': "Do you want to enable the AI in this group?\n\n*[1]* ✅ *Yes* - Enable AI to chat and execute text commands, like an assistant.\n*[2]* ❌ *No* - Traditional moderation only using prefixes, e.g.: /menu\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
+    'onboarding.step2_header': "*INITIAL SETUP (Step 2/3)*",
+    'onboarding.step2_question': "🧠 Allow the AI to read and remember the group conversation context?\n\n*[1]* ✅ *Yes* - Smarter answers and contextual commands, the AI understands and learns the group dynamics.\n*[2]* ❌*No* - No data is collected by the AI.\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
+    'onboarding.step3_header': "*INITIAL SETUP (Step 3/3)*",
+    'onboarding.step3_question': "Which message and alert style do you prefer for the bot?\n\n*[1]* *Natural* - Friendly style with emojis and visual alerts.\n*[2]* 💼 *Formal* - More robotic with *[Moderation]* tags and clean, direct alerts.\n\n👉 Reply with *1* or *2* (or send *.* for default [1])",
     'onboarding.finished': "🎉 *SETUP COMPLETED SUCCESSFULLY!*\nThe bot is ready to operate in the group!\n\n🤖 Artificial Intelligence: *{ai}*\n🧠 Context Memory: *{memory}*\n🎭 Message Style: *{style}*\n\n📖 Send *{prefix}menu* to view commands or *{prefix}config* for the full panel!"
   }
 };

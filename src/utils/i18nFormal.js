@@ -230,11 +230,11 @@ const dictionaries = {
     // Onboarding Wizard Keys
     'onboarding.welcome': "*[Ativação do Sistema]*\nGrupo ativado com sucesso. Licença: *{expiry}*.\n\nIniciando configuração inicial de 3 etapas.",
     'onboarding.step1_header': "*[Configuração Inicial - Etapa 1/3]*",
-    'onboarding.step1_question': "Deseja habilitar as funções de Inteligência Artificial (Hermes IA) no grupo?\n\n[1] Sim (Ativar IA para comandos em texto livre e auxílio)\n[2] Não (Manter apenas moderação tradicional sem IA)\n\n👉 Envie 1 ou 2 (ou envie . para padrão [1])",
+    'onboarding.step1_question': "Deseja ativar a IA neste grupo?\n\n*[1]* *Sim* - Ativar IA para conversar e executar comandos por texto, como um assistente.\n*[2]* *Não* - Apenas moderação tradicional usando prefixos, como por exemplo: /menu\n\n👉 Envie 1 ou 2 (ou envie . para padrão [1])",
     'onboarding.step2_header': "*[Configuração Inicial - Etapa 2/3]*",
-    'onboarding.step2_question': "A IA deve acompanhar o histórico recente de mensagens para entender o contexto do chat?\n\n[1] Sim (Respostas e comandos por contexto)\n[2] Não (Privacidade estrita: processa apenas menções diretas)\n\n👉 Envie 1 ou 2 (ou envie . para padrão [1])",
+    'onboarding.step2_question': "Deseja que a IA leia e lembre o contexto das conversas do grupo?\n\n*[1]* *Sim* - Respostas mais inteligentes e comandos por contexto, a IA entende e aprende a dinâmica do grupo.\n*[2]* *Não* - Nenhum dado é coletado pela IA.\n\n👉 Envie 1 ou 2 (ou envie . para padrão [1])",
     'onboarding.step3_header': "*[Configuração Inicial - Etapa 3/3]*",
-    'onboarding.step3_question': "Qual estilo de mensagens e avisos o bot deve adotar neste grupo?\n\n[1] Natural (Visual amigável com emojis e linguagem descontraída)\n[2] Formal (Visual corporativo com etiquetas *[Moderação]* e linguagem sóbria)\n\n👉 Envie 1 ou 2 (ou envie . para padrão [1])",
+    'onboarding.step3_question': "Qual estilo de mensagens e avisos você prefere para o bot?\n\n*[1]* *Natural* - Estilo amigável com emojis e avisos visuais.\n*[2]* *Formal* - Mais robótico com etiquetas *[Moderação]* e avisos limpos e diretos.\n\n👉 Envie 1 ou 2 (ou envie . para padrão [1])",
     'onboarding.finished': "*[Configuração Concluída]*\nSistema pronto e operacional para este grupo.\n\n• Inteligência Artificial: *{ai}*\n• Memória de Contexto: *{memory}*\n• Estilo de Mensagens: *{style}*\n\nComandos: *{prefix}menu* | Painel: *{prefix}config*"
   },
 
