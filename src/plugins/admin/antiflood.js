@@ -1,7 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { floodCache } = require('../../utils/cache');
-const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
+const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
 const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
@@ -60,8 +60,8 @@ module.exports = {
           en: 'What action should be taken in case of flood or crash attempt?'
         },
         choices: [
-          { value: 'warn', label: { pt: 'Apagar e advertir (soma no !warn)', es: 'Borrar y advertir (suma en !warn)', en: 'Delete and warn (adds to !warn)' } },
-          { value: 'ban', label: { pt: 'Apagar e banir imediatamente', es: 'Borrar y expulsar inmediatamente', en: 'Delete and ban immediately' } }
+          { value: 'warn', label: { pt: 'Advertir (soma no !warn)', es: 'Advertir (suma en !warn)', en: 'Warn (adds to !warn)' } },
+          { value: 'ban', label: { pt: 'Banir imediatamente', es: 'Expulsar inmediatamente', en: 'Ban immediately' } }
         ],
         default: 'warn'
       }
@@ -193,9 +193,6 @@ module.exports = {
     }
 
     if (!isViolation) return false;
-
-    // Ação de Emergência (Zero Delay): Apagar mensagem
-    await safeDelete(sock, from, msg.key);
 
     const targetData = await resolveParticipant(sock, from, sender);
     const targetPhone = targetData?.phoneJid || sender;
