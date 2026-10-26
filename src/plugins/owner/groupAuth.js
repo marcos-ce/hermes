@@ -5,7 +5,7 @@ const { getGroupMetadata } = require('../../utils/jidResolver');
 module.exports = {
   name: 'bot',
   aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm', 'setup', 'onboarding', 'estilo', 'style'],
-  usage: 'bot on/off/add/list/pv/setup/estilo',
+  usage: 'bot on/off/add/list/pv/config/setup/estilo',
   description: 'Gestão de licenças SaaS e ativação do bot no grupo',
   ownerOnly: false, // Checado dinamicamente conforme authMode no execute
   adminOnly: false,
@@ -179,9 +179,9 @@ module.exports = {
     }
 
     // ==========================================
-    // Onboarding Manual (!bot setup ou !onboarding)
+    // Onboarding Manual (!bot config, !bot setup ou !onboarding)
     // ==========================================
-    if (cmd === 'setup' || cmd === 'onboarding' || sub === 'setup' || sub === 'onboarding') {
+    if (cmd === 'setup' || cmd === 'onboarding' || sub === 'config' || sub === 'setup' || sub === 'onboarding' || sub === 'wizard') {
       const wizardEngine = require('../../core/wizardEngine');
       return await wizardEngine.startOnboarding(sock, _msg, from, sender);
     }
