@@ -16,6 +16,63 @@ function humanizeAIText(rawText) {
   if (!rawText || typeof rawText !== 'string') return '';
   let text = rawText.trim();
 
+  // 0. Remove tags de thinking explícitas de modelos de raciocínio (<think>...</think> ou <thought>...</thought>)
+  text = text.replace(/<(?:think|thought)>[\s\S]*?<\/(?:think|thought)>/gi, '').trim();
+
+  // 0.1 Remove blocos de monólogo interno / scratchpad que o modelo rascunha para si mesmo:
+  // Ex: [Contexto] ... Resposta curta: ... Melhor: ... Sem emoji. ...
+  text = text.replace(/(?:^|\n)Sem emojis?\.?\s*/gi, '\n').trim();
+
+  const rawLines = text.split('\n');
+  const filteredLines = [];
+  let inScratchpad = false;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i].trim();
+
+    // Início de bloco de metadados / raciocínio
+    if (/^\[(?:Contexto|Racioc[ií]nio|Pensamento|Thought|Reasoning|An[aá]lise|Inten[cç][aã]o)\]/i.test(line)) {
+      inScratchpad = true;
+      continue;
+    }
+
+    // Linha de rascunhos intermediários (ex: "Resposta curta: ...", "Rascunho:", "Opção 1:")
+    if (/^(?:Resposta curta|Rascunho|Primeira tentativa|Tentativa|Op[cç][aã]o \d+):\s*/i.test(line)) {
+      inScratchpad = true;
+      continue;
+    }
+
+    // Linha de "Melhor: ..."
+    if (/^Melhor:\s*/i.test(line)) {
+      inScratchpad = true;
+      continue;
+    }
+
+    // Se estiver em scratchpad
+    if (inScratchpad) {
+      if (line.length === 0) continue;
+      // Frases típicas de monólogo
+      if (/^(?:Devo responder|N[aã]o existe ferramenta|Vou responder|Vou dizer|Explico rapidamente)/i.test(line)) {
+        continue;
+      }
+      // Saiu do scratchpad, encontrou conteúdo real
+      inScratchpad = false;
+    }
+
+    if (line.length > 0) {
+      filteredLines.push(rawLines[i]);
+    }
+  }
+
+  text = filteredLines.join('\n').trim();
+
+  // Remove aspas de fechamento soltas no final de rascunhos
+  if (text.startsWith('"') && text.endsWith('"') && text.indexOf('"', 1) === text.length - 1) {
+    text = text.slice(1, -1).trim();
+  } else if (text.endsWith('"') && !text.includes('"', 0)) {
+    text = text.slice(0, -1).trim();
+  }
+
   // 1. Remove emojis típicos de robô/IA
   text = text.replace(/[\u{1F916}\u{1F47E}]/gu, '').trim(); // 🤖 👾
 

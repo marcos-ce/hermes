@@ -2,7 +2,7 @@ const pluginLoader = require('../../core/pluginLoader');
 
 module.exports = {
   name: 'reload',
-  aliases: ['reload', 'recarregar', 'recargar', 'atualizar'],
+  aliases: ['reload', 'relaod', 'recarregar', 'recargar', 'atualizar'],
   usage: 'reload',
   description: 'Hot-reload de plugins, schemas e traduções em tempo real',
   ownerOnly: true,

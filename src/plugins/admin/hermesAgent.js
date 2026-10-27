@@ -335,26 +335,16 @@ module.exports = {
     const groupPrefix = configManager.getGroupPrefix(from) || '!';
     const trimmedText = (text || '').trim();
 
-    // Proteção 2 (Comandos determinísticos via prefixo ou menção @bot / @hermes):
-    let isUnknownCommandAttempt = false;
+    // Proteção 2 (Comandos determinísticos via prefixo):
+    // Mensagens com prefixo (!, /) são comandos determinísticos. O Hermes IA NUNCA intercepta
+    // comandos desconhecidos ou erros de digitação (ex: /relaod, !banrrr), economizando 100% de tokens de API.
     if (trimmedText.startsWith(groupPrefix) || trimmedText.startsWith('/') || trimmedText.startsWith('!')) {
       const prefixLen = trimmedText.startsWith(groupPrefix) ? groupPrefix.length : 1;
       const afterPrefix = trimmedText.slice(prefixLen).trim();
       const firstWord = afterPrefix.split(/\s+/)[0]?.toLowerCase();
       const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
-      if (cmdPlugin && (trimmedText.startsWith(groupPrefix) || cmdPlugin.name !== 'hermes')) {
+      if (!cmdPlugin || cmdPlugin.name !== 'hermes') {
         return false;
-      }
-      // Se começou com o prefixo do grupo + palavra alfabética (ex: "!trancar", "!como usa", "!tirar @user"),
-      // mas o comando não existe, o Hermes IA (quando ativo) intercepta para executar ou ensinar o comando certo!
-      if (
-        !cmdPlugin &&
-        trimmedText.startsWith(groupPrefix) &&
-        /^[a-zA-ZÀ-ÿ]{2,}/.test(afterPrefix) &&
-        configManager.isPluginEnabled(from, 'hermes') &&
-        aiService.isConfigured()
-      ) {
-        isUnknownCommandAttempt = true;
       }
     } else if (/^@[a-zA-Z0-9_:.-]+\s+/i.test(trimmedText)) {
       let afterMention = trimmedText.replace(/^@[a-zA-Z0-9_:.-]+\s+/i, '').trim();
@@ -436,7 +426,7 @@ module.exports = {
       }
     }
 
-    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || mentionsHermes || isUnknownCommandAttempt || isContinuation;
+    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || mentionsHermes || isContinuation;
 
     // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
@@ -500,9 +490,8 @@ module.exports = {
     }
 
     // 2.1 Gatilho exclusivo de administradores: a IA permanece 100% adormecida para membros comuns
-    // (nenhuma chamada de API, nenhuma resposta). Tentativa de comando inexistente de membro volta ao pipeline normal.
     if (!(await isAdminOrOwner(sock, from, sender))) {
-      return !isUnknownCommandAttempt;
+      return false;
     }
 
     // 3. Se foi chamado expressamente MAS o plugin está desativado no grupo:
@@ -523,11 +512,7 @@ module.exports = {
     }
 
     // 6. Limpa apenas os prefixos de chamada ao próprio bot (preservando menções a outros membros!)
-    let cleanQuery = text;
-    if (isUnknownCommandAttempt && cleanQuery.trim().startsWith(groupPrefix)) {
-      cleanQuery = cleanQuery.trim().slice(groupPrefix.length).trim();
-    }
-    cleanQuery = cleanQuery
+    let cleanQuery = text
       .replace(/^hermes[\s,.:!?-]*/i, '')
       .replace(/(?:^|\s)(?:ei|ô|o|fala|eai|ae|por\s+favor)?\s*hermes[\s,.:!?-]*/gi, ' ')
       .replace(/@hermes\b/gi, '')
@@ -560,8 +545,7 @@ module.exports = {
       reply,
       lang,
       cfg,
-      contextInfo,
-      isUnknownCommandAttempt: Boolean(isUnknownCommandAttempt)
+      contextInfo
     }).catch(err => {
       logger.error({ err, from, sender }, 'Erro assíncrono na interação do Hermes IA');
     });
@@ -603,7 +587,7 @@ module.exports = {
   /**
    * Processa a consulta com IA, contexto recente (50 mensagens do SQLite) e execução de ferramentas
    */
-  async _runAIInteraction({ sock, msg, from, sender, queryText, reply, lang, cfg, contextInfo = null, isUnknownCommandAttempt = false }) {
+  async _runAIInteraction({ sock, msg, from, sender, queryText, reply, lang, cfg, contextInfo = null }) {
     const personality = cfg?.personality || 'descontraido';
     const memoryEnabled = cfg?.memoryEnabled !== false;
 
