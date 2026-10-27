@@ -170,13 +170,21 @@ module.exports = {
         }
       } catch (_) {}
 
-      // Se for a primeira ativação no grupo, dispara o Onboarding de 3 passos automaticamente
+      // Aplica configurações padrão e marca como onboarded para ativação instantânea
       if (!configManager.isGroupOnboarded(from)) {
-        const wizardEngine = require('../../core/wizardEngine');
-        return await wizardEngine.startOnboarding(sock, currentMsg, from, sender, expiryDisplay);
+        configManager.setGroupOnboarded(from, true);
+        configManager.setGroupStyle(from, 'natural');
+        configManager.updatePluginConfig(from, 'hermes', {
+          enabled: true,
+          memoryEnabled: true,
+          configured: true
+        });
       }
+      configManager.flushSync();
 
-      return reply(t('saas.activated', { expiry: expiryDisplay }));
+      const groupPrefix = configManager.getGroupPrefix(from) || prefix || '!';
+      const groupLang = configManager.getGroupLang(from) || 'pt';
+      return reply(t(groupLang, 'saas.group_presentation', { prefix: groupPrefix }));
     }
 
     // ==========================================

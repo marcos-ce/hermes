@@ -30,11 +30,12 @@ const COMMAND_NUMBER_MAP = {
   '17': 'ping',
   '18': 'menu',
 
-  // 19 a 22: Comandos do Dono / SaaS (Privado)
+  // 19 a 23: Comandos do Dono / SaaS (Privado)
   '19': 'bot',
   '20': 'autoadm',
   '21': 'bangrupo',
-  '22': 'reload'
+  '22': 'reload',
+  '23': 'liberar'
 };
 
 class PluginLoader {

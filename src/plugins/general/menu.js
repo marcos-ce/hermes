@@ -200,6 +200,7 @@ module.exports = {
     // ========================================================
     if (isOwner) {
       const ownerCmds = [
+        { cmd: `${p}liberar <link|id> [dias]`, desc: 'Liberar grupo remotamente (ou entrar pelo link)' },
         { cmd: `${p}bot on [dias]`, desc: 'Ativar bot no grupo (ou renovar dias)' },
         { cmd: `${p}bot add [dias]`, desc: 'Adicionar dias à assinatura do grupo' },
         { cmd: `${p}bot off`, desc: 'Pausar bot no grupo (mantém configurações)' },
