@@ -244,11 +244,21 @@ module.exports = {
       return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
     }
 
-    // Ativar
+    // Ativar: ativa imediatamente sem abrir o wizard e bloqueia tudo direto por padrão
     if (['on', 'ativar', 'activar', 'enable'].includes(sub)) {
-      configManager.setPluginEnabled(from, 'antilink', true);
-      if (!cfg.configured) {
-        return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
+      const isAlreadyConfigured = Boolean(cfg.configured);
+      const updates = {
+        enabled: true,
+        configured: true,
+        mode: cfg.mode || 'whitelist',
+        allowedDomains: Array.isArray(cfg.allowedDomains) ? cfg.allowedDomains : [],
+        action: cfg.action || 'delete'
+      };
+
+      configManager.updatePluginConfig(from, 'antilink', updates);
+
+      if (!isAlreadyConfigured || (updates.mode === 'whitelist' && updates.allowedDomains.length === 0)) {
+        return reply(t('antilink.on_direct'));
       }
       return reply(t('config.module_toggled_on', { module: 'ANTILINK' }));
     }
