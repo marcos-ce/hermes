@@ -447,6 +447,41 @@ module.exports = {
       return false;
     }
 
+    // Gatekeeper Anti-Desperdício: Detecta se o quote ao bot é apenas reação social, risada ou figurinha
+    // sem intenção de comando nem de conversa com o bot (evita queimar ~7.500 tokens para gerar [SILENCIO])
+    if (isReplyToBot && !isContinuation) {
+      const isSticker = Boolean(realMsg?.stickerMessage);
+      const trimmedClean = lowerText.replace(/@\S+/g, '').trim();
+
+      // 1. Figurinha sem legenda
+      if (isSticker && !text) {
+        memoryEngine.saveMessage(from, sender, '[Figurinha]', msg.messageTimestamp, senderName, {
+          msgId: msg?.key?.id,
+          participant: msg?.key?.participant || sender
+        });
+        return false;
+      }
+
+      // 2. Apenas emojis ou caracteres de pontuação
+      const isOnlyEmojis = trimmedClean.length > 0 && /^[\p{Emoji}\s.,!?~^:;()\-—_]+$/u.test(trimmedClean);
+
+      // 3. Apenas risadas (kkk, haha, rsrs, lol, etc.)
+      const isOnlyLaughter = /^(?:k+|ha|he|hi|ho|hu|rs|ja|je|ji|jo|ju|lol|lmao)+$/i.test(trimmedClean.replace(/[\s.,!?~^:;()\-—_]/g, ''));
+
+      // 4. Comentário social a outro membro citando o bot sem pedir ação (ex: "kkk bem feito", "olha aí @fulano", "toma")
+      const isSocialReaction = /^(?:(?:k+|ha|he|rs|lol)\s+)?(?:bem feito|olha a[ií]|toma|toma vergonha|toma jeito|se fodeu|se lascou|boa|parab[eé]ns|triste|eita|nossa|vish|caramba|mds|uai|pqp|valeu|obrigad[oa]|show|top)(?:\s|$)/iu.test(trimmedClean);
+      const mentionsActionKeyword = /\b(ban|chuta|tira|some|muta|silencia|apaga|deleta|limpa|avisa|adverte|warn|fecha|tranca|abre|destranca|pina|fixa|ajuda|link|enquete|adm|hor[aá]rio)\b/i.test(lowerText);
+
+      if ((isOnlyEmojis || isOnlyLaughter || isSocialReaction) && !mentionsActionKeyword && !mentionsHermes) {
+        logger.info({ from, sender, text: trimmedClean }, 'Gatekeeper: quote ao bot identificado como reação social/risada. Silêncio mantido localmente (economia de ~7.500 tokens)');
+        memoryEngine.saveMessage(from, sender, text, msg.messageTimestamp, senderName, {
+          msgId: msg?.key?.id,
+          participant: msg?.key?.participant || sender
+        });
+        return false;
+      }
+    }
+
     // Proteção 1 (Wizard ativo): Se o admin possui uma sessão de Wizard ou Onboarding ativa,
     // as respostas dele (incluindo quotes/replies de opções numéricas) pertencem ao wizardEngine.
     // A IA não deve interceptar nem apagar o wizard ativo!
@@ -518,7 +553,8 @@ module.exports = {
       reply,
       lang,
       cfg,
-      contextInfo
+      contextInfo,
+      isUnknownCommandAttempt: Boolean(isUnknownCommandAttempt)
     }).catch(err => {
       logger.error({ err, from, sender }, 'Erro assíncrono na interação do Hermes IA');
     });
@@ -560,7 +596,7 @@ module.exports = {
   /**
    * Processa a consulta com IA, contexto recente (50 mensagens do SQLite) e execução de ferramentas
    */
-  async _runAIInteraction({ sock, msg, from, sender, queryText, reply, lang, cfg, contextInfo = null }) {
+  async _runAIInteraction({ sock, msg, from, sender, queryText, reply, lang, cfg, contextInfo = null, isUnknownCommandAttempt = false }) {
     const personality = cfg?.personality || 'descontraido';
     const memoryEnabled = cfg?.memoryEnabled !== false;
 
@@ -910,9 +946,14 @@ module.exports = {
 
     try {
       const prefix = configManager.getGroupPrefix(from) || '!';
+      const relevantTools = toolRegistry.getTools(queryText, {
+        quotedPoll: Boolean(quotedPoll),
+        hasMediaQuoted: Boolean(unwrappedQuoted?.imageMessage || unwrappedQuoted?.stickerMessage),
+        isUnknownCommandAttempt
+      });
       let aiResponse = await aiService.chatCompletion({
         messages,
-        tools: toolRegistry.getTools(),
+        tools: relevantTools,
         personality,
         lang,
         groupName,

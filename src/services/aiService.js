@@ -289,6 +289,19 @@ class AIService {
         return { success: false, error: 'NO_CHOICE_RETURNED' };
       }
 
+      if (data.usage) {
+        logger.info(
+          {
+            promptTokens: data.usage.prompt_tokens,
+            completionTokens: data.usage.completion_tokens,
+            cacheHitTokens: data.usage.prompt_cache_hit_tokens || 0,
+            cacheMissTokens: data.usage.prompt_cache_miss_tokens || data.usage.prompt_tokens,
+            totalTokens: data.usage.total_tokens
+          },
+          'Consumo DeepSeek API'
+        );
+      }
+
       // Saída cortada por limite de tokens: tool calls podem estar com JSON incompleto
       const truncated = choice?.finish_reason === 'length';
 

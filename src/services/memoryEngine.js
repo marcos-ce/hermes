@@ -211,8 +211,14 @@ class MemoryEngine {
     if (!list || list.length === 0) return '';
 
     // Formato compacto (economia de tokens): "[mID] Nome: texto".
-    // O ref "mID" substitui JIDs/IDs longos: o modelo só devolve "m123" e o código resolve autor e chave real.
+    // Filtra ruído de risadas vazias (ex: "kkkkk", "hahaha") preservando 100% dos diálogos reais
     return list
+      .filter(m => {
+        const t = (m.text || '').trim();
+        if (!t) return false;
+        if (/^(?:k{2,}|h[aeiou]{2,}|rs{2,}|j{2,}|l[ao]l|lmao|kk|haha|hehe|rs)+$/i.test(t.replace(/[\s.,!?~^:;()\-—_]/g, ''))) return false;
+        return true;
+      })
       .map(m => {
         const body = m.text.length > 200 ? `${m.text.slice(0, 200)}…` : m.text;
         if (m.sender === 'hermes@bot') {
