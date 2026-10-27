@@ -416,10 +416,11 @@ module.exports = {
       return clean === botJid || clean === botLid || (botNum && num === botNum);
     });
 
-    // C. Menção no texto por nome: "@hermes", "@bot", ou iniciando por "hermes"
+    // C. Menção no texto por nome: "@hermes", "@bot", iniciando por "hermes" ou mencionando a palavra "hermes"
     const lowerText = (text || '').toLowerCase().trim();
     const hasNameTag = lowerText.includes('@hermes') || lowerText.includes('@bot');
     const startsWithName = /^hermes[\s,.:!?-]/i.test(lowerText) || lowerText === 'hermes';
+    const mentionsHermes = /\bhermes\b/i.test(lowerText);
 
     // D. Continuidade em duas etapas (Ideia 5): Se o bot fez uma pergunta recente (< 60s) para este admin
     // e o admin respondeu apontando alguém (quote), mencionando (@) ou com resposta confirmativa/curta
@@ -435,7 +436,7 @@ module.exports = {
       }
     }
 
-    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || isUnknownCommandAttempt || isContinuation;
+    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || mentionsHermes || isUnknownCommandAttempt || isContinuation;
 
     // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
@@ -486,6 +487,7 @@ module.exports = {
     }
     cleanQuery = cleanQuery
       .replace(/^hermes[\s,.:!?-]*/i, '')
+      .replace(/(?:^|\s)(?:ei|ô|o|fala|eai|ae|por\s+favor)?\s*hermes[\s,.:!?-]*/gi, ' ')
       .replace(/@hermes\b/gi, '')
       .replace(/@bot\b/gi, '');
 
@@ -495,7 +497,7 @@ module.exports = {
     if (botLidNum) {
       cleanQuery = cleanQuery.replace(new RegExp(`@${botLidNum}\\b`, 'g'), '');
     }
-    cleanQuery = cleanQuery.trim();
+    cleanQuery = cleanQuery.replace(/\s+/g, ' ').trim();
 
     // Se o usuário apenas chamou "hermes" ou "@hermes" sem escrever nada
     if (cleanQuery.length === 0 && !contextInfo?.quotedMessage) {

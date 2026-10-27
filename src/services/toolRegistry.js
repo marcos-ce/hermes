@@ -22,7 +22,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'ban_member',
-      description: 'Expulsa membro do grupo imediatamente.',
+      description: 'Expulsa/bane membro do grupo imediatamente. Acione para: banir, chutar, tirar esse cara, sumir com ele, descer o martelo, passar o rodo, eliminar, kickar, mandar pastar, dar ban, botar pra fora, rapa fora, /chuta, /ban.',
       parameters: {
         type: 'object',
         properties: {
@@ -37,7 +37,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_mute',
-      description: 'Tranca ("close") ou abre ("open") o grupo para mensagens (imediato ou agendado).',
+      description: 'Tranca ("close") ou abre ("open") o grupo para mensagens (imediato ou agendado). Acione "close" para: fechar, trancar, trancar tudo, fechar a porteira, calar o grupo, ninguém fala mais, hora de dormir, fechar essa bagunça, /tranca, /fechar. Acione "open" para: abrir, liberar, destrancar, abrir a porteira, pode falar, /abrir.',
       parameters: {
         type: 'object',
         properties: {
@@ -80,6 +80,8 @@ const TOOLS = [
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
           action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição: "delete", "warn" ou "ban".' },
+          mode: { type: 'string', enum: ['whitelist', 'blacklist', 'whatsapp'], description: 'Modo do antilink: "whitelist" (bloqueia tudo exceto liberados), "blacklist" (bloqueia domínios específicos) ou "whatsapp" (libera todos exceto links do WhatsApp).' },
+          blockedDomains: { type: 'string', description: 'Domínios bloqueados no antilink quando no modo blacklist (ex: "whatsapp.com, telegram.org").' },
           allowedDomains: { type: 'string', description: 'Domínios liberados no antilink (ex: "youtube.com, instagram.com") ou "." para todos.' },
           maxMessages: { type: 'integer', description: 'Máximo de mensagens em 5s no antiflood.' },
           maxChars: { type: 'integer', description: 'Limite de caracteres anti-trava.' },
@@ -117,7 +119,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'warn_member',
-      description: 'Aplica advertência formal a membro. No limite (padrão 3), aplica ban.',
+      description: 'Aplica advertência formal a membro. No limite (padrão 3), aplica ban. Acione para: advertir, dar warn, dar puxão de orelha, chamar atenção, dar um aviso, primeiro aviso, /warn, /adv.',
       parameters: {
         type: 'object',
         properties: {
@@ -132,7 +134,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'unwarn_member',
-      description: 'Remove 1 advertência de um membro (perdoa).',
+      description: 'Remove 1 advertência de um membro (perdoa). Acione para: perdoar, tirar advertência, tirar aviso, unwarn, /unwarn, /perdoar.',
       parameters: {
         type: 'object',
         properties: {
@@ -146,7 +148,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'mute_member',
-      description: 'Silencia um membro temporariamente por até 24h, apagando todas as mensagens dele em tempo real.',
+      description: 'Silencia um membro temporariamente por até 24h, apagando todas as mensagens dele em tempo real. Acione para: silenciar, mutar, calar a boca dele, cala ele, deixar de molho, botar de castigo, dar timeout, não quero ouvir ele, /muta, /calar, /silenciar.',
       parameters: {
         type: 'object',
         properties: {
@@ -162,7 +164,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'unmute_member',
-      description: 'Remove o silenciamento de um membro no grupo, permitindo que ele volte a mandar mensagens.',
+      description: 'Remove o silenciamento de um membro no grupo, permitindo que ele volte a mandar mensagens. Acione para: desmutar, tirar do molho, liberar o membro, pode falar, /desmutar, /unmute.',
       parameters: {
         type: 'object',
         properties: {
@@ -191,7 +193,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'delete_message',
-      description: 'Apaga mensagem por ref do histórico (ex: "m123") ou respondida (quoted).',
+      description: 'Apaga mensagem por ref do histórico (ex: "m123") ou respondida (quoted). Acione para: apagar, deletar, limpar, tirar essa mensagem, sumir com isso, tirar esse link, apaga essa porcaria, /del, /apagar, /limpar.',
       parameters: {
         type: 'object',
         properties: {
@@ -219,7 +221,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'promote_member',
-      description: 'Promove membro comum a Administrador.',
+      description: 'Promove membro comum a Administrador. Acione para: dar adm, promover, virar adm, botar de adm, /promover, /adm.',
       parameters: {
         type: 'object',
         properties: {
@@ -233,7 +235,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'demote_member',
-      description: 'Rebaixa Administrador a membro comum.',
+      description: 'Rebaixa Administrador a membro comum. Acione para: tirar adm, rebaixar, tirar a chave dele, remover adm, /rebaixar.',
       parameters: {
         type: 'object',
         properties: {
@@ -287,7 +289,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_description',
-      description: 'Altera ou limpa a descrição/regras/bio do grupo.',
+      description: 'Altera ou limpa a descrição/regras/bio do grupo. Acione para: mudar descrição, alterar regras, trocar bio, colocar isso na descrição, usar isso de regras, /desc, /regras.',
       parameters: {
         type: 'object',
         properties: {
@@ -301,7 +303,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_group_picture',
-      description: 'Altera ("update") ou remove ("remove") a foto de perfil do grupo.',
+      description: 'Altera ("update") ou remove ("remove") a foto de perfil do grupo. Acione para: mudar foto, foto de perfil, trocar o ícone do grupo, /foto.',
       parameters: {
         type: 'object',
         properties: {
@@ -315,7 +317,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_group_invite_link',
-      description: 'Obtém o link oficial de convite do grupo ou revoga/gera um novo se solicitado.',
+      description: 'Obtém o link oficial de convite do grupo ou revoga/gera um novo se solicitado. Acione para: mandar link, link do grupo, link de convite, cadê o link, passa o link, /link.',
       parameters: {
         type: 'object',
         properties: {
@@ -333,7 +335,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'pin_group_message',
-      description: 'Fixa ("pin"), desafixa ("unpin") mensagem respondida ou desafixa todas as mensagens ("unpin_all").',
+      description: 'Fixa ("pin"), desafixa ("unpin") mensagem respondida ou desafixa todas as mensagens ("unpin_all"). Acione "pin" para: fixar, pinar, pregar no topo, deixar destacado, /pin, /fixar. Acione "unpin" para: desafixar, despinar, tirar do topo, /unpin.',
       parameters: {
         type: 'object',
         properties: {
@@ -349,7 +351,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'create_group_poll',
-      description: 'Cria enquete interativa oficial no WhatsApp.',
+      description: 'Cria enquete interativa oficial no WhatsApp. Acione para: criar enquete, fazer votação, abrir votação, votação entre opções, /enquete, /poll.',
       parameters: {
         type: 'object',
         properties: {
@@ -365,7 +367,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_poll_results',
-      description: 'Consulta o resultado, opções, votos computados e vencedor da enquete do grupo.',
+      description: 'Consulta o resultado, opções, votos computados e vencedor da enquete do grupo. Acione para: quem ganhou, resultado da enquete, placar, apuração, parcial, como tá a votação, /resultado, /votos.',
       parameters: {
         type: 'object',
         properties: {
@@ -1000,6 +1002,15 @@ class ToolRegistry {
         if (mod === 'antilink') {
           if (args.action && ['delete', 'warn', 'ban'].includes(args.action)) {
             updates.action = args.action;
+          }
+          if (args.mode && ['whitelist', 'blacklist', 'whatsapp'].includes(args.mode)) {
+            updates.mode = args.mode;
+          }
+          if (args.blockedDomains !== undefined) {
+            const rawBlocked = String(args.blockedDomains).trim();
+            updates.blockedDomains = (rawBlocked === '.' || rawBlocked === '')
+              ? ['whatsapp.com']
+              : rawBlocked.split(/[\s,]+/).map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')).filter(Boolean);
           }
           if (args.allowedDomains !== undefined) {
             const rawDoms = String(args.allowedDomains).trim();
