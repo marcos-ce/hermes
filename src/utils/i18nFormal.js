@@ -65,9 +65,7 @@ const dictionaries = {
     'antilink.detected': "*[AutoMod]* Link detectado e removido. Infrator: @{user}",
     'antilink.warned': "*[AutoMod]* Link não autorizado removido. Advertência registrada para @{user} ({warns}/{max}).",
     'antilink.banned': "*[AutoMod]* @{user} foi expulso do grupo por violação da política de links.",
-    'antilink.status': "*[AutoMod - AntiLink]*\nEstado: {status}\nModo: {mode}\nDomínios: {domains}\nAção: {action}",
-    'antilink.on_direct': "*[AutoMod - AntiLink]* Módulo ativado. Política: Bloqueio total de links externos ativado.",
-    'antilink.mode_specific': "*[Configuração]* AntiLink configurado para bloquear apenas links específicos: {domains}",
+    'antilink.status': "*[AutoMod - AntiLink]*\nEstado: {status}\nDomínios autorizados: {domains}\nAção: {action}",
 
     'welcome.default': "*[Novo Membro]* @{user} ingressou no grupo.\nRegras e orientações: consulte a descrição do grupo.",
     'welcome.status': "*[Boas-Vindas]*\nEstado: {status}\nAuto-exclusão: {time}",
@@ -272,9 +270,6 @@ const dictionaries = {
     'antilink.detected': "*[AutoMod]* Enlace detectado y eliminado. Infractor: @{user}",
     'antilink.warned': "*[AutoMod]* Enlace no autorizado eliminado. Advertencia registrada para @{user} ({warns}/{max}).",
     'antilink.banned': "*[AutoMod]* @{user} fue expulsado del grupo por violación de política de enlaces.",
-    'antilink.status': "*[AutoMod - AntiLink]*\nEstado: {status}\nModo: {mode}\nDominios: {domains}\nAcción: {action}",
-    'antilink.on_direct': "*[AutoMod - AntiLink]* Módulo activado. Política: Bloqueo total de enlaces externos activado.",
-    'antilink.mode_specific': "*[Configuración]* AntiLink configurado para bloquear solo enlaces específicos: {domains}",
 
     'welcome.default': "*[Nuevo Miembro]* @{user} se unió al grupo.\nConsulta la descripción del grupo para conocer las normas.",
 
@@ -343,9 +338,6 @@ const dictionaries = {
     'antilink.detected': "*[AutoMod]* Link detected and deleted. Offender: @{user}",
     'antilink.warned': "*[AutoMod]* Unauthorized link deleted. Warning logged for @{user} ({warns}/{max}).",
     'antilink.banned': "*[AutoMod]* @{user} was removed for violating the link policy.",
-    'antilink.status': "*[AutoMod - AntiLink]*\nStatus: {status}\nMode: {mode}\nDomains: {domains}\nAction: {action}",
-    'antilink.on_direct': "*[AutoMod - AntiLink]* Module enabled. Policy: Full blocking of external links active.",
-    'antilink.mode_specific': "*[Configuration]* AntiLink configured to block specific links only: {domains}",
 
     'welcome.default': "*[New Member]* @{user} has joined the group.\nPlease review the group description for rules.",
 

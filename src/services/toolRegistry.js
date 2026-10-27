@@ -80,8 +80,6 @@ const TOOLS = [
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
           action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição: "delete", "warn" ou "ban".' },
-          mode: { type: 'string', enum: ['whitelist', 'blacklist', 'whatsapp'], description: 'Modo do antilink: "whitelist" (bloqueia tudo exceto liberados), "blacklist" (bloqueia domínios específicos) ou "whatsapp" (libera todos exceto links do WhatsApp).' },
-          blockedDomains: { type: 'string', description: 'Domínios bloqueados no antilink quando no modo blacklist (ex: "whatsapp.com, telegram.org").' },
           allowedDomains: { type: 'string', description: 'Domínios liberados no antilink (ex: "youtube.com, instagram.com") ou "." para todos.' },
           maxMessages: { type: 'integer', description: 'Máximo de mensagens em 5s no antiflood.' },
           maxChars: { type: 'integer', description: 'Limite de caracteres anti-trava.' },
@@ -1102,15 +1100,6 @@ class ToolRegistry {
         if (mod === 'antilink') {
           if (args.action && ['delete', 'warn', 'ban'].includes(args.action)) {
             updates.action = args.action;
-          }
-          if (args.mode && ['whitelist', 'blacklist', 'whatsapp'].includes(args.mode)) {
-            updates.mode = args.mode;
-          }
-          if (args.blockedDomains !== undefined) {
-            const rawBlocked = String(args.blockedDomains).trim();
-            updates.blockedDomains = (rawBlocked === '.' || rawBlocked === '')
-              ? ['whatsapp.com']
-              : rawBlocked.split(/[\s,]+/).map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')).filter(Boolean);
           }
           if (args.allowedDomains !== undefined) {
             const rawDoms = String(args.allowedDomains).trim();
