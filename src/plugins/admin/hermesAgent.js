@@ -902,11 +902,10 @@ module.exports = {
       }
     }
 
-    // Injeção de Enquete / Votação sob demanda (apenas quando relevante para economizar tokens)
-    const pollKeywords = /enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|placar|voto|votos|venceu|disputa|parcial|frente|opç[oõ]es/i;
-    const isPollRelated = pollKeywords.test(queryText || '') ||
-                          pollKeywords.test(snippet || '') ||
-                          Boolean(quotedPoll);
+    // Injeção de Enquete / Votação sob demanda: APENAS quando o admin cita uma enquete diretamente
+    // ou pede expressamente apuração/resultado/placar (evita desenterrar enquetes antigas em pedidos gerais)
+    const pollResultKeywords = /\b(apurar|resultado|placar|parcial|quem\s+ganhou|quem\s+venceu|como\s+t[aá]\s+a\s+vota[cç][aã]o|votos\s+da\s+enquete|mostrar\s+votos|ver\s+votos|apurar\s+enquete)\b/i;
+    const isPollRelated = Boolean(quotedPoll) || pollResultKeywords.test(queryText || '') || pollResultKeywords.test(snippet || '');
 
     if (isPollRelated) {
       const targetPollId = (contextInfo?.stanzaId && pollTracker.getPoll(contextInfo.stanzaId))
@@ -946,14 +945,10 @@ module.exports = {
 
     try {
       const prefix = configManager.getGroupPrefix(from) || '!';
-      const relevantTools = toolRegistry.getTools(queryText, {
-        quotedPoll: Boolean(quotedPoll),
-        hasMediaQuoted: Boolean(unwrappedQuoted?.imageMessage || unwrappedQuoted?.stickerMessage),
-        isUnknownCommandAttempt
-      });
+      const tools = toolRegistry.getTools();
       let aiResponse = await aiService.chatCompletion({
         messages,
-        tools: relevantTools,
+        tools,
         personality,
         lang,
         groupName,

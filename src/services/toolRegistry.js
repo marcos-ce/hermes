@@ -435,99 +435,14 @@ class ToolRegistry {
    * @param {object} [context]
    * @returns {Array<object>}
    */
-  getTools(queryText = '', context = {}) {
-    if (!queryText || typeof queryText !== 'string') {
-      return this.tools;
-    }
-
-    const q = queryText.toLowerCase().trim();
-
-    // 1. FAIL-OPEN: Pedidos abertos, ajuda, desfazer ou tentativa de comando desconhecido
-    const isBroadOrComplex =
-      Boolean(context.isUnknownCommandAttempt) ||
-      q.length === 0 ||
-      /\b(ajuda|help|menu|o que voc[eê]|como funciona|suas fun[cç][oõ]es|o que sabe|comandos|socorro|tudo|desfa[zç]|cancela|reverte|desfaz tudo)\b/i.test(q);
-
-    if (isBroadOrComplex) {
-      return this.tools; // Retorna todas as 24 ferramentas completas
-    }
-
-    // 2. CORE DE MODERAÇÃO (Sempre presente em qualquer interação de moderação):
-    // ban_member, set_group_mute, mute_member, unmute_member, warn_member, unwarn_member, delete_message
-    const coreNames = new Set([
-      'ban_member',
-      'set_group_mute',
-      'mute_member',
-      'unmute_member',
-      'warn_member',
-      'unwarn_member',
-      'delete_message'
-    ]);
-
-    const activeNames = new Set(coreNames);
-
-    // 3. DETECÇÃO DE DOMÍNIOS ESPECIALIZADOS SOB DEMANDA:
-
-    // A. Enquetes e Votações
-    if (/\b(enquete|vota[cç][aã]o|voto|votos|apurar|resultado|placar|parcial|ganh|venceu|disputa|opç)\b/i.test(q) || context.quotedPoll) {
-      activeNames.add('create_group_poll');
-      activeNames.add('get_poll_results');
-    }
-
-    // B. Agenda, Horários Automáticos, Sorteio e Lembretes
-    if (/\b(agenda|lembrete|lembrar|hor[aá]rio|amanh[aã]|sorteio|sortear|ganhador|pr[eê]mio|agendar|programar|abertura|fechamento|rotina)\b/i.test(q) || /\b(daqui a|\d{1,2}h|\d{1,2}:\d{2})\b/i.test(q)) {
-      activeNames.add('manage_calendar');
-      activeNames.add('raffle_members');
-      activeNames.add('set_group_schedule');
-    }
-
-    // C. Mídia do Grupo e Descrição/Regras
-    if (/\b(foto|perfil|[íi]cone|imagem|descri[cç][aã]o|regras|bio|status do grupo)\b/i.test(q) || context.hasMediaQuoted) {
-      activeNames.add('set_group_picture');
-      activeNames.add('set_group_description');
-    }
-
-    // D. Link de Convite
-    if (/\b(link|convite|entrar no grupo|compartilhar grupo)\b/i.test(q)) {
-      activeNames.add('get_group_invite_link');
-    }
-
-    // E. Fixar/Desafixar Mensagens (Pin)
-    if (/\b(fixa|pina|desfixa|despina|topo|destaque|pin|unpin)\b/i.test(q)) {
-      activeNames.add('pin_group_message');
-    }
-
-    // F. Cargos de Administrador (Promover / Rebaixar)
-    if (/\b(adm|admin|administrador|promov|rebaix|cargo|chave)\b/i.test(q)) {
-      activeNames.add('promote_member');
-      activeNames.add('demote_member');
-    }
-
-    // G. Blacklist (Lista Negra)
-    if (/\b(blacklist|lista negra|bloquear n[uú]mero)\b/i.test(q)) {
-      activeNames.add('manage_blacklist');
-    }
-
-    // H. Comunicado Oculto / Hidetag
-    if (/\b(todos|hidetag|marcar todos|aviso geral|notificar|totag|comunicado)\b/i.test(q)) {
-      activeNames.add('hidetag_announcement');
-    }
-
-    // I. Configurações Gerais, Módulos e Memória Cultural
-    if (/\b(config|painel|m[oó]dulo|antilink|antiflood|antifake|bemvindo|automsg|idioma|prefixo|aprende|anota|esquece|lembra que|fato|regra t[aá]cita)\b/i.test(q)) {
-      activeNames.add('toggle_group_protection');
-      activeNames.add('set_group_settings');
-      activeNames.add('learn_group_fact');
-      activeNames.add('forget_group_fact');
-    }
-
-    // Se a mensagem for longa (mais de 10 palavras) e não tiver foco claro em moderação rápida,
-    // aplica fail-open defensivo enviando todas as ferramentas completas
-    if (activeNames.size === coreNames.size && q.split(/\s+/).length > 10) {
-      return this.tools;
-    }
-
-    return this.tools.filter(t => activeNames.has(t.function.name));
+  /**
+   * Retorna todas as ferramentas disponíveis (schemas de Tool Calling oficiais).
+   * Mantém a lista 100% estática e idêntica entre requisições para maximizar
+   * o Context Caching da DeepSeek (90% de desconto) e eliminar visão de túnel do modelo.
+   * @returns {Array<object>}
+   */
+  getTools() {
+    return this.tools;
   }
 
   /**
@@ -1418,10 +1333,31 @@ class ToolRegistry {
         let deleteId = null;
         let deleteParticipant = null;
 
+        const botJid = cleanJid(sock?.user?.id || '');
+        const botLid = cleanJid(sock?.user?.lid || '');
+
         // 1. Prioridade absoluta: mensagem citada diretamente no chat (reply)
         if (contextInfo?.stanzaId) {
           deleteId = contextInfo.stanzaId;
           deleteParticipant = contextInfo.participant;
+
+          // Blindagem de Segurança: se a mensagem citada for do próprio bot (Hermes),
+          // SÓ apaga se o admin tiver intenção explícita de apagar no texto (ex: "apaga", "deleta", "limpa").
+          // NUNCA apaga mensagens do próprio bot se a resposta for apenas confirmação ("sim", "pode", etc.)!
+          const isQuotingBot = deleteParticipant && (
+            cleanJid(deleteParticipant) === botJid ||
+            cleanJid(deleteParticipant) === botLid
+          );
+          const rawText = (msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || '').toLowerCase().trim();
+          const hasExplicitDelete = /\b(apaga|apagar|deleta|deletar|limpa|limpar|some|tira|del|exclui|excluir)\b/i.test(rawText);
+
+          if (isQuotingBot && !hasExplicitDelete) {
+            logger.warn({ from, sender, rawText }, 'delete_message bloqueada: quote ao bot sem intenção explícita de exclusão');
+            return {
+              success: false,
+              error: 'Ação cancelada: para apagar mensagens do bot, diga expressamente "apaga" ou "deleta".'
+            };
+          }
         } else if (args.messageId && /^m\d{1,9}$/i.test(String(args.messageId).trim())) {
           // 2. Ref do histórico ("m123") quando NÃO houve citação direta
           const refData = memoryEngine.getMessageByRef(from, String(args.messageId).trim());

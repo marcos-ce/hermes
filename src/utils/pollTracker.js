@@ -385,9 +385,9 @@ class PollTracker {
         const votes = Array.isArray(opt.voters) ? opt.voters.length : 0;
         totalVotes += votes;
         const item = { name: opt.name, votes };
-        if (!winner || votes > winner.votes) {
+        if (opt.name !== 'Unknown' && (!winner || votes > winner.votes)) {
           winner = item;
-        } else if (winner && votes === winner.votes && votes > 0) {
+        } else if (winner && opt.name !== 'Unknown' && votes === winner.votes && votes > 0) {
           winner.isTie = true;
         }
         return item;
