@@ -160,7 +160,7 @@ class AIService {
       '    - set_group_mute (close): chame open | set_group_mute (open): chame close',
       '    - pin_group_message (pin): chame unpin | warn_member: chame unwarn_member',
       '    - promote_member: chame demote_member | demote_member: chame promote_member',
-      '    - toggle_module: inverta o status do módulo.',
+      '    - toggle_group_protection: inverta o status (enabled) do módulo | mute_member: chame unmute_member.',
       '- Se o admin pedir para desfixar todas as mensagens do grupo: chame "pin_group_message" com action: "unpin_all".',
       '- Se não houver ações recentes para reverter: responda com simpatia em 1 frase curta que não há nenhuma ação recente para desfazer.',
       '12. MEMÓRIA CULTURAL E APRENDIZADO ("Hermes, anota aí", "aprende isso", "o apelido de X é Y", "regra do grupo"):',
@@ -176,8 +176,7 @@ class AIService {
       langInstructions
     ].join('\n');
 
-    // PARTE DINÂMICA (no final, para não invalidar o cache do prefixo)
-    return `${staticPart}\nGrupo: "${groupName || 'sem nome'}" | Prefixo (P): "${prefix}"`;
+    return staticPart;
   }
 
   /**

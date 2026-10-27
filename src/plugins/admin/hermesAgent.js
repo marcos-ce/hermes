@@ -4,7 +4,6 @@ const pluginLoader = require('../../core/pluginLoader');
 const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
-const { humanizeAIText } = require('../../services/humanizer');
 const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
@@ -34,7 +33,8 @@ const REVERSIBLE_TOOLS = new Set([
   'warn_member',
   'promote_member',
   'demote_member',
-  'toggle_module',
+  'toggle_group_protection',
+  'mute_member',
   'set_group_description'
 ]);
 
@@ -440,7 +440,14 @@ module.exports = {
 
     // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
-      memoryEngine.saveMessage(from, sender, text, msg.messageTimestamp, senderName, {
+      const mediaTag = !text && (
+        realMsg?.imageMessage ? '[Foto]' :
+        realMsg?.videoMessage ? '[Vídeo]' :
+        realMsg?.stickerMessage ? '[Figurinha]' :
+        realMsg?.audioMessage ? '[Áudio]' :
+        realMsg?.documentMessage ? '[Documento]' : ''
+      );
+      memoryEngine.saveMessage(from, sender, text || mediaTag, msg.messageTimestamp, senderName, {
         msgId: msg?.key?.id,
         participant: msg?.key?.participant || sender
       });
@@ -611,6 +618,9 @@ module.exports = {
 
     // Monta o prompt do usuário com contexto e histórico compactos em uma única mensagem
     const userPromptParts = [];
+
+    const groupPrefix = configManager.getGroupPrefix(from) || '!';
+    userPromptParts.push(`[Contexto do Grupo: "${groupName || 'sem nome'}" | Prefixo (P): "${groupPrefix}"]`);
 
     // Injeção de Data e Hora em Tempo Real (fuso configurado, padrão Brasília)
     const now = new Date();
@@ -1097,7 +1107,7 @@ module.exports = {
           return;
         }
 
-        const finalReply = humanizeAIText(rawContent);
+        const finalReply = rawContent;
         await reply(`${notice}${finalReply}`);
         memoryEngine.saveMessage(from, 'hermes@bot', finalReply, null, 'Hermes');
 
