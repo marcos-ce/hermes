@@ -44,9 +44,7 @@ function extractBaseDomain(url) {
     let href = url.trim();
     if (!/^https?:\/\//i.test(href)) href = 'https://' + href;
     const hostname = new URL(href).hostname.toLowerCase();
-    // Remove www. e subdomínios simples (www, m, mobile)
     const noWww = hostname.replace(/^(www\.|m\.|mobile\.)/, '');
-    // Verifica alias canônico para subdomínio completo
     if (DOMAIN_ALIASES[hostname]) return DOMAIN_ALIASES[hostname];
     if (DOMAIN_ALIASES[noWww]) return DOMAIN_ALIASES[noWww];
     return noWww;
@@ -69,7 +67,6 @@ function isWhatsAppMatch(urlOrDomain) {
 
 /**
  * Verifica se um domínio extraído confere com uma lista de domínios.
- * Compara: match exato, sem subdomínios e com aliases canônicos.
  * @param {string} urlOrDomain
  * @param {string[]} domainList
  * @returns {boolean}
@@ -90,15 +87,13 @@ function isDomainMatch(urlOrDomain, domainList) {
 }
 
 /**
- * Extrai todos os textos relevantes de uma mensagem Baileys para detecção de links,
- * incluindo link previews (extendedTextMessage), legendas de mídia, enquetes e texto normal.
+ * Extrai todos os textos relevantes de uma mensagem Baileys para detecção de links.
  * @param {object} message msg.message do Baileys
  * @returns {string}
  */
 function extractAllTextForLinks(message) {
   if (!message) return '';
 
-  // Desencapsula efêmeras/viewOnce
   const real = message.ephemeralMessage?.message ||
                message.viewOnceMessage?.message ||
                message.viewOnceMessageV2?.message ||
@@ -107,10 +102,8 @@ function extractAllTextForLinks(message) {
 
   const parts = [];
 
-  // Texto normal
   if (real.conversation) parts.push(real.conversation);
 
-  // Mensagem com texto estendido (link preview)
   if (real.extendedTextMessage) {
     const ext = real.extendedTextMessage;
     if (ext.text) parts.push(ext.text);
@@ -118,14 +111,12 @@ function extractAllTextForLinks(message) {
     if (ext.canonicalUrl) parts.push(ext.canonicalUrl);
   }
 
-  // Legendas de mídia
   if (real.imageMessage?.caption) parts.push(real.imageMessage.caption);
   if (real.videoMessage?.caption) parts.push(real.videoMessage.caption);
   if (real.documentMessage?.caption) parts.push(real.documentMessage.caption);
   if (real.audioMessage?.caption) parts.push(real.audioMessage.caption);
   if (real.stickerMessage?.caption) parts.push(real.stickerMessage.caption);
 
-  // Enquetes
   const poll = real.pollCreationMessage || real.pollCreationMessageV2 || real.pollCreationMessageV3;
   if (poll?.name) parts.push(poll.name);
   if (Array.isArray(poll?.options)) {
@@ -140,7 +131,7 @@ function extractAllTextForLinks(message) {
 module.exports = {
   name: 'antilink',
   aliases: ['antilink', 'antlink', 'link', 'links', 'antienlace', 'antilinks'],
-  description: 'Filtro inteligente de links não autorizados com Whitelist, Blacklist e modo exclusivo WhatsApp',
+  description: 'Filtro inteligente de links: bloqueia todos os links, apenas WhatsApp ou sites específicos',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
@@ -153,74 +144,64 @@ module.exports = {
       en: 'AntiLink Filter'
     },
     description: {
-      pt: 'Bloqueia links externos com suporte a Whitelist, Blacklist e modo exclusivo WhatsApp',
-      es: 'Bloquea enlaces externos con soporte de Lista Blanca, Lista Negra y modo exclusivo WhatsApp',
-      en: 'Blocks external links with Whitelist, Blacklist and WhatsApp-only mode support'
+      pt: 'Proteção contra links externos com opções de bloqueio total, WhatsApp ou sites específicos',
+      es: 'Protección contra enlaces externos con opciones de bloqueo total, WhatsApp o sitios específicos',
+      en: 'External link protection with full block, WhatsApp-only or specific sites options'
     },
     fields: [
       {
         name: 'mode',
         type: 'choice',
         question: {
-          pt: 'Qual modo de proteção do AntiLink você deseja utilizar?',
-          es: '¿Qué modo de protección de AntiLink deseas utilizar?',
-          en: 'Which AntiLink protection mode do you want to use?'
+          pt: 'O que você deseja bloquear no grupo?',
+          es: '¿Qué deseas bloquear en el grupo?',
+          en: 'What do you want to block in the group?'
         },
         choices: [
           {
-            value: 'whitelist',
+            value: 'all',
             label: {
-              pt: 'Lista Branca (Bloquear tudo, exceto sites permitidos)',
-              es: 'Lista Blanca (Bloquear todo, excepto sitios permitidos)',
-              en: 'Whitelist (Block all, except allowed sites)'
+              pt: 'Todos os links (Bloqueia qualquer link externo)',
+              es: 'Todos los enlaces (Bloquea cualquier enlace externo)',
+              en: 'All links (Block any external link)'
             }
           },
           {
             value: 'whatsapp',
             label: {
-              pt: 'Apenas WhatsApp (Liberar tudo, bloquear apenas links/grupos do WhatsApp)',
-              es: 'Solo WhatsApp (Permitir todo, bloquear solo enlaces de WhatsApp)',
-              en: 'WhatsApp Only (Allow all, block only WhatsApp links)'
+              pt: 'Apenas WhatsApp (Bloqueia só links/grupos do WhatsApp e libera o resto)',
+              es: 'Solo WhatsApp (Bloquea solo enlaces/grupos de WhatsApp y permite el resto)',
+              en: 'WhatsApp only (Block only WhatsApp links/groups and allow the rest)'
             }
           },
           {
-            value: 'blacklist',
+            value: 'specific',
             label: {
-              pt: 'Lista Negra (Liberar tudo, bloquear domínios específicos)',
-              es: 'Lista Negra (Permitir todo, bloquear dominios específicos)',
-              en: 'Blacklist (Allow all, block specific domains)'
+              pt: 'Apenas sites específicos (Bloqueia só os sites que você escolher)',
+              es: 'Solo sitios específicos (Bloquea solo los sitios que elijas)',
+              en: 'Specific sites only (Block only the sites you choose)'
             }
           }
         ],
-        default: 'whitelist'
+        default: 'all'
       },
       {
         name: 'blockedDomains',
         type: 'domain_list',
         question: {
-          pt: 'Digite os domínios PROIBIDOS separados por espaço (usado no modo Lista Negra, ex: whatsapp.com t.me)\nou envie . para padrão:',
-          es: 'Escribe los dominios PROHIBIDOS separados por espacio (usado en modo Lista Negra, ej: whatsapp.com t.me)\no envía . para predeterminado:',
-          en: 'Enter FORBIDDEN domains separated by space (used in Blacklist mode, e.g. whatsapp.com t.me)\nor send . for default:'
+          pt: 'Se escolheu a opção 3 (Apenas sites específicos), digite os sites a bloquear separados por espaço (ex: telegram.org tiktok.com).\nSe escolheu Todos ou WhatsApp, envie . para avançar:',
+          es: 'Si elegiste la opción 3 (Solo sitios específicos), escribe los sitios a bloquear separados por espacio (ej: telegram.org tiktok.com).\nSi elegiste Todos o WhatsApp, envía . para continuar:',
+          en: 'If you chose option 3 (Specific sites only), enter sites to block separated by space (e.g. telegram.org tiktok.com).\nIf you chose All or WhatsApp, send . to proceed:'
         },
         default: ['whatsapp.com']
-      },
-      {
-        name: 'allowedDomains',
-        type: 'domain_list',
-        question: {
-          pt: 'Digite os domínios PERMITIDOS separados por espaço (usado no modo Lista Branca, ex: youtube.com instagram.com)\nou escreva "nenhum" para bloquear absolutamente todos os links:',
-          es: 'Escribe los dominios PERMITIDOS separados por espacio (usado en modo Lista Blanca, ej: youtube.com instagram.com)\no escribe "ninguno" para bloquear todos los enlaces:',
-          en: 'Enter ALLOWED domains separated by space (used in Whitelist mode, e.g. youtube.com instagram.com)\nor type "none" to block all links:'
-        },
-        default: []
       },
       {
         name: 'action',
         type: 'choice',
         question: {
-          pt: 'Qual ação aplicar ao membro que enviar link não autorizado?',
-          es: '¿Qué acción aplicar al miembro que envíe un enlace no autorizado?',
-          en: 'What action should be taken against a member sending unauthorized links?'
+          pt: 'Qual ação aplicar ao membro que enviar link proibido?',
+          es: '¿Qué acción aplicar al miembro que envíe un enlace prohibido?',
+          en: 'What action should be taken against a member sending forbidden links?'
         },
         choices: [
           { value: 'delete', label: { pt: 'Apenas apagar a mensagem', es: 'Solo borrar el mensaje', en: 'Only delete message' } },
@@ -239,105 +220,65 @@ module.exports = {
     const cfg = configManager.getPluginConfig(from, 'antilink') || {};
     const lang = configManager.getGroupLang(from);
 
-    // Sem argumentos, config, wizard ou setup abre o assistente interativo
+    // Sem argumentos, config, wizard ou setup abre o assistente interativo enxuto
     if (!sub || sub === 'config' || sub === 'wizard' || sub === 'setup') {
       return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
     }
 
-    // Ativar: ativa imediatamente sem abrir o wizard e bloqueia tudo direto por padrão
+    // 1. Ativar bloqueando TUDO direto (sem abrir wizard)
     if (['on', 'ativar', 'activar', 'enable'].includes(sub)) {
-      const isAlreadyConfigured = Boolean(cfg.configured);
-      const updates = {
+      configManager.updatePluginConfig(from, 'antilink', {
         enabled: true,
         configured: true,
-        mode: cfg.mode || 'whitelist',
-        allowedDomains: Array.isArray(cfg.allowedDomains) ? cfg.allowedDomains : [],
+        mode: 'all',
+        allowedDomains: [],
         action: cfg.action || 'delete'
-      };
-
-      configManager.updatePluginConfig(from, 'antilink', updates);
-
-      if (!isAlreadyConfigured || (updates.mode === 'whitelist' && updates.allowedDomains.length === 0)) {
-        return reply(t('antilink.on_direct'));
-      }
-      return reply(t('config.module_toggled_on', { module: 'ANTILINK' }));
+      });
+      return reply(t('antilink.on_direct'));
     }
 
-    // Desativar
+    // 2. Ativar bloqueando APENAS links do WhatsApp (libera todo o restante)
+    if (['whats', 'whatsapp'].includes(sub)) {
+      configManager.updatePluginConfig(from, 'antilink', {
+        enabled: true,
+        configured: true,
+        mode: 'whatsapp',
+        action: cfg.action || 'delete'
+      });
+      return reply(t('antilink.mode_whatsapp'));
+    }
+
+    // 3. Ativar bloqueando APENAS sites específicos (ex: !antilink apenas telegram.org discord.gg)
+    if (['apenas', 'bloquear', 'proibir', 'block', 'blacklist', 'especifico'].includes(sub)) {
+      const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
+      if (domains.length > 0) {
+        configManager.updatePluginConfig(from, 'antilink', {
+          enabled: true,
+          configured: true,
+          mode: 'specific',
+          blockedDomains: domains,
+          action: cfg.action || 'delete'
+        });
+        return reply(t('antilink.mode_specific', { domains: domains.join(', ') }));
+      }
+      // Se chamado sem listar domínios (ex: !antilink bloquear), bloqueia tudo direto
+      configManager.updatePluginConfig(from, 'antilink', {
+        enabled: true,
+        configured: true,
+        mode: 'all',
+        allowedDomains: [],
+        action: cfg.action || 'delete'
+      });
+      return reply(t('antilink.on_direct'));
+    }
+
+    // 4. Desativar
     if (['off', 'desativar', 'desactivar', 'disable'].includes(sub)) {
       configManager.setPluginEnabled(from, 'antilink', false);
       return reply(t('config.module_toggled_off', { module: 'ANTILINK' }));
     }
 
-    // Atalho direto: Bloquear apenas links do WhatsApp (libera todo o resto)
-    if (['whats', 'whatsapp'].includes(sub)) {
-      configManager.updatePluginConfig(from, 'antilink', {
-        mode: 'whatsapp',
-        enabled: true,
-        configured: true
-      });
-      return reply(t('antilink.mode_whatsapp'));
-    }
-
-    // Configuração de Lista Negra (Blacklist): Proibir domínios específicos e liberar o restante
-    if (['proibir', 'block', 'blacklist', 'prohibir', 'bloquearlink'].includes(sub)) {
-      const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
-      const targetDomains = domains.length > 0 ? domains : ['whatsapp.com'];
-      configManager.updatePluginConfig(from, 'antilink', {
-        mode: 'blacklist',
-        blockedDomains: targetDomains,
-        enabled: true,
-        configured: true
-      });
-      return reply(t('antilink.mode_blacklist', { domains: targetDomains.join(', ') }));
-    }
-
-    // Configuração de Lista Branca (Whitelist): Permitir domínios e bloquear o restante
-    if (['permitir', 'allow', 'whitelist'].includes(sub)) {
-      const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
-      configManager.updatePluginConfig(from, 'antilink', {
-        mode: 'whitelist',
-        allowedDomains: domains,
-        enabled: true,
-        configured: true
-      });
-      const display = domains.length ? domains.join(', ') : 'Nenhum (Bloqueia Todos)';
-      return reply(t('antilink.mode_whitelist', { domains: display }));
-    }
-
-    // Bloquear 100% de todos os links externos
-    if (['bloquear', 'blockall', 'bloqueartodos'].includes(sub)) {
-      configManager.updatePluginConfig(from, 'antilink', {
-        mode: 'whitelist',
-        allowedDomains: [],
-        enabled: true,
-        configured: true
-      });
-      return reply(t('antilink.mode_blockall'));
-    }
-
-    // Alternar ou consultar modo
-    if (['modo', 'mode'].includes(sub)) {
-      const targetMode = (args[1] || '').toLowerCase();
-      if (['whats', 'whatsapp'].includes(targetMode)) {
-        configManager.updatePluginConfig(from, 'antilink', { mode: 'whatsapp', enabled: true, configured: true });
-        return reply(t('antilink.mode_whatsapp'));
-      }
-      if (['blacklist', 'negra', 'proibir'].includes(targetMode)) {
-        const blocked = Array.isArray(cfg.blockedDomains) && cfg.blockedDomains.length > 0 ? cfg.blockedDomains : ['whatsapp.com'];
-        configManager.updatePluginConfig(from, 'antilink', { mode: 'blacklist', blockedDomains: blocked, enabled: true, configured: true });
-        return reply(t('antilink.mode_blacklist', { domains: blocked.join(', ') }));
-      }
-      if (['whitelist', 'branca', 'permitir', 'todos', 'all'].includes(targetMode)) {
-        const allowed = Array.isArray(cfg.allowedDomains) ? cfg.allowedDomains : [];
-        configManager.updatePluginConfig(from, 'antilink', { mode: 'whitelist', allowedDomains: allowed, enabled: true, configured: true });
-        const display = allowed.length > 0 ? allowed.join(', ') : 'Nenhum (Bloqueia Todos)';
-        return reply(t('antilink.mode_whitelist', { domains: display }));
-      }
-      return reply(t('antilink.mode_help'));
-    }
-
-    // Configuração direta de ação: ban, del, warn
+    // 5. Configuração direta de ação punitiva: ban, del, warn
     if (['ban', 'banir', 'expulsar', 'kick'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'ban', enabled: true, configured: true });
       return reply(t('antilink.action_ban'));
@@ -351,29 +292,28 @@ module.exports = {
       return reply(t('antilink.action_warn'));
     }
 
-    // Status do módulo
+    // 6. Status resumido do módulo
     const status = configManager.isPluginEnabled(from, 'antilink') ? t('common.enabled') : t('common.disabled');
-    const mode = (cfg.mode || 'whitelist').toLowerCase();
+    const mode = (cfg.mode || 'all').toLowerCase();
 
     let modeDisplay = '';
     let domainsDisplay = '';
 
     if (mode === 'whatsapp') {
-      modeDisplay = lang === 'es' ? 'Solo WhatsApp (Bloquea solo enlaces de WhatsApp)' : (lang === 'en' ? 'WhatsApp Only (Blocks WhatsApp links only)' : 'Apenas WhatsApp (Bloqueia só convites/links do WhatsApp)');
+      modeDisplay = lang === 'es' ? 'Solo WhatsApp (Bloquea solo enlaces de WhatsApp)' : (lang === 'en' ? 'WhatsApp only (Blocks WhatsApp links only)' : 'Apenas WhatsApp (Bloqueia só links do WhatsApp)');
       domainsDisplay = 'chat.whatsapp.com, wa.me, whatsapp.com';
-    } else if (mode === 'blacklist') {
+    } else if (mode === 'specific' || mode === 'blacklist') {
       const blocked = (cfg.blockedDomains && cfg.blockedDomains.length) ? cfg.blockedDomains.join(', ') : 'whatsapp.com';
-      modeDisplay = lang === 'es' ? 'Lista Negra (Bloquea dominios específicos)' : (lang === 'en' ? 'Blacklist (Blocks specific domains)' : 'Lista Negra (Bloqueia domínios específicos)');
+      modeDisplay = lang === 'es' ? 'Sitios específicos' : (lang === 'en' ? 'Specific sites' : 'Apenas sites específicos');
       domainsDisplay = blocked;
     } else {
-      // Modo whitelist / padrão histórico
-      const allowed = (cfg.allowedDomains && cfg.allowedDomains.length) ? cfg.allowedDomains.join(', ') : '';
-      if (allowed) {
-        modeDisplay = lang === 'es' ? 'Lista Blanca (Permite seleccionados)' : (lang === 'en' ? 'Whitelist (Allows selected)' : 'Lista Branca (Permitir selecionados)');
-        domainsDisplay = allowed;
+      // Modo 'all' ou 'whitelist'
+      if (Array.isArray(cfg.allowedDomains) && cfg.allowedDomains.length > 0) {
+        modeDisplay = lang === 'es' ? 'Todos los enlaces (con excepciones)' : (lang === 'en' ? 'All links (with exceptions)' : 'Todos os links (com exceções)');
+        domainsDisplay = `Liberados: ${cfg.allowedDomains.join(', ')}`;
       } else {
-        modeDisplay = lang === 'es' ? 'Lista Blanca (Bloquea todos los enlaces)' : (lang === 'en' ? 'Whitelist (Blocks all links)' : 'Lista Branca (Bloquear todos os links)');
-        domainsDisplay = lang === 'es' ? 'Ninguno (Bloquea todo)' : (lang === 'en' ? 'None (Blocks all)' : 'Nenhum (Bloqueia Todos)');
+        modeDisplay = lang === 'es' ? 'Todos los enlaces (Bloqueo total)' : (lang === 'en' ? 'All links (Full block)' : 'Todos os links (Bloqueio total)');
+        domainsDisplay = lang === 'es' ? 'Cualquier enlace externo' : (lang === 'en' ? 'Any external link' : 'Qualquer link externo');
       }
     }
 
@@ -387,7 +327,7 @@ module.exports = {
   async onMessage({ sock, msg, from, sender, _text, lang }) {
     if (!configManager.isPluginEnabled(from, 'antilink')) return false;
 
-    // Extrai TODOS os textos relevantes (incluindo link previews, legendas de mídia e enquetes)
+    // Extrai textos relevantes (incluindo link previews, legendas de mídia e enquetes)
     const fullText = extractAllTextForLinks(msg.message);
     const matches = fullText ? fullText.match(new RegExp(URL_REGEX_PATTERN, 'gi')) : null;
     if (!matches || matches.length === 0) return false;
@@ -398,31 +338,30 @@ module.exports = {
     if (adminCheck.isAdmin) return false;
 
     const cfg = configManager.getPluginConfig(from, 'antilink') || {};
-    const mode = (cfg.mode || 'whitelist').toLowerCase();
+    const mode = (cfg.mode || 'all').toLowerCase();
     let isViolation = false;
 
     if (mode === 'whatsapp') {
-      // Modo expresso: Bloqueia SOMENTE links da família WhatsApp (grupos, convites, wa.me, canais) e libera todo o restante
+      // Bloqueia SOMENTE links da família WhatsApp
       isViolation = matches.some(match => isWhatsAppMatch(match));
-    } else if (mode === 'blacklist') {
-      // Modo Lista Negra: Bloqueia apenas os domínios proibidos configurados
+    } else if (mode === 'specific' || mode === 'blacklist') {
+      // Bloqueia APENAS os domínios específicos configurados
       const blocked = Array.isArray(cfg.blockedDomains) && cfg.blockedDomains.length > 0
         ? cfg.blockedDomains
         : ['whatsapp.com'];
       isViolation = matches.some(match => isDomainMatch(match, blocked));
     } else {
-      // Modo Lista Branca (padrão histórico): bloqueia tudo exceto os domínios autorizados
+      // Modo 'all' ou 'whitelist': bloqueia todos os links externos
       const allowed = Array.isArray(cfg.allowedDomains) ? cfg.allowedDomains : [];
       if (allowed.length === 0) {
-        // Whitelist vazia = bloqueia absolutamente todos os links
         isViolation = true;
       } else {
-        // Se qualquer link da mensagem NÃO estiver na whitelist, é violação
+        // Se houver lista de liberados, apenas eles passam
         isViolation = matches.some(match => !isDomainMatch(match, allowed));
       }
     }
 
-    // Se nenhum link configurado violou as regras do modo ativo, permite a mensagem normalmente
+    // Se nenhum link violou a regra do modo ativo, libera a mensagem
     if (!isViolation) return false;
 
     // Ação de Emergência (Zero Delay): Apagar mensagem do infrator
