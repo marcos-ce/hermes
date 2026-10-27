@@ -49,10 +49,11 @@ module.exports = {
   /**
    * Hook de execução periódica chamado a cada minuto pelo scheduler
    */
-  async onSchedule({ sock, groupJid, config, currentHHMM, currentDateKey, lang, queueTask, lastExecuted }) {
+  async onSchedule({ sock, groupJid, config, currentHHMM, currentDateKey, lang, style, queueTask, lastExecuted }) {
     const scheduleCfg = config;
     if (!scheduleCfg || !scheduleCfg.enabled) return;
 
+    const groupStyle = style || configManager.getGroupStyle(groupJid);
     const closeTime = scheduleCfg.closeTime;
     const openTime = scheduleCfg.openTime;
 
@@ -67,7 +68,7 @@ module.exports = {
           run: async () => {
             try {
               await sock.groupSettingUpdate(groupJid, 'announcement');
-              await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.closed') });
+              await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.closed', {}, groupStyle) });
             } catch (err) {
               lastExecuted.delete(execKey); // Libera para retentativa em caso de erro de conexão
               throw err;
@@ -91,7 +92,7 @@ module.exports = {
           run: async () => {
             try {
               await sock.groupSettingUpdate(groupJid, 'not_announcement');
-              await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.opened') });
+              await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.opened', {}, groupStyle) });
             } catch (err) {
               lastExecuted.delete(execKey); // Libera para retentativa em caso de erro de conexão
               throw err;
@@ -123,12 +124,12 @@ module.exports = {
       }
       const close = cfg.closeTime || '23:00';
       const open = cfg.openTime || '07:00';
-      return reply(`${translate('common.saved')}\n⏰ *Horários Automáticos:* ATIVADO\n🔒 *Fechar:* ${close} | 🔓 *Abrir:* ${open}`);
+      return reply(translate('config.module_toggled_on', { module: 'HORÁRIOS' }));
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'schedule', false);
-      return reply(translate('common.saved') + '\n⏰ *Horários Automáticos:* DESATIVADO');
+      return reply(translate('config.module_toggled_off', { module: 'HORÁRIOS' }));
     }
 
     // Configuração direta de horário: /horarios 23:00 07:00

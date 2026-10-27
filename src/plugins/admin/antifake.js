@@ -41,7 +41,7 @@ module.exports = {
   /**
    * Hook passivo: monitora novos membros e expulsa se o DDI não for autorizado
    */
-  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, action }) {
+  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, style, action }) {
     if (action !== 'add') return false;
 
     const antifakeCfg = configManager.getPluginConfig(groupJid, 'antifake');
@@ -60,9 +60,10 @@ module.exports = {
       const hasValidDdi = allowedDdis.some(ddi => participantNumber.startsWith(ddi.replace(/\D/g, '')));
       if (!hasValidDdi) {
         // Número estrangeiro não permitido -> Ban imediato
+        const groupStyle = style || configManager.getGroupStyle(groupJid);
         await safeKick(sock, groupJid, targetGroupJid);
         await sendSafeMessage(sock, groupJid, {
-          text: t(lang, 'antifake.detected', { user: participantNumber }),
+          text: t(lang, 'antifake.detected', { user: participantNumber }, groupStyle),
           mentions: [targetGroupJid, targetPhoneJid]
         });
         return { stop: true }; // Interrompe próximos plugins (como welcome)

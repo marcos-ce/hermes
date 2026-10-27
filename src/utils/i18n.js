@@ -622,17 +622,49 @@ const dictionaries = {
 
 /**
  * Traduz uma chave para o idioma solicitado com interpolação de variáveis e suporte a estilo
- * @param {string} lang Idioma ('pt', 'es', 'en')
- * @param {string} key Chave da mensagem (ex: 'common.bot_name')
- * @param {object} vars Variáveis dinâmicas para substituição: { user: 'Fulano' }
- * @param {string} [style='natural'] Estilo de texto: 'natural' | 'formal'
+ * Suporta assinaturas:
+ * - t(lang, key, vars, style)
+ * - t(key, vars, style)
+ * @param {string} langOrKey Idioma ('pt', 'es', 'en') ou chave da mensagem
+ * @param {string|object} [keyOrVars] Chave da mensagem ou objeto de variáveis
+ * @param {object|string} [varsOrStyle] Variáveis dinâmicas ou estilo
+ * @param {string} [maybeStyle] Estilo ('natural' | 'formal')
  * @returns {string} Texto formatado com fallback para português
  */
-function t(lang = 'pt', key, vars = {}, style = null) {
+function t(langOrKey = 'pt', keyOrVars, varsOrStyle = {}, maybeStyle = null) {
+  let lang = 'pt';
+  let key = '';
+  let vars = {};
+  let style = null;
+
+  // Overload 1: t('common.saved', { ... }, 'formal')
+  if (typeof langOrKey === 'string' && (langOrKey.includes('.') || !['pt', 'es', 'en'].includes(langOrKey.toLowerCase()))) {
+    key = langOrKey;
+    lang = 'pt';
+    vars = (keyOrVars && typeof keyOrVars === 'object') ? keyOrVars : {};
+    style = typeof varsOrStyle === 'string' ? varsOrStyle : (maybeStyle || null);
+  } else {
+    // Normal: t(lang, key, vars, style)
+    lang = langOrKey || 'pt';
+    key = keyOrVars;
+    vars = (varsOrStyle && typeof varsOrStyle === 'object') ? varsOrStyle : {};
+    style = maybeStyle;
+  }
+
   const targetLang = (lang || 'pt').toLowerCase();
 
   // Resolve estilo ('natural' ou 'formal')
-  const resolvedStyle = style || vars?._style || (['natural', 'formal'].includes(vars?.style) ? vars.style : 'natural');
+  let resolvedStyle = style || vars?._style || (['natural', 'formal'].includes(vars?.style) ? vars.style : null);
+
+  // Se o estilo não foi informado explicitamente, busca pelo grupo caso groupJid ou from esteja nas variáveis
+  if (!resolvedStyle && (vars?.groupJid || vars?.from)) {
+    try {
+      const configManager = require('../core/configManager');
+      resolvedStyle = configManager.getGroupStyle(vars.groupJid || vars.from);
+    } catch (_) {}
+  }
+
+  if (!resolvedStyle) resolvedStyle = 'natural';
 
   let text = null;
   if (resolvedStyle === 'formal') {

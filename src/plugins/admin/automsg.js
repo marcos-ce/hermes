@@ -119,15 +119,12 @@ module.exports = {
       if (!cfg.configured) {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'automsg');
       }
-      const minutes = cfg.intervalMinutes || 180;
-      const formattedTime = formatHumanDuration(minutes, 'minutes', groupLang);
-      const alertMsg = cfg.message || 'Nenhuma mensagem configurada';
-      return reply(`${t('common.saved')}\n📢 *AutoMsg:* ATIVADO\n⏱️ *Intervalo:* a cada ${formattedTime}\n💬 *Mensagem:* ${alertMsg}`);
+      return reply(t('config.module_toggled_on', { module: 'AUTOMSG' }));
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'automsg', false);
-      return reply(t('common.saved') + '\n📢 *AutoMsg:* DESATIVADO');
+      return reply(t('config.module_toggled_off', { module: 'AUTOMSG' }));
     }
 
     // Configuração direta: /automsg 3h <texto...> ou /automsg 120 <texto...> (primeiro arg é tempo/número)

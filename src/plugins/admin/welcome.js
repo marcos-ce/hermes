@@ -1,4 +1,4 @@
-﻿const configManager = require('../../core/configManager');
+const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { getGroupMetadata } = require('../../utils/jidResolver');
 const { sendSafeMessage, safeDelete } = require('../../utils/antiBan');
@@ -60,7 +60,7 @@ module.exports = {
   /**
    * Hook passivo: envia mensagem e foto de boas-vindas quando novos membros entram
    */
-  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, action }) {
+  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, style, action }) {
     if (action !== 'add') return false;
 
     const welcomeCfg = configManager.getPluginConfig(groupJid, 'welcome');
@@ -71,7 +71,8 @@ module.exports = {
       const groupName = metadata?.subject || 'Grupo';
       const groupDesc = metadata?.desc || '';
 
-      let welcomeText = welcomeCfg.message || t(lang, 'welcome.default');
+      const groupStyle = style || configManager.getGroupStyle(groupJid);
+      let welcomeText = welcomeCfg.message || t(lang, 'welcome.default', {}, groupStyle);
       welcomeText = welcomeText
         .replace(/\{user\}/g, `@${participantNumber}`)
         .replace(/\{group\}/g, groupName)

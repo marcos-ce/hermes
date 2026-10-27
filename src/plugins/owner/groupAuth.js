@@ -12,7 +12,8 @@ module.exports = {
   botAdminRequired: false,
   allowWhenInactive: true,
 
-  async execute({ sock, _msg, from, sender, args, command, reply, t, isOwner, isAdmin, isGroup }) {
+  async execute({ sock, msg, _msg, from, sender, args, command, reply, t, prefix, isOwner, isAdmin, isGroup }) {
+    const currentMsg = msg || _msg;
     const cmd = (command || '').toLowerCase();
     const isDirectActivate = ['ativar', 'activar', 'activate'].includes(cmd);
     const isPvDirect = ['pv', 'dm'].includes(cmd);
@@ -172,7 +173,7 @@ module.exports = {
       // Se for a primeira ativação no grupo, dispara o Onboarding de 3 passos automaticamente
       if (!configManager.isGroupOnboarded(from)) {
         const wizardEngine = require('../../core/wizardEngine');
-        return await wizardEngine.startOnboarding(sock, _msg, from, sender, expiryDisplay);
+        return await wizardEngine.startOnboarding(sock, currentMsg, from, sender, expiryDisplay);
       }
 
       return reply(t('saas.activated', { expiry: expiryDisplay }));
@@ -183,7 +184,7 @@ module.exports = {
     // ==========================================
     if (cmd === 'setup' || cmd === 'onboarding' || sub === 'config' || sub === 'setup' || sub === 'onboarding' || sub === 'wizard') {
       const wizardEngine = require('../../core/wizardEngine');
-      return await wizardEngine.startOnboarding(sock, _msg, from, sender);
+      return await wizardEngine.startOnboarding(sock, currentMsg, from, sender);
     }
 
     // ==========================================
@@ -191,16 +192,22 @@ module.exports = {
     // ==========================================
     if (cmd === 'estilo' || cmd === 'style' || sub === 'estilo' || sub === 'style') {
       const targetStyle = (cmd === 'estilo' || cmd === 'style' ? (args[0] || '') : (args[1] || '')).toLowerCase();
+      const currentPrefix = prefix || '!';
       if (['formal', 'f', '2'].includes(targetStyle)) {
         configManager.setGroupStyle(from, 'formal');
+        configManager.flushSync();
         return reply('*[Sistema]* Estilo de mensagens alterado para: *Formal (Etiquetas)*');
       } else if (['natural', 'n', '1', 'emojis', 'emoji'].includes(targetStyle)) {
         configManager.setGroupStyle(from, 'natural');
+        configManager.flushSync();
         return reply('🌈 *Estilo de mensagens alterado para:* *Natural (Emojis)*');
       } else {
         const currentStyle = configManager.getGroupStyle(from);
-        const display = currentStyle === 'formal' ? 'Formal *[Tag]*' : 'Natural (Emojis)';
-        return reply(`🎭 *Estilo Atual:* ${display}\nPara alterar, envie:\n• \`!estilo natural\` (com emojis)\n• \`!estilo formal\` (com etiquetas em negrito)`);
+        if (currentStyle === 'formal') {
+          return reply(`*[Sistema - Estilo de Mensagens]*\nEstilo ativo: *Formal (Etiquetas)*\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
+        } else {
+          return reply(`🎭 *Estilo Atual:* Natural (Emojis)\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
+        }
       }
     }
 

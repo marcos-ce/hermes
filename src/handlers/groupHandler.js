@@ -1,4 +1,4 @@
-﻿const { groupCache } = require('../utils/cache');
+const { groupCache } = require('../utils/cache');
 const { cleanJid, resolveParticipant } = require('../utils/jidResolver');
 const configManager = require('../core/configManager');
 const pluginLoader = require('../core/pluginLoader');
@@ -24,6 +24,7 @@ async function handleParticipantsUpdate(sock, update) {
   }
 
   const lang = configManager.getGroupLang(groupJid);
+  const style = configManager.getGroupStyle(groupJid);
 
   if (action === 'add' && Array.isArray(participants)) {
     const botJid = cleanJid(sock?.user?.id || '');
@@ -67,6 +68,7 @@ async function handleParticipantsUpdate(sock, update) {
             targetGroupJid,
             participantNumber,
             lang,
+            style,
             action
           });
 
@@ -89,7 +91,8 @@ async function handleParticipantsUpdate(sock, update) {
           groupJid,
           participants,
           action,
-          lang
+          lang,
+          style
         });
       } catch (err) {
         logger.error({ err, pluginName: plugin.name }, 'Erro no hook onParticipantsUpdate do plugin');

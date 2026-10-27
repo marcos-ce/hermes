@@ -1,4 +1,4 @@
-﻿const configManager = require('../../core/configManager');
+const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
 const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
@@ -179,13 +179,12 @@ module.exports = {
       if (!cfg.configured) {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'antilink');
       }
-      const action = cfg.action || 'delete';
-      return reply(`${t('common.saved')}\n🛡️ *AntiLink:* ATIVADO\n⚡ *Ação atual:* \`${action}\``);
+      return reply(t('config.module_toggled_on', { module: 'ANTILINK' }));
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'antilink', false);
-      return reply(t('common.saved') + '\n🛡️ *AntiLink:* DESATIVADO');
+      return reply(t('config.module_toggled_off', { module: 'ANTILINK' }));
     }
 
     // Configuração direta de ação: ban, del, warn
@@ -263,11 +262,12 @@ module.exports = {
     const targetGroup = targetData?.groupJid || sender;
     const userNum = targetData?.displayNum || sender.replace(/@.*$/, '').replace(/\D/g, '');
     const action = cfg.action || 'delete';
+    const groupStyle = configManager.getGroupStyle(from);
 
     if (action === 'ban') {
       await safeKick(sock, from, targetGroup);
       await sendSafeMessage(sock, from, {
-        text: t(lang, 'antilink.banned', { user: userNum }),
+        text: t(lang, 'antilink.banned', { user: userNum }, groupStyle),
         mentions: [targetGroup, targetPhone]
       });
     } else if (action === 'warn') {
@@ -279,19 +279,19 @@ module.exports = {
         await safeKick(sock, from, targetGroup);
         configManager.resetWarns(from, targetPhone);
         await sendSafeMessage(sock, from, {
-          text: t(lang, 'warn.max_reached', { user: userNum, max: maxWarns }),
+          text: t(lang, 'warn.max_reached', { user: userNum, max: maxWarns }, groupStyle),
           mentions: [targetGroup, targetPhone]
         });
       } else {
         await sendSafeMessage(sock, from, {
-          text: t(lang, 'antilink.warned', { user: userNum, warns: count, max: maxWarns }),
+          text: t(lang, 'antilink.warned', { user: userNum, warns: count, max: maxWarns }, groupStyle),
           mentions: [targetGroup, targetPhone]
         });
       }
     } else {
       // Apenas apagar
       await sendSafeMessage(sock, from, {
-        text: t(lang, 'antilink.detected', { user: userNum }),
+        text: t(lang, 'antilink.detected', { user: userNum }, groupStyle),
         mentions: [targetGroup, targetPhone]
       });
     }

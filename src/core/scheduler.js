@@ -90,6 +90,7 @@ class Scheduler {
         }
 
         const lang = group.lang || 'pt';
+        const style = group.style || configManager.getGroupStyle(groupJid);
 
         // Despacha dinamicamente para todos os plugins que possuem rotina agendada (onSchedule)
         for (const plugin of pluginLoader.onScheduleHooks) {
@@ -105,6 +106,7 @@ class Scheduler {
               currentHHMM,
               currentDateKey,
               lang,
+              style,
               queueTask: (task) => executionQueue.push(task),
               lastExecuted: this.lastExecutedSchedule,
               lastAutoMsgTimes: this.lastAutoMsgTimes

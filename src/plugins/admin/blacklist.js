@@ -17,7 +17,7 @@ module.exports = {
   /**
    * Hook passivo: monitora entrada de participantes e expulsa imediatamente se estiver na blacklist
    */
-  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, action }) {
+  async onParticipantsUpdate({ sock, groupJid, targetPhoneJid, targetGroupJid, participantNumber, lang, style, action }) {
     if (action !== 'add') return false;
 
     const isGlobalBL = configManager.isGlobalBlacklisted(targetPhoneJid) || configManager.isGlobalBlacklisted(targetGroupJid);
@@ -25,9 +25,10 @@ module.exports = {
 
     if (isGlobalBL || isGroupBL) {
       // Remoção de Emergência (Zero Delay) usando o JID exato do grupo
+      const groupStyle = style || configManager.getGroupStyle(groupJid);
       await safeKick(sock, groupJid, targetGroupJid);
       await sendSafeMessage(sock, groupJid, {
-        text: t(lang, 'blacklist.banned_entry', { user: participantNumber }),
+        text: t(lang, 'blacklist.banned_entry', { user: participantNumber }, groupStyle),
         mentions: [targetGroupJid, targetPhoneJid]
       });
       return { stop: true }; // Interrompe próximos plugins (como welcome e antifake)

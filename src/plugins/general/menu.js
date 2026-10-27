@@ -10,10 +10,11 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: false,
 
-  async execute({ sock, msg, from, sender, args, reply, prefix, lang, isOwner, isGroup }) {
+  async execute({ sock, msg, from, sender, args, reply, prefix, lang, style, isOwner, isGroup }) {
     const p = prefix || '/';
     const l = (lang || 'pt').toLowerCase();
     const sub = (args[0] || '').toLowerCase();
+    const isFormal = (style === 'formal') || (isGroup && require('../../core/configManager').getGroupStyle(from) === 'formal');
 
     // Se o usuário pedir especificamente o painel via subcomando: !menu config ou !menu painel
     if (['config', 'painel', 'panel', 'settings', 'cfg'].includes(sub)) {
@@ -33,6 +34,86 @@ module.exports = {
         groupName = meta?.subject || 'Grupo';
         membersCount = meta?.participants?.length || 0;
       } catch (_) {}
+
+      // Resposta Formal (Etiquetas em negrito e sem emojis)
+      if (isFormal) {
+        const formalTitles = {
+          pt: {
+            title: '*[Hermes AutoMod - Guia de Comandos]*',
+            group: 'Grupo:',
+            members: 'membros',
+            secQuick: '*[Ações Rápidas & Moderação]*',
+            secConfig: '*[Gestão & Utilidades]*',
+            tipHeader: '*[Painel de Controle]*',
+            tipBody: `Para gerenciar módulos de proteção e filtros, envie: \`${p}config\``
+          },
+          es: {
+            title: '*[Hermes AutoMod - Guía de Comandos]*',
+            group: 'Grupo:',
+            members: 'miembros',
+            secQuick: '*[Acciones Rápidas y Moderación]*',
+            secConfig: '*[Gestión y Utilidades]*',
+            tipHeader: '*[Panel de Control]*',
+            tipBody: `Para gestionar los módulos de protección, envía: \`${p}config\``
+          },
+          en: {
+            title: '*[Hermes AutoMod - Commands Guide]*',
+            group: 'Group:',
+            members: 'members',
+            secQuick: '*[Quick Actions & Moderation]*',
+            secConfig: '*[Management & Utilities]*',
+            tipHeader: '*[Control Panel]*',
+            tipBody: `To manage protection modules, send: \`${p}config\``
+          }
+        };
+
+        const fInfo = formalTitles[l] || formalTitles.pt;
+
+        const quickActions = [
+          { cmd: `${p}fechar | ${p}abrir`, desc: { pt: 'Trancar ou abrir o grupo', es: 'Cerrar o abrir el grupo', en: 'Lock or unlock the group' } },
+          { cmd: `${p}mutar @user [tempo]`, desc: { pt: 'Silenciar membro por até 24h (!desmutar)', es: 'Silenciar miembro por hasta 24h (!desmutar)', en: 'Mute member for up to 24h (!unmute)' } },
+          { cmd: `${p}ban @user`, desc: { pt: 'Banir membro (ou via resposta)', es: 'Expulsar miembro (o respondiendo)', en: 'Kick member (or via reply)' } },
+          { cmd: `${p}warn @user`, desc: { pt: 'Advertir membro (!unwarn, !warns)', es: 'Advertir miembro (!unwarn, !warns)', en: 'Warn member (!unwarn, !warns)' } },
+          { cmd: `${p}del`, desc: { pt: 'Apagar mensagem respondida', es: 'Borrar mensaje respondido', en: 'Delete replied message' } },
+          { cmd: `${p}link [reset]`, desc: { pt: 'Obter ou redefinir link de convite', es: 'Obtener o restablecer enlace de invitación', en: 'Get or reset group invite link' } },
+          { cmd: `${p}pin [24h|7d|30d]`, desc: { pt: 'Fixar mensagem (!unpin desfixa)', es: 'Fijar mensaje (!unpin desfija)', en: 'Pin message (!unpin unpins)' } },
+          { cmd: `${p}enquete [opções]`, desc: { pt: 'Criar votação interativa', es: 'Crear encuesta interactiva', en: 'Create interactive poll' } },
+          { cmd: `${p}foto`, desc: { pt: 'Definir foto do grupo (com imagem)', es: 'Cambiar foto del grupo (con imagen)', en: 'Change group icon (with image)' } },
+          { cmd: `${p}setdesc [texto]`, desc: { pt: 'Alterar descrição do grupo', es: 'Cambiar descripción del grupo', en: 'Change group description' } },
+          { cmd: `${p}all [texto]`, desc: { pt: 'Notificar todos os membros', es: 'Notificar a todos los miembros', en: 'Notify all group members' } },
+          { cmd: `${p}adm @user`, desc: { pt: 'Promover membro a Administrador', es: 'Promover miembro a Administrador', en: 'Promote member to Admin' } },
+          { cmd: `${p}demote @user`, desc: { pt: 'Rebaixar administrador a membro', es: 'Degradar administrador a miembro', en: 'Demote admin to regular member' } }
+        ];
+
+        const configActions = [
+          { cmd: `${p}config`, desc: { pt: 'Painel de controle de módulos', es: 'Panel de control de módulos', en: 'Modules control panel' } },
+          { cmd: `${p}agenda`, desc: { pt: 'Cronograma de lembretes e avisos', es: 'Calendario de recordatorios', en: 'Reminders calendar' } },
+          { cmd: `${p}sortear [qtd] [prêmio]`, desc: { pt: 'Sorteio entre membros', es: 'Sorteo entre miembros', en: 'Raffle draw among members' } },
+          { cmd: `${p}blacklist add/del`, desc: { pt: 'Lista negra do grupo', es: 'Lista negra del grupo', en: 'Group blacklist' } },
+          { cmd: `${p}idioma [pt|es|en]`, desc: { pt: 'Alterar idioma do bot', es: 'Cambiar idioma del bot', en: 'Change bot language' } },
+          { cmd: `${p}estilo [natural|formal]`, desc: { pt: 'Alternar estilo de mensagens', es: 'Cambiar estilo de mensajes', en: 'Toggle message style' } },
+          { cmd: `${p}ping`, desc: { pt: 'Diagnóstico de operação e latência', es: 'Diagnóstico de operación y latencia', en: 'Bot diagnostics and latency' } }
+        ];
+
+        let output = `${fInfo.title}\n`;
+        output += `Prefixo: \`${p}\` | Idioma: \`${l.toUpperCase()}\` | Estilo: \`Formal\`\n`;
+        output += `${fInfo.group} *${groupName}* (${membersCount} ${fInfo.members})\n\n`;
+
+        output += `${fInfo.secQuick}\n`;
+        quickActions.forEach(a => {
+          const d = a.desc[l] || a.desc.pt;
+          output += `• \`${a.cmd}\` - ${d}\n`;
+        });
+
+        output += `\n${fInfo.secConfig}\n`;
+        configActions.forEach(a => {
+          const d = a.desc[l] || a.desc.pt;
+          output += `• \`${a.cmd}\` - ${d}\n`;
+        });
+
+        output += `\n${fInfo.tipHeader}\n${fInfo.tipBody}`;
+        return reply(output);
+      }
 
       const titles = {
         pt: {

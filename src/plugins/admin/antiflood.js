@@ -84,15 +84,12 @@ module.exports = {
       if (!cfg.configured) {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'antiflood');
       }
-      const msgs = cfg.maxMessages || 6;
-      const chars = cfg.maxChars || 2500;
-      const action = cfg.action || 'warn';
-      return reply(`${t('common.saved')}\n🌊 *AntiFlood:* ATIVADO\n⚡ *Máx:* ${msgs} msgs/5s | *Trava:* ${chars} carac | *Ação:* ${action}`);
+      return reply(t('config.module_toggled_on', { module: 'ANTIFLOOD' }));
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'antiflood', false);
-      return reply(t('common.saved') + '\n🌊 *AntiFlood:* DESATIVADO');
+      return reply(t('config.module_toggled_off', { module: 'ANTIFLOOD' }));
     }
 
     if (['ban', 'banir', 'expulsar'].includes(sub)) {
@@ -198,12 +195,13 @@ module.exports = {
     const targetPhone = targetData?.phoneJid || sender;
     const targetGroup = targetData?.groupJid || sender;
     const resolvedUserNum = targetData?.displayNum || userNum;
+    const groupStyle = configManager.getGroupStyle(from);
 
     if (action === 'ban') {
       await safeKick(sock, from, targetGroup);
       const banKey = violationType === 'trava' ? 'antiflood.banned_trava' : 'antiflood.banned_flood';
       await sendSafeMessage(sock, from, {
-        text: t(lang, banKey, { user: resolvedUserNum }),
+        text: t(lang, banKey, { user: resolvedUserNum }, groupStyle),
         mentions: [targetGroup, targetPhone]
       });
     } else {
@@ -217,13 +215,13 @@ module.exports = {
         await safeKick(sock, from, targetGroup);
         configManager.resetWarns(from, targetPhone);
         await sendSafeMessage(sock, from, {
-          text: t(lang, 'warn.max_reached', { user: resolvedUserNum, max: maxWarns }),
+          text: t(lang, 'warn.max_reached', { user: resolvedUserNum, max: maxWarns }, groupStyle),
           mentions: [targetGroup, targetPhone]
         });
       } else {
         const alertKey = violationType === 'trava' ? 'antiflood.trava_detected' : 'antiflood.flood_detected';
         await sendSafeMessage(sock, from, {
-          text: `${t(lang, alertKey, { user: resolvedUserNum })}\n${t(lang, 'warn.added', { user: resolvedUserNum, reason, warns: count, max: maxWarns })}`,
+          text: `${t(lang, alertKey, { user: resolvedUserNum }, groupStyle)}\n${t(lang, 'warn.added', { user: resolvedUserNum, reason, warns: count, max: maxWarns }, groupStyle)}`,
           mentions: [targetGroup, targetPhone]
         });
       }

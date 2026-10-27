@@ -257,7 +257,8 @@ async function processSingleMessage(sock, msg) {
           text,
           reply,
           t: translate,
-          lang: groupLang
+          lang: groupLang,
+          style: groupStyle
         });
 
         // Se o hook aplicou punição (ex: apagou link ou flood), interrompe o pipeline

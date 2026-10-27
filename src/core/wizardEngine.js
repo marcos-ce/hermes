@@ -317,23 +317,48 @@ class WizardEngine {
     const currentGroupStyle = configManager.getGroupStyle(from);
     const styleDisplay = currentGroupStyle === 'formal' ? 'Formal' : 'Natural';
 
-    let menuText = `${headerTitle}\n\n`;
-    menuText += `📌 *Prefixo:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\` | 🎭 *Estilo:* \`${styleDisplay}\`\n`;
-    if (from.endsWith('@g.us')) {
-      menuText += `${groupLabel} *${groupName}* (${membersCount} ${membersLabel})\n`;
-    }
-    menuText += '\n';
-
+    let menuText = '';
     const nameMap = localizedModuleNames[lang] || localizedModuleNames.pt;
 
-    modules.forEach((mod, index) => {
-      const statusIcon = mod.enabled ? '🟢' : '🔴';
-      const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
-      menuText += `[${index + 1}] ${statusIcon} *${cleanTitle}*\n`;
-      if (mod.desc) menuText += `    _${mod.desc}_\n`;
-    });
+    if (currentGroupStyle === 'formal') {
+      menuText = `*[Painel de Controle - Hermes AutoMod]*\n\n`;
+      menuText += `Prefixo: \`${currentPrefix}\` | Idioma: \`${lang.toUpperCase()}\` | Estilo: \`Formal\`\n`;
+      if (from.endsWith('@g.us')) {
+        menuText += `Grupo: *${groupName}* (${membersCount} ${membersLabel})\n`;
+      }
+      menuText += '\n';
 
-    menuText += `\n${footerHelp}`;
+      modules.forEach((mod, index) => {
+        const statusTag = mod.enabled ? '[ATIVADO]' : '[DESATIVADO]';
+        const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
+        menuText += `[${index + 1}] ${statusTag} *${cleanTitle}*\n`;
+        if (mod.desc) menuText += `    _${mod.desc}_\n`;
+      });
+
+      menuText += `\nEnvie o número (1 a ${modules.length}) para alternar ou configurar.\nAtalhos: [P] Prefixo • [L] Idioma • [E] Estilo • [X] Fechar\nComandos: ${currentPrefix}menu`;
+    } else {
+      menuText = `${headerTitle}\n\n`;
+      menuText += `📌 *Prefixo:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\` | 🎭 *Estilo:* \`${styleDisplay}\`\n`;
+      if (from.endsWith('@g.us')) {
+        menuText += `${groupLabel} *${groupName}* (${membersCount} ${membersLabel})\n`;
+      }
+      menuText += '\n';
+
+      modules.forEach((mod, index) => {
+        const statusIcon = mod.enabled ? '🟢' : '🔴';
+        const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
+        menuText += `[${index + 1}] ${statusIcon} *${cleanTitle}*\n`;
+        if (mod.desc) menuText += `    _${mod.desc}_\n`;
+      });
+
+      const footerHelpWithE = {
+        pt: `_Responda com o número (1 a ${modules.length}) para configurar ou ligar/desligar._\n_Atalhos: *P [novo]* prefixo • *L* idioma • *E* estilo • *X* fechar_\n📖 _Para ver a lista de comandos, use ${currentPrefix}menu_`,
+        es: `_Responda con el número (1 a ${modules.length}) para configurar o activar/desactivar._\n_Atajos: *P [nuevo]* prefijo • *L* idioma • *E* estilo • *X* cerrar_\n📖 _Para ver los comandos, use ${currentPrefix}menu_`,
+        en: `_Reply with number (1 to ${modules.length}) to configure or toggle._\n_Shortcuts: *P [new]* prefix • *L* language • *E* style • *X* close_\n📖 _To see commands, use ${currentPrefix}menu_`
+      }[lang] || footerHelp[lang];
+
+      menuText += `\n${footerHelpWithE}`;
+    }
     const session = {
       type: 'config_menu',
       groupJid: from,
