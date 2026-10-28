@@ -159,7 +159,12 @@ async function processSingleMessage(sock, msg) {
   const reply = async (content, options = {}) => {
     return await sendSafeMessage(sock, from, content, { quoted: msg, ...options });
   };
-  const translate = (key, vars = {}) => t(groupLang, key, vars, groupStyle);
+  const translate = (keyOrLang, maybeKeyOrVars = {}, maybeVars = {}) => {
+    if (['pt', 'es', 'en'].includes(String(keyOrLang).toLowerCase()) && typeof maybeKeyOrVars === 'string') {
+      return t(keyOrLang, maybeKeyOrVars, maybeVars, groupStyle);
+    }
+    return t(groupLang, keyOrLang, typeof maybeKeyOrVars === 'object' ? maybeKeyOrVars : maybeVars, groupStyle);
+  };
 
   // ========================================================
   // Resolução Dinâmica de Prefixo e Comando (Totalmente Desacoplada)

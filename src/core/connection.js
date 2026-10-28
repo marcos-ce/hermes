@@ -68,7 +68,7 @@ let reconnectTimer = null;
 // Mini-store de mensagens recentes para re-decriptografia pós-reconexão (substitui makeInMemoryStore)
 // Guarda as últimas 100 mensagens em RAM com eviction FIFO. Sem TTL = sem vazamento de memória.
 const msgStore = new Map();
-const MSG_STORE_MAX = 100;
+const MSG_STORE_MAX = 1500;
 
 /**
  * Registra uma mensagem no mini-store para suporte a re-decriptografia do Baileys.

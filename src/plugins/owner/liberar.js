@@ -114,9 +114,12 @@ module.exports = {
       configManager.unbanGroup(targetJid);
     }
 
-    // Tenta obter metadados e nome do grupo
+    // Tenta obter metadados e nome do grupo (aguarda propagação da rede se acabou de entrar pelo link)
     let groupName = (inviteCode && inviteInfo?.subject) ? inviteInfo.subject : 'Grupo';
     try {
+      if (inviteCode) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
       const meta = await getGroupMetadata(sock, targetJid);
       if (meta?.subject) {
         groupName = meta.subject;
@@ -147,26 +150,30 @@ module.exports = {
 
     // Mensagem de apresentação oficial do bot no grupo
     const groupPrefix = configManager.getGroupPrefix(targetJid) || '!';
-    const groupLang = configManager.getGroupLang(targetJid) || 'pt';
-    const presentationText = t(groupLang, 'saas.group_presentation', { prefix: groupPrefix });
+    const presentationText = t('saas.group_presentation', { prefix: groupPrefix });
 
     // Se o comando foi disparado de fora do grupo (ex: no Privado / DM)
     if (!isGroup || from !== targetJid) {
-      // 1. Envia a apresentação no grupo com pequeno delay anti-ban
-      setTimeout(async () => {
-        try {
-          await sendSafeMessage(sock, targetJid, { text: presentationText });
-        } catch (err) {
-          logger.error({ err }, 'Erro ao enviar mensagem de apresentação no grupo liberado');
-        }
-      }, 1200);
-
-      // 2. Responde confirmação detalhada para o Dono no chat atual
-      return reply(t('saas.liberate_success_owner', {
+      // 1. Responde confirmação detalhada para o Dono no chat atual
+      await reply(t('saas.liberate_success_owner', {
         name: groupName,
         id: targetJid,
         expiry: expiryDisplay
       }));
+
+      // 2. Envia a apresentação no grupo com delay seguro e garantia de chaves E2EE
+      setTimeout(async () => {
+        try {
+          try {
+            await sock.groupMetadata(targetJid);
+          } catch (_) {}
+          await sendSafeMessage(sock, targetJid, { text: presentationText });
+        } catch (err) {
+          logger.error({ err }, 'Erro ao enviar mensagem de apresentação no grupo liberado');
+        }
+      }, 3000);
+
+      return;
     }
 
     // Se o comando foi executado diretamente dentro do grupo alvo

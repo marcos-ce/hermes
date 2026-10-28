@@ -81,6 +81,12 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
   // 3. Disparo da mensagem com garantia de restauração da presença
   try {
     const sent = await sock.sendMessage(jid, payload, options);
+    if (sent?.key?.id && sent?.message) {
+      try {
+        const { storeMsgForRetry } = require('../core/connection');
+        storeMsgForRetry(sent);
+      } catch (_) {}
+    }
     try {
       await sock.sendPresenceUpdate('unavailable');
     } catch (_) {}

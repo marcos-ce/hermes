@@ -184,7 +184,7 @@ module.exports = {
 
       const groupPrefix = configManager.getGroupPrefix(from) || prefix || '!';
       const groupLang = configManager.getGroupLang(from) || 'pt';
-      return reply(t(groupLang, 'saas.group_presentation', { prefix: groupPrefix }));
+      return reply(t('saas.group_presentation', { prefix: groupPrefix }));
     }
 
     // ==========================================
