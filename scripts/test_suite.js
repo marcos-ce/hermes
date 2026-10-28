@@ -95,12 +95,16 @@ async function runTests() {
       'autoapprove.no_pending',
       'autoapprove.no_pending_br',
       'autoapprove.batch_starting',
+      'autoapprove.batch_starting_all',
       'autoapprove.batch_finished',
+      'autoapprove.batch_finished_all',
       'autoapprove.approved_single',
       'autoapprove.circuit_breaker_pause',
       'autoapprove.approval_mode_warning',
       'autoapprove.target_approved',
-      'autoapprove.target_not_found'
+      'autoapprove.target_not_found',
+      'autoapprove.all_members',
+      'autoapprove.activated_all'
     ];
 
     ['pt', 'es', 'en'].forEach(lang => {
@@ -132,7 +136,7 @@ async function runTests() {
     assert(joinTool, 'Ferramenta manage_join_requests ausente');
     assert.deepStrictEqual(
       joinTool.function.parameters.properties.action.enum,
-      ['list', 'approve_all_br', 'enable_auto', 'disable_auto']
+      ['list', 'approve_all_br', 'approve_all', 'enable_auto', 'disable_auto']
     );
   });
 
@@ -367,6 +371,85 @@ async function runTests() {
       prefix: '!'
     });
     assert(replyNotFound.includes('Não Encontrada'), 'Deveria avisar que o número não está pendente');
+  });
+
+  // 11. Opção de Aceitar Qualquer Membro (Wildcard '*')
+  await itAsync('Opção de aceitar qualquer membro funciona via comando, wildcard e lote de todos', async () => {
+    const { isNumberAllowed } = autoapprove;
+    const fakeGroup = '120363000000000002@g.us';
+    const fakeAdmin = '5511999990000@s.whatsapp.net';
+    const fakeBot = '5511988880000@s.whatsapp.net';
+
+    // A: isNumberAllowed com wildcard '*' aceita qualquer país
+    assert.strictEqual(isNumberAllowed('14155552671', ['*']), true, 'Deveria aceitar EUA com *');
+    assert.strictEqual(isNumberAllowed('5491123456789', ['todos']), true, 'Deveria aceitar Argentina com todos');
+    assert.strictEqual(isNumberAllowed('351912345678', ['all']), true, 'Deveria aceitar Portugal com all');
+    assert.strictEqual(isNumberAllowed('5511999998888', ['qualquer']), true, 'Deveria aceitar Brasil com qualquer');
+
+    // B: Ativação direta para qualquer membro via comando !aprovar qualquer
+    const { groupCache } = require('../src/utils/cache');
+    groupCache.set(fakeGroup, {
+      id: fakeGroup,
+      subject: 'Grupo Teste',
+      participants: [
+        { id: fakeAdmin, admin: 'admin' },
+        { id: fakeBot, admin: 'admin' }
+      ]
+    });
+
+    const fakeSock = {
+      user: { id: `${fakeBot}:1` },
+      groupRequestParticipantsList: async () => [
+        { jid: '5511999998888:0@s.whatsapp.net' },
+        { jid: '14155552671@s.whatsapp.net' }
+      ],
+      groupRequestParticipantsUpdate: async () => ({ status: 200 }),
+      sendPresenceUpdate: async () => {},
+      sendMessage: async () => {}
+    };
+
+    let replyActivated = '';
+    await autoapprove.execute({
+      sock: fakeSock,
+      msg: {},
+      from: fakeGroup,
+      sender: fakeAdmin,
+      args: ['qualquer'],
+      reply: (txt) => { replyActivated = txt; },
+      t: (k, vars) => t('pt', k, vars),
+      isGroup: true,
+      prefix: '!'
+    });
+    assert(replyActivated.includes('QUALQUER membro'), 'Deveria confirmar ativação para qualquer membro');
+    const cfgAfter = configManager.getPluginConfig(fakeGroup, 'autoapprove');
+    assert.strictEqual(cfgAfter.enabled, true);
+    assert.deepStrictEqual(cfgAfter.allowedDdis, ['*']);
+
+    // C: onJoinRequest com allowedDdis: ['*'] aprova número estrangeiro (+1 EUA)
+    const resForeignApproved = await autoapprove.onJoinRequest({
+      sock: fakeSock,
+      groupJid: fakeGroup,
+      participant: '14155552671@s.whatsapp.net',
+      action: 'created',
+      lang: 'pt',
+      style: 'natural'
+    });
+    assert.deepStrictEqual(resForeignApproved, { stop: true }, 'Deveria aceitar participante estrangeiro quando configurado com *');
+
+    // D: Execução de !aprovar todos aprova todos os pendentes (BR e estrangeiros)
+    let replyBatchAll = '';
+    await autoapprove.execute({
+      sock: fakeSock,
+      msg: {},
+      from: fakeGroup,
+      sender: fakeAdmin,
+      args: ['todos'],
+      reply: (txt) => { replyBatchAll = txt; },
+      t: (k, vars) => t('pt', k, vars),
+      isGroup: true,
+      prefix: '!'
+    });
+    assert(replyBatchAll.includes('TODOS os 2 participantes'), 'Deveria iniciar aprovação de todos os 2 pendentes');
   });
 
   // 11. Teste de Sorteio com Fisher-Yates (pickWinners)
