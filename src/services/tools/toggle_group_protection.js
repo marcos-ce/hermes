@@ -92,6 +92,24 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     updates.mentionAll = Boolean(args.mentionAll);
   }
 
+  if (mod === 'autoapprove') {
+    if (args.allowedDdis !== undefined) {
+      const raw = String(args.allowedDdis).trim();
+      if (['*', 'todos', 'all', 'qualquer'].includes(raw.toLowerCase())) {
+        updates.allowedDdis = ['*'];
+      } else {
+        const ddis = raw.split(/[\s,]+/).map(d => d.replace(/\D/g, '')).filter(Boolean);
+        if (ddis.length > 0) updates.allowedDdis = ddis;
+      }
+    }
+    if (args.actionForForeigners && ['ignore', 'reject'].includes(args.actionForForeigners)) {
+      updates.actionForForeigners = args.actionForForeigners;
+    }
+    if (args.notifyGroup !== undefined) {
+      updates.notifyGroup = Boolean(args.notifyGroup);
+    }
+  }
+
   if (Object.keys(updates).length > 1) {
     configManager.updatePluginConfig(from, mod, updates);
   } else {

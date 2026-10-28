@@ -584,6 +584,37 @@ async function runTests() {
     assert.strictEqual(resB.targetData.phoneJid, '5511988887777@s.whatsapp.net');
   });
 
+  // 17. Teste de Não-Interferência entre AutoApprove e AutoMsg no Wizard/Config Panel
+  it('Ordem do painel !config mantém automsg na posição 4 e autoapprove na posição 10 sem interferência', async () => {
+    const wizardEngine = require('../src/core/wizardEngine');
+    const { wizardCache } = require('../src/utils/cache');
+    const fakeSock = {
+      sendPresenceUpdate: async () => {},
+      sendMessage: async () => ({ key: { id: 'msg123' } })
+    };
+    const fakeGroup = '120363999999999@g.us';
+    const fakeAdmin = '5511999990000@s.whatsapp.net';
+    configManager.getOrCreateGroup(fakeGroup);
+
+    await wizardEngine.startConfigPanel(fakeSock, { key: { id: 'trig' } }, fakeGroup, fakeAdmin);
+    const session = wizardCache.get(`${fakeGroup}:${fakeAdmin}`);
+    assert(session, 'Sessão do painel deve ser criada');
+    assert.strictEqual(session.type, 'config_menu');
+    assert(Array.isArray(session.modules), 'Modules deve ser array');
+
+    // Posição 4 (índice 3) DEVE ser automsg
+    assert.strictEqual(session.modules[3].name, 'automsg', 'Opção [4] do menu deve ser automsg');
+    // autoapprove deve estar na posição 10 (índice 9)
+    assert.strictEqual(session.modules[9].name, 'autoapprove', 'Opção [10] do menu deve ser autoapprove');
+
+    // Testa seleção via handleInput: enviar "4 on" deve ligar automsg sem afetar autoapprove
+    configManager.setPluginEnabled(fakeGroup, 'automsg', false);
+    configManager.setPluginEnabled(fakeGroup, 'autoapprove', false);
+    await wizardEngine.handleInput(fakeSock, { key: { id: 'reply4' } }, fakeGroup, fakeAdmin, '4 on');
+    assert.strictEqual(configManager.isPluginEnabled(fakeGroup, 'automsg'), true, 'Opção "4 on" deve ativar automsg');
+    assert.strictEqual(configManager.isPluginEnabled(fakeGroup, 'autoapprove'), false, 'Opção "4 on" NÃO deve alterar autoapprove');
+  });
+
   console.log('\n====================================================');
   console.log(`🏁 RESULTADO FINAL: ${passedTests}/${totalTests} testes aprovados!`);
   console.log('====================================================\n');

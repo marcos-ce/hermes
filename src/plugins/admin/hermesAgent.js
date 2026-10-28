@@ -70,6 +70,69 @@ async function isAdminOrOwner(sock, from, sender) {
 }
 
 /**
+ * Gatekeeper Anti-Desperdício: Detecta se a mensagem é um pedido de promoção a administrador sem menção @.
+ * Executado localmente em 0ms para evitar queimar tokens de IA inutilmente.
+ * 
+ * @param {object} params
+ * @param {string} params.queryText Texto limpo da mensagem
+ * @param {object} params.msg Objeto original da mensagem
+ * @param {object} params.sock Socket do Baileys
+ * @returns {boolean}
+ */
+function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
+  if (!queryText || typeof queryText !== 'string') return false;
+
+  const norm = queryText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  // 1. Verifica se expressa intenção de promover / dar adm
+  // Padrões diretos: "dá adm", "dar adm", "promove", "promover", "bota de adm", "virar adm", "add adm"
+  const isPromotionVerb = /\b(?:promove|promover|promueva|promueve|promote)\b/i.test(norm);
+  const isGiveAdmin = /\b(?:da|de|dar|bote|bota|botar|coloque|coloca|colocar|passa|passar|torne|torna|tornar|faca|faz|fazer|virar|vira|adiciona|adicionar|add|give|make|poner|pon|nombrar)\b(?:\s+(?:ele|ela|o|a|esse|essa|este|esta|alguem|alguien|someone|him|her|this|the))?\s+(?:de\s+|como\s+|a\s+|pra\s+|para\s+)?(?:adm|admin|administrador(?:a)?)\b/i.test(norm);
+  const isDirectAdm = /^(?:adm|admin)\b/i.test(norm);
+
+  if (!isPromotionVerb && !isGiveAdmin && !isDirectAdm) {
+    return false;
+  }
+
+  // 2. Filtra dúvidas ou perguntas puramente informativas (ex: "quem é o adm?", "como funciona o adm?")
+  const isQuestion = /\b(?:quem|quais|qual|o\s+que|oque|quien|quienes|cual|cuales|who|what|how)\s+(?:e|sao|seria|consigo|posso|viro|funciona|ser|is|are|can|do|does)\b/i.test(norm);
+  if (isQuestion) {
+    return false;
+  }
+
+  // 3. Extrai menções com @ para verificar se alguém além do bot foi marcado
+  const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
+  const realMsg = msg?.message?.ephemeralMessage?.message ||
+                  msg?.message?.viewOnceMessage?.message ||
+                  msg?.message?.viewOnceMessageV2?.message ||
+                  msg?.message?.documentWithCaptionMessage?.message ||
+                  msg?.message;
+
+  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                      realMsg?.imageMessage?.contextInfo ||
+                      realMsg?.videoMessage?.contextInfo ||
+                      realMsg?.documentMessage?.contextInfo;
+
+  const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
+  const targetMentions = rawMentions
+    .map(m => cleanJid(m))
+    .filter(m => {
+      const num = m.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      return m !== botJid && m !== botLid && (!botNum || num !== botNum) && (!botLidNum || num !== botLidNum);
+    });
+
+  // Verifica menções por texto (@551199999999)
+  const textAtMatches = (queryText.match(/@(\d{8,15})\b/g) || [])
+    .map(tm => tm.replace('@', ''))
+    .filter(num => num !== botNum && num !== botLidNum);
+
+  const hasExplicitMention = targetMentions.length > 0 || textAtMatches.length > 0;
+
+  // Se tem intenção de promover MAS NÃO tem menção explícita com @ -> INTERCEPTAR!
+  return !hasExplicitMention;
+}
+
+/**
  * Notifica o Dono do bot no privado com diagnóstico completo caso ocorra erro na IA
  * Evita expor falhas técnicas e saldo insuficiente nos grupos
  */
@@ -568,7 +631,7 @@ module.exports = {
    * Porta de entrada da IA com trilhos determinísticos: deduplicação, 1 pedido por vez e cota horária.
    */
   async processAIInteraction(params) {
-    const { msg, from, sender, reply } = params;
+    const { sock, msg, from, sender, reply, queryText, lang } = params;
 
     const msgId = msg?.key?.id;
     if (msgId) {
@@ -577,6 +640,14 @@ module.exports = {
       if (processedMsgIds.size > 300) {
         processedMsgIds.delete(processedMsgIds.values().next().value);
       }
+    }
+
+    // Gatekeeper Anti-Desperdício: Pedido de promoção sem menção explícita com @
+    // Responde com template padrão determinístico sem gastar tokens da API DeepSeek
+    if (isUnmarkedPromotionRequest({ queryText, msg, sock })) {
+      logger.info({ from, sender, queryText }, 'Gatekeeper: pedido de promoção sem menção @ barrado localmente (economia de tokens de IA)');
+      await reply(tr(lang, 'promote.need_explicit_mention'));
+      return;
     }
 
     const flightKey = `${from}:${sender}`;

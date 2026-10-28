@@ -233,7 +233,7 @@ class WizardEngine {
     }
 
     // Lista plugins que possuem schema ou são configuráveis
-    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'autoapprove', 'automsg', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'hermes'];
+    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'automsg', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'autoapprove', 'hermes'];
     const modules = [];
     for (const [name, schema] of pluginLoader.schemas.entries()) {
       const isEnabled = configManager.isPluginEnabled(from, name);
@@ -264,7 +264,9 @@ class WizardEngine {
         calendar: 'CALENDÁRIO',
         schedule: 'HORÁRIOS',
         warn: 'ADVERTÊNCIAS',
-        welcome: 'BOAS-VINDAS'
+        welcome: 'BOAS-VINDAS',
+        autoapprove: 'AUTO-APROVAÇÃO',
+        hermes: 'AGENTE IA HERMES'
       },
       es: {
         antifake: 'ANTIFAKE',
@@ -275,7 +277,9 @@ class WizardEngine {
         calendar: 'CALENDARIO',
         schedule: 'HORARIOS',
         warn: 'ADVERTENCIAS',
-        welcome: 'BIENVENIDA'
+        welcome: 'BIENVENIDA',
+        autoapprove: 'AUTO-APROBACIÓN',
+        hermes: 'AGENTE IA HERMES'
       },
       en: {
         antifake: 'ANTIFAKE',
@@ -286,7 +290,9 @@ class WizardEngine {
         calendar: 'CALENDAR',
         schedule: 'SCHEDULE',
         warn: 'WARN',
-        welcome: 'WELCOME'
+        welcome: 'WELCOME',
+        autoapprove: 'AUTO-APPROVE',
+        hermes: 'HERMES AI AGENT'
       }
     };
 

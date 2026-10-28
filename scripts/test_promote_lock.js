@@ -442,6 +442,161 @@ async function runAll() {
     assert.strictEqual(res.error, t('pt', 'common.no_permission_admin'));
   });
 
+  // ----------------------------------------------------
+  // GRUPO 6: GATEKEEPER LOCAL NO PLUGIN DO HERMES IA (Zero Custo de Tokens)
+  // ----------------------------------------------------
+  const hermesPlugin = require('../src/plugins/admin/hermesAgent');
+  const aiService = require('../src/services/aiService');
+
+  await runAsyncTest('6.1 hermesAgent intercepta "dá adm pro Pedro" (sem @) localmente sem chamar a API de IA', async () => {
+    let apiCalled = false;
+    const originalChat = aiService.chatCompletion;
+    aiService.chatCompletion = async () => {
+      apiCalled = true;
+      return { success: true, content: 'resposta do modelo' };
+    };
+
+    let replyText = '';
+    const msg = {
+      key: { id: 'TEST_MSG_6_1' },
+      message: { conversation: 'Hermes, dá adm pro Pedro' }
+    };
+
+    try {
+      await hermesPlugin.processAIInteraction({
+        sock: mockSock,
+        msg,
+        from: fromGroup,
+        sender: '5511911111111@s.whatsapp.net',
+        queryText: 'dá adm pro Pedro',
+        reply: async (txt) => { replyText = txt; },
+        lang: 'pt',
+        cfg: { personality: 'descontraido' },
+        contextInfo: null
+      });
+
+      assert.strictEqual(apiCalled, false, 'API da DeepSeek NÃO deve ser chamada para pedido sem @!');
+      assert.strictEqual(replyText, t('pt', 'promote.need_explicit_mention'), 'Deve responder com o template padrão');
+    } finally {
+      aiService.chatCompletion = originalChat;
+    }
+  });
+
+  await runAsyncTest('6.2 hermesAgent intercepta citação sem @ "dá adm nele" localmente sem chamar a API de IA', async () => {
+    let apiCalled = false;
+    const originalChat = aiService.chatCompletion;
+    aiService.chatCompletion = async () => {
+      apiCalled = true;
+      return { success: true, content: 'resposta do modelo' };
+    };
+
+    let replyText = '';
+    const msg = {
+      key: { id: 'TEST_MSG_6_2' },
+      message: {
+        extendedTextMessage: {
+          text: 'Hermes, dá adm nele',
+          contextInfo: {
+            participant: '5511922222222@s.whatsapp.net',
+            quotedMessage: { conversation: 'oi' }
+          }
+        }
+      }
+    };
+
+    try {
+      await hermesPlugin.processAIInteraction({
+        sock: mockSock,
+        msg,
+        from: fromGroup,
+        sender: '5511911111111@s.whatsapp.net',
+        queryText: 'dá adm nele',
+        reply: async (txt) => { replyText = txt; },
+        lang: 'pt',
+        cfg: { personality: 'descontraido' },
+        contextInfo: msg.message.extendedTextMessage.contextInfo
+      });
+
+      assert.strictEqual(apiCalled, false, 'API da DeepSeek NÃO deve ser chamada para reply sem @!');
+      assert.strictEqual(replyText, t('pt', 'promote.need_explicit_mention'), 'Deve responder com o template padrão');
+    } finally {
+      aiService.chatCompletion = originalChat;
+    }
+  });
+
+  await runAsyncTest('6.3 hermesAgent NÃO intercepta pergunta informativa "quem é o adm do grupo?"', async () => {
+    let apiCalled = false;
+    const originalChat = aiService.chatCompletion;
+    aiService.chatCompletion = async () => {
+      apiCalled = true;
+      return { success: true, content: 'O adm do grupo é o Carlos.' };
+    };
+
+    let replyText = '';
+    const msg = {
+      key: { id: 'TEST_MSG_6_3' },
+      message: { conversation: 'Hermes, quem é o adm do grupo?' }
+    };
+
+    try {
+      await hermesPlugin.processAIInteraction({
+        sock: mockSock,
+        msg,
+        from: fromGroup,
+        sender: '5511911111111@s.whatsapp.net',
+        queryText: 'quem é o adm do grupo?',
+        reply: async (txt) => { replyText = txt; },
+        lang: 'pt',
+        cfg: { personality: 'descontraido' },
+        contextInfo: null
+      });
+
+      assert.strictEqual(apiCalled, true, 'Pergunta informativa DEVE ser encaminhada à IA');
+    } finally {
+      aiService.chatCompletion = originalChat;
+    }
+  });
+
+  await runAsyncTest('6.4 hermesAgent com menção explícita @ segue normalmente para o fluxo da IA', async () => {
+    let apiCalled = false;
+    const originalChat = aiService.chatCompletion;
+    aiService.chatCompletion = async () => {
+      apiCalled = true;
+      return { success: true, content: 'Promovendo membro...' };
+    };
+
+    let replyText = '';
+    const msg = {
+      key: { id: 'TEST_MSG_6_4' },
+      message: {
+        extendedTextMessage: {
+          text: 'Hermes, dá adm pro @5511922222222',
+          contextInfo: {
+            mentionedJid: ['5511922222222@s.whatsapp.net']
+          }
+        }
+      }
+    };
+
+    try {
+      await hermesPlugin.processAIInteraction({
+        sock: mockSock,
+        msg,
+        from: fromGroup,
+        sender: '5511911111111@s.whatsapp.net',
+        queryText: 'dá adm pro @5511922222222',
+        reply: async (txt) => { replyText = txt; },
+        lang: 'pt',
+        cfg: { personality: 'descontraido' },
+        contextInfo: msg.message.extendedTextMessage.contextInfo
+      });
+
+      assert.strictEqual(apiCalled, true, 'Pedido com @ legítimo DEVE seguir para o fluxo de IA/ferramenta');
+    } finally {
+      aiService.chatWithTools = originalChat;
+    }
+  });
+
   console.log('\n====================================================');
   console.log(`🏁 RESULTADO DA BATERIA: ${passedTests}/${totalTests} testes aprovados!`);
   console.log('====================================================');

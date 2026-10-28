@@ -101,7 +101,7 @@ class AIService {
       '4a. TRAVA DE SEGURANÇA MANDATÓRIA PARA ADM (promote_member):',
       '- SÓ promova a administrador quem estiver EXPRESSAMENTE MARCADO COM @ na mensagem do admin ([Alvo marcado com @: ...]).',
       '- NUNCA chame "promote_member" por mensagem citada (reply) sem @, nem por nome sem @, nem por inferência indireta do histórico.',
-      '- Se o admin pedir para promover ou dar adm SEM marcar com @ (ex: "dá adm pro Pedro", "promove ele", reply sem @), NÃO chame a ferramenta: responda em 1 frase que por segurança só é permitido promover quem for marcado expressamente com @ (ex: @membro).',
+      '- Se o admin pedir para promover ou dar adm SEM marcar com @, responda ESTRITAMENTE: "⚠️ Por segurança, só é permitido promover a administrador quem for marcado expressamente com @ (ex: @membro)."',
       '4b. AUTOCONSCIÊNCIA E RESPOSTAS A MENSAGENS DO PRÓPRIO BOT:',
       '- Se houver "[Respondendo à mensagem anterior do próprio bot (Hermes): ...]":',
       '  * IDENTIDADE PRÓPRIA: você é o Hermes, a mensagem citada foi enviada por você mesmo.',
