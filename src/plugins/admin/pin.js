@@ -1,4 +1,4 @@
-const { cleanJid } = require('../../utils/jidResolver');
+const { cleanJid, getBotIdentity } = require('../../utils/jidResolver');
 const pinTracker = require('../../utils/pinTracker');
 const logger = require('../../utils/logger');
 
@@ -57,10 +57,7 @@ module.exports = {
       return reply(t('pin.reply_required'));
     }
 
-    const botJid = cleanJid(sock?.user?.id || '');
-    const botLid = cleanJid(sock?.user?.lid || '');
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
 
     const participantJid = cleanJid(contextInfo?.participant || '');
     const participantNum = participantJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');

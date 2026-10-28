@@ -1,6 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
-const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr } = require('../utils/jidResolver');
+const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr, getBotIdentity } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');
@@ -73,10 +73,7 @@ async function processSingleMessage(sock, msg) {
   // ========================================================
   // Detecção de Menção ao Bot como Prefixo Simultâneo
   // ========================================================
-  const botJid = cleanJid(sock?.user?.id || '');
-  const botLid = cleanJid(sock?.user?.lid || '');
-  const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-  const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
   const envBotNum = (settings.botNumber || '').replace(/\D/g, '');
   const botBr = getBr(botNum || envBotNum);
 

@@ -1,5 +1,5 @@
 const { safeKick, safeDelete } = require('../../utils/antiBan');
-const { resolveTarget, checkAdminStatus, cleanJid } = require('../../utils/jidResolver');
+const { resolveTarget, checkAdminStatus, getBotIdentity } = require('../../utils/jidResolver');
 const settings = require('../../config/settings');
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
@@ -65,9 +65,7 @@ module.exports = {
     const targetNum = targetData.displayNum;
 
     // Proteção: Não banir o próprio bot
-    const botJid = cleanJid(sock?.user?.id || '');
-    const botLid = cleanJid(sock?.user?.lid || '');
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum } = getBotIdentity(sock);
 
     if (targetGroup === botJid || targetGroup === botLid || (botNum && targetNum === botNum)) {
       return reply(t('ban.cannot_ban_bot'));

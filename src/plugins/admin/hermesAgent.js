@@ -4,7 +4,7 @@ const pluginLoader = require('../../core/pluginLoader');
 const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
-const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
+const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant, getBotIdentity } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
@@ -370,10 +370,7 @@ module.exports = {
     }
 
     // 2. Verificação ampla de endereçamento ao bot
-    const botJid = cleanJid(sock?.user?.id || '');
-    const botLid = cleanJid(sock?.user?.lid || '');
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
 
     const realMsg = msg?.message?.ephemeralMessage?.message ||
                     msg?.message?.viewOnceMessage?.message ||
@@ -630,10 +627,7 @@ module.exports = {
     }
 
 
-    const botJid = cleanJid(sock?.user?.id || '');
-    const botLid = cleanJid(sock?.user?.lid || '');
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
 
     // Alvos marcados na mensagem (excluindo o próprio bot) com resolução de nome
     const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];

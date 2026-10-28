@@ -1,4 +1,4 @@
-const { getGroupMetadata, cleanJid, getBr } = require('../../utils/jidResolver');
+const { getGroupMetadata, cleanJid, getBr, getBotIdentity } = require('../../utils/jidResolver');
 const { groupCache } = require('../../utils/cache');
 const { randomDelay } = require('../../utils/antiBan');
 const settings = require('../../config/settings');
@@ -23,9 +23,7 @@ async function promoteOwnerInGroup(sock, gid, ownerPhoneJid, ownerLidJid, preloa
   const groupName = meta.subject || gid;
 
   // 1. Verifica se o bot é administrador neste grupo
-  const botJid = cleanJid(sock.user?.id || '');
-  const botLid = cleanJid(sock.user?.lid || '');
-  const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  const { botJid, botLid, botNum: botNumber } = getBotIdentity(sock);
 
   let isBotAdmin = false;
   for (const p of meta.participants) {

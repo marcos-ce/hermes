@@ -3,7 +3,7 @@ const configManager = require('../core/configManager');
 const wizardEngine = require('../core/wizardEngine');
 const logger = require('../utils/logger');
 const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
-const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid } = require('../utils/jidResolver');
+const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid, getBotIdentity } = require('../utils/jidResolver');
 const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
 const pollTracker = require('../utils/pollTracker');
@@ -594,10 +594,7 @@ class ToolRegistry {
    * Evita que "@Hermes bane @Infrator" ou reply ao próprio bot selecione o bot como alvo
    */
   async _resolveTargetSmart(sock, msg, from, targetArg = '') {
-    const botJid = cleanJid(sock?.user?.id || '');
-    const botLid = cleanJid(sock?.user?.lid || '');
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
 
     const isBotIdentity = (jidOrNum) => {
       if (!jidOrNum) return false;
@@ -705,10 +702,7 @@ class ToolRegistry {
    * @returns {Promise<Array<object>>} participantes resolvidos (mesmo formato de resolveParticipant)
    */
   async _getExplicitTargets(sock, msg, from) {
-    const botJid = cleanJid(sock?.user?.id || '');
-    const botLid = cleanJid(sock?.user?.lid || '');
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
 
     const isBot = (jid) => {
       const clean = cleanJid(jid);
@@ -850,9 +844,7 @@ class ToolRegistry {
         }
         const targetData = guard.targetData;
 
-        const botJid = cleanJid(sock?.user?.id || '');
-        const botLid = cleanJid(sock?.user?.lid || '');
-        const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const { botJid, botLid, botNum } = getBotIdentity(sock);
 
         if (targetData.groupJid === botJid || targetData.groupJid === botLid || (botNum && targetData.displayNum === botNum)) {
           return { success: false, error: t(lang, 'ban.cannot_ban_bot') };
@@ -1270,9 +1262,7 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.not_found_target') };
         }
 
-        const botJid = cleanJid(sock?.user?.id || '');
-        const botLid = cleanJid(sock?.user?.lid || '');
-        const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const { botJid, botLid, botNum } = getBotIdentity(sock);
 
         if (targetData.groupJid === botJid || targetData.groupJid === botLid || (botNum && targetData.displayNum === botNum)) {
           return { success: false, error: t(lang, 'mutemember.cannot_mute_bot') };
@@ -1397,8 +1387,7 @@ class ToolRegistry {
         let deleteId = null;
         let deleteParticipant = null;
 
-        const botJid = cleanJid(sock?.user?.id || '');
-        const botLid = cleanJid(sock?.user?.lid || '');
+        const { botJid, botLid } = getBotIdentity(sock);
 
         // 1. Prioridade absoluta: mensagem citada diretamente no chat (reply)
         if (contextInfo?.stanzaId) {
@@ -1972,10 +1961,7 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'pin.reply_required') };
         }
 
-        const botJid = cleanJid(sock?.user?.id || '');
-        const botLid = cleanJid(sock?.user?.lid || '');
-        const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-        const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
 
         const cleanParticipant = cleanJid(targetParticipant || '');
         const cleanParticipantNum = cleanParticipant.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');

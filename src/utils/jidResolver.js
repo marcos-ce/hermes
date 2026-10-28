@@ -396,9 +396,7 @@ async function checkAdminStatus(sock, groupJid, userJid) {
   result.metadata = metadata;
 
   const cleanUser = cleanJid(userJid);
-  const botJid = cleanJid(sock?.user?.id || '');
-  const botLid = cleanJid(sock?.user?.lid || '');
-  const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  const { botJid, botLid, botNum: botNumber } = getBotIdentity(sock);
   const userNumber = cleanUser.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
   const userBr = getBr(userNumber);
@@ -459,6 +457,33 @@ function formatNumber(jid) {
   return num ? `+${num}` : jid;
 }
 
+/**
+ * Extrai a identidade completa do bot (JID, LID e números limpos) em uma única chamada.
+ * @param {object} sock Instância do Baileys
+ * @returns {{ botJid: string, botLid: string, botNum: string, botLidNum: string }}
+ */
+function getBotIdentity(sock) {
+  const botJid = cleanJid(sock?.user?.id || '');
+  const botLid = cleanJid(sock?.user?.lid || '');
+  const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  return { botJid, botLid, botNum, botLidNum };
+}
+
+/**
+ * Verifica se um JID/número corresponde à identidade do próprio bot.
+ * @param {object} sock Instância do Baileys
+ * @param {string} jidOrNum JID ou número a comparar
+ * @returns {boolean}
+ */
+function isBotIdentity(sock, jidOrNum) {
+  if (!jidOrNum) return false;
+  const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
+  const clean = cleanJid(jidOrNum);
+  const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+  return clean === botJid || clean === botLid || (botNum && num === botNum) || (botLidNum && num === botLidNum);
+}
+
 module.exports = {
   cleanJid,
   extractSender,
@@ -470,6 +495,8 @@ module.exports = {
   getGroupMetadata,
   checkAdminStatus,
   formatNumber,
+  getBotIdentity,
+  isBotIdentity,
   getBr,
   registerParticipantLid,
   lidToPhoneMap,

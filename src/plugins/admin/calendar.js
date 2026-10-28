@@ -2,7 +2,7 @@ const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const settings = require('../../config/settings');
 const { sendSafeMessage } = require('../../utils/antiBan');
-const { getGroupMetadata, resolveParticipant, cleanJid } = require('../../utils/jidResolver');
+const { getGroupMetadata, resolveParticipant, cleanJid, getBotIdentity } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 const pollTracker = require('../../utils/pollTracker');
 const pinTracker = require('../../utils/pinTracker');
@@ -154,9 +154,7 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
         await sendSafeMessage(sock, groupJid, { text: t(lang, 'raffle.not_enough') });
         return;
       }
-      const botJid = sock?.user?.id ? cleanJid(sock.user.id) : '';
-      const botLid = sock?.user?.lid ? cleanJid(sock.user.lid) : '';
-      const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      const { botJid, botLid, botNum } = getBotIdentity(sock);
       let pool = metadata.participants.filter(p => {
         const pId = cleanJid(p.id);
         const pLid = p.lid ? cleanJid(p.lid) : '';

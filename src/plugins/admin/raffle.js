@@ -1,4 +1,4 @@
-const { getGroupMetadata, cleanJid, resolveParticipant } = require('../../utils/jidResolver');
+const { getGroupMetadata, cleanJid, resolveParticipant, getBotIdentity } = require('../../utils/jidResolver');
 const { groupCache } = require('../../utils/cache');
 
 module.exports = {
@@ -27,9 +27,7 @@ module.exports = {
     }
 
     // Identifica o bot para exclusão automática (tanto por Phone quanto por LID)
-    const botJid = sock?.user?.id ? cleanJid(sock.user.id) : '';
-    const botLid = sock?.user?.lid ? cleanJid(sock.user.lid) : '';
-    const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    const { botJid, botLid, botNum } = getBotIdentity(sock);
 
     // 1. Tenta filtrar apenas membros comuns (exclui o bot e administradores para sorteios normais)
     let pool = metadata.participants.filter(p => {

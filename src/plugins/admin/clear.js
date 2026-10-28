@@ -1,5 +1,5 @@
 const { safeDelete } = require('../../utils/antiBan');
-const { cleanJid } = require('../../utils/jidResolver');
+const { cleanJid, getBotIdentity } = require('../../utils/jidResolver');
 
 module.exports = {
   name: 'del',
@@ -30,9 +30,7 @@ module.exports = {
     }
 
     try {
-      const botJid = cleanJid(sock?.user?.id || '');
-      const botLid = cleanJid(sock?.user?.lid || '');
-      const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      const { botJid, botLid, botNum } = getBotIdentity(sock);
 
       const cleanParticipant = cleanJid(quotedParticipant || '');
       const participantNum = cleanParticipant.replace(/@.*$/, '').replace(/\D/g, '');
