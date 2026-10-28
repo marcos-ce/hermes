@@ -1,4 +1,4 @@
-const { resolveTarget, resolveParticipant, cleanJid, getBotIdentity, getGroupMetadata, findParticipantJidsByName } = require('../utils/jidResolver');
+const { resolveTarget, resolveParticipant, cleanJid, getBotIdentity, getGroupMetadata, findParticipantJidsByName, setLidMapping, digitsOf, getBr } = require('../utils/jidResolver');
 const memoryEngine = require('./memoryEngine');
 const { t } = require('../utils/i18n');
 
@@ -106,7 +106,9 @@ function extractNameMentionTokens(text) {
     const numeric = token.replace(/^\+/, '');
     if (/^\d{8,20}$/.test(numeric)) return false;
     const normalized = normalizeName(token);
-    return Boolean(normalized) && !RESERVED_MENTION_TOKENS.has(normalized);
+    if (!normalized || RESERVED_MENTION_TOKENS.has(normalized)) return false;
+    if (normalized === 'hermes' || normalized === 'bot') return false;
+    return true;
   });
 }
 
@@ -335,18 +337,30 @@ async function getExplicitMentionTargets(sock, msg, from) {
     [...mentionCandidates, ...numericCandidates],
     isBot
   );
-  if (explicit.length > 0) return explicit;
 
-  // 2. Somente quando não existe nenhuma menção JID/número: aceita @Fulano digitado
-  //    literalmente, desde que corresponda a um único membro do grupo.
-  if (mentionCandidates.length === 0 && numericCandidates.length === 0) {
-    const nameTokens = extractNameMentionTokens(text);
-    if (nameTokens.length > 0) {
-      return await resolveNameMentionTargets(sock, from, nameTokens, isBot);
+  // Se as menções diretas resolveram participantes confirmados nos metadados do grupo:
+  const confirmed = explicit.filter(data => data && data.resolved !== false);
+  if (confirmed.length > 0) return confirmed;
+
+  // 2. Se as menções diretas não resolveram membro confirmado nos metadados (ex: @lid sem mapeamento PN),
+  // ou se não há menções JID/número: aceita @Fulano digitado literalmente ou resolve por nome:
+  const nameTokens = extractNameMentionTokens(text);
+  if (nameTokens.length > 0) {
+    const byName = await resolveNameMentionTargets(sock, from, nameTokens, isBot);
+    if (byName.length > 0) {
+      // Se havia um LID não mapeado nas menções e exatamente um membro resolvido por nome,
+      // aprende o mapeamento LID <-> Phone imediatamente:
+      if (explicit.length === 1 && byName.length === 1 && explicit[0].groupJid?.endsWith('@lid')) {
+        const pn = byName[0].phoneJid || byName[0].groupJid;
+        if (pn && !pn.endsWith('@lid')) {
+          setLidMapping(explicit[0].groupJid, pn);
+        }
+      }
+      return byName;
     }
   }
 
-  return [];
+  return explicit;
 }
 
 /**
@@ -363,7 +377,15 @@ function hasExplicitMentionSyntax(sock, msg) {
   const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
   if (mentions.some(m => m && !isBot(m))) return true;
 
-  return extractAtTokens(getMessageText(realMsg)).length > 0;
+  const { botNum, botLidNum } = getBotIdentity(sock);
+  const textTokens = extractAtTokens(getMessageText(realMsg)).filter(token => {
+    const numeric = token.replace(/^\+/, '');
+    if (/^\d{8,20}$/.test(numeric)) return !isBot(numeric) && numeric !== botNum && numeric !== botLidNum;
+    const normalized = normalizeName(token);
+    return Boolean(normalized) && normalized !== 'hermes' && normalized !== 'bot';
+  });
+
+  return textTokens.length > 0;
 }
 
 /**
@@ -474,6 +496,7 @@ async function resolveTargetSmart(sock, msg, from, targetArg = '') {
  * @returns {Promise<{ success: boolean, targetData?: { phoneJid: string, groupJid: string, displayNum: string }, error?: string }>}
  */
 async function resolveActionTarget(sock, msg, from, targetArg = '', { requireExplicit = false, requireExplicitMention = false, lang = 'pt' } = {}) {
+  const { realMsg } = extractContextInfo(msg);
   if (requireExplicitMention) {
     const mentioned = await getExplicitMentionTargets(sock, msg, from);
     if (mentioned.length === 0) {
@@ -483,13 +506,61 @@ async function resolveActionTarget(sock, msg, from, targetArg = '', { requireExp
       return { success: false, error: t(lang, errorKey) };
     }
 
+    const singleMention = mentioned.find(data => data.resolved !== false) || mentioned[0];
+
+    // Se há exatamente 1 alvo marcado com @ na mensagem:
+    // O requisito mandatório de segurança está 100% satisfeito se targetArg corresponder
+    // ao alvo marcado ou se targetArg for genérico ("mentioned", vazio, ou o token marcado no texto).
+    if (mentioned.length === 1 && singleMention) {
+      const arg = String(targetArg || '').trim().toLowerCase();
+      const cleanArg = arg.replace(/^@/, '');
+
+      // 1. Argumento genérico ou omitido -> aceita o único mencionado
+      if (!arg || arg === 'mentioned' || arg === 'quoted') {
+        return { success: true, targetData: singleMention };
+      }
+
+      // 2. Se targetArg for número explícito (ou JID), verifica se bate com o singleMention
+      const numMatch = targetArg.match(/@?(\d{8,20})/);
+      if (numMatch && numMatch[1]) {
+        const rawDigits = numMatch[1];
+        const singleDigits = [
+          singleMention.displayNum,
+          digitsOf(singleMention.groupJid),
+          digitsOf(singleMention.phoneJid)
+        ].filter(Boolean);
+
+        const matchesDigits = singleDigits.some(d =>
+          d === rawDigits || (getBr(d).last8 && getBr(d).last8 === getBr(rawDigits).last8)
+        );
+
+        if (matchesDigits) {
+          return { success: true, targetData: singleMention };
+        }
+        // É um número explícito de outra pessoa (alucinação do modelo / prompt injection)!
+        return { success: false, error: t(lang, 'promote.need_explicit_mention') };
+      }
+
+      // 3. Se targetArg for nome, verifica se bate com o singleMention ou com tokens marcados na mensagem
+      const nameTokens = extractNameMentionTokens(getMessageText(realMsg)).map(normalizeName);
+      const matchesName = (singleMention.name && nameMatchesToken(singleMention.name, cleanArg)) ||
+                          nameTokens.includes(normalizeName(cleanArg));
+
+      if (matchesName) {
+        return { success: true, targetData: singleMention };
+      }
+
+      // Se o targetArg apontar para outro membro diferente (ex: "Pedro" quando marcou "Bob"):
+      return { success: false, error: t(lang, 'promote.need_explicit_mention') };
+    }
+
     const arg = String(targetArg || '').trim().toLowerCase();
     if (!arg || arg === 'mentioned') {
       // Prefere um alvo confirmado nos metadados do grupo; mantém o primeiro
       // como fallback para sockets que ainda não expõem groupMetadata.
       return {
         success: true,
-        targetData: mentioned.find(data => data.resolved !== false) || mentioned[0]
+        targetData: singleMention
       };
     }
 

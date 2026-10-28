@@ -195,8 +195,18 @@ async function processSingleMessage(sock, msg) {
   }
 
   const parts = rawBody ? rawBody.split(/\s+/).filter(Boolean) : [];
-  const [commandTrigger = '', ...args] = parts;
-  const commandArgsText = commandTrigger ? rawBody.slice(commandTrigger.length).trim() : '';
+  let [commandTrigger = '', ...args] = parts;
+
+  // Normalização de comandos compostos naturais em português (ex: "da adm ao @user", "dar adm pro @user")
+  if (['da', 'de', 'dar'].includes(commandTrigger.toLowerCase()) && ['adm', 'admin'].includes(args[0]?.toLowerCase())) {
+    commandTrigger = 'adm';
+    args = args.slice(1);
+    if (args.length > 0 && ['ao', 'pro', 'pra', 'para', 'o', 'a'].includes(args[0].toLowerCase())) {
+      args = args.slice(1);
+    }
+  }
+
+  const commandArgsText = args.join(' ');
   const plugin = commandTrigger ? pluginLoader.findCommand(commandTrigger) : null;
 
   // ========================================================

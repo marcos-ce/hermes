@@ -149,9 +149,9 @@ async function runTests() {
   });
 
   // 5. ToolRegistry da IA
-  it('ToolRegistry possui 25 ferramentas incluindo manage_join_requests', () => {
+  it('ToolRegistry possui 26 ferramentas incluindo manage_join_requests', () => {
     const tools = toolRegistry.getTools();
-    assert.strictEqual(tools.length, 25, 'Número total de ferramentas deve ser 25');
+    assert.strictEqual(tools.length, 26, 'Número total de ferramentas deve ser 26');
     const joinTool = tools.find(t => t.function.name === 'manage_join_requests');
     assert(joinTool, 'Ferramenta manage_join_requests ausente');
     assert.deepStrictEqual(
@@ -577,9 +577,9 @@ async function runTests() {
   });
 
   // 14. Teste de Modularidade dos Tool Handlers
-  it('ToolRegistry possui 25 handlers modulares carregados e funcionais', () => {
+  it('ToolRegistry possui 26 handlers modulares carregados e funcionais', () => {
     const toolHandlers = require('../src/services/tools');
-    assert.strictEqual(toolHandlers.size, 25);
+    assert.strictEqual(toolHandlers.size, 26);
     for (const [name, handler] of toolHandlers.entries()) {
       assert.strictEqual(typeof handler, 'function', `Handler da ferramenta "${name}" não é uma função`);
     }

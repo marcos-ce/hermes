@@ -4,6 +4,7 @@ const pluginLoader = require('../../core/pluginLoader');
 const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
+const { getExplicitMentionTargets } = require('../../services/targetResolver');
 const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant, getBotIdentity } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
@@ -428,16 +429,19 @@ module.exports = {
         afterMention = afterMention.slice(1).trim();
       }
       const words = afterMention.split(/\s+/).filter(Boolean);
-      const firstWord = words[0]?.toLowerCase();
+      let firstWord = words[0]?.toLowerCase();
+      if (['da', 'de', 'dar'].includes(firstWord) && ['adm', 'admin'].includes(words[1]?.toLowerCase())) {
+        firstWord = 'adm';
+      }
       const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
 
-      // Se começar com prefixo explícito (ex: "@bot !fechar") ou for comando simples de até 3 palavras
-      // sem conectivos de linguagem natural (ex: "@bot ping", "@bot fechar", "@bot ban @user"):
+      // Se começar com prefixo explícito (ex: "@bot !fechar") ou for comando simples de até 4 palavras
+      // sem conectivos de linguagem natural (ex: "@bot ping", "@bot fechar", "@bot ban @user", "@bot da adm ao @user"):
       // delega para o plugin tradicional determinístico.
       // MAS se contiver linguagem natural, múltiplos pedidos ou frases (ex: "feche o grupo e reabra amanhã",
       // "com um lembrete", "se chover"), entrega para a IA do Hermes atender o pedido composto completo!
-      const hasNaturalLanguage = /\b(e|com|para|pra|que|quando|se|amanh[aã]|depois|daqui|horas?|lembrete|aviso|ver|favor|por favor)\b/i.test(afterMention);
-      const isSimpleDeterministicCmd = cmdPlugin && cmdPlugin.name !== 'hermes' && (hasPrefixChar || (!hasNaturalLanguage && words.length <= 3));
+      const hasNaturalLanguage = /\b(e|com|que|quando|se|amanh[aã]|depois|daqui|horas?|lembrete|aviso|ver|favor|por favor)\b/i.test(afterMention);
+      const isSimpleDeterministicCmd = cmdPlugin && cmdPlugin.name !== 'hermes' && (hasPrefixChar || (!hasNaturalLanguage && words.length <= 4));
 
       if (isSimpleDeterministicCmd) {
         return false;
@@ -754,6 +758,24 @@ module.exports = {
         const num = resolved?.displayNum || tm.replace(/@.*$/, '').replace(/\D/g, '');
         formattedTargets.push(name ? `${name} (@${num})` : `@${num}`);
       }
+    }
+
+    // Se contextInfo.mentionedJid não trouxe alvos (ou o WhatsApp não populou),
+    // usa getExplicitMentionTargets para resolver os alvos marcados por @ no texto:
+    if (formattedTargets.length === 0) {
+      try {
+        const explicitTargets = await getExplicitMentionTargets(sock, msg, from);
+        for (const et of explicitTargets) {
+          if (et && et.resolved !== false) {
+            const name = et.name || memoryEngine.getParticipantName(from, et.groupJid) || memoryEngine.getParticipantName(from, et.phoneJid) || '';
+            const num = et.displayNum || et.phoneJid?.replace(/@.*$/, '') || '';
+            formattedTargets.push(name ? `${name} (@${num})` : `@${num}`);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (formattedTargets.length > 0) {
       userPromptParts.push(`[Alvo marcado com @: ${formattedTargets.join(', ')}]`);
     }
 

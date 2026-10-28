@@ -758,6 +758,7 @@ module.exports = {
   getBotIdentity,
   isBotIdentity,
   getBr,
+  setLidMapping,
   registerParticipantLid,
   lidToPhoneMap,
   phoneToLidMap,
