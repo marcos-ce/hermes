@@ -233,7 +233,7 @@ class WizardEngine {
     }
 
     // Lista plugins que possuem schema ou são configuráveis
-    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'automsg', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'hermes'];
+    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'autoapprove', 'automsg', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'hermes'];
     const modules = [];
     for (const [name, schema] of pluginLoader.schemas.entries()) {
       const isEnabled = configManager.isPluginEnabled(from, name);

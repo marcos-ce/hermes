@@ -76,8 +76,8 @@ const TOOLS = [
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember'],
-            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar".'
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove'],
+            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar", "autoapprove".'
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
           action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição para infrações: "delete" (apenas apagar), "warn" (advertir até atingir limite de warns e banir) ou "ban" (banir imediatamente no primeiro deslize).' },
@@ -403,6 +403,24 @@ const TOOLS = [
           key: { type: 'string', description: 'Termo ou chave a ser esquecida.' }
         },
         required: ['key']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_join_requests',
+      description: 'Gerencia as solicitações de entrada de novos membros no grupo (fila de aprovação do WhatsApp). Acione para: aceitar quem pediu para entrar, aprovar pessoas, aprovar brasileiros pendentes, ver quem está na fila para entrar, listar pedidos de aprovação, aprovar solicitações, ligar ou desligar aprovação automática de BRs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['list', 'approve_all_br', 'enable_auto', 'disable_auto'],
+            description: '"list" para consultar/contar pendentes, "approve_all_br" para aprovar todos os brasileiros da fila com filtro anti-ban seguro, "enable_auto" para ativar a aprovação automática de BRs em tempo real, "disable_auto" para desativar.'
+          }
+        },
+        required: ['action']
       }
     }
   }
@@ -1058,7 +1076,7 @@ class ToolRegistry {
       case 'toggle_group_protection': {
         const rawMod = String(args.module || '').toLowerCase();
         const mod = rawMod === 'agenda' ? 'calendar' : rawMod;
-        const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar'];
+        const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'autoapprove'];
         if (!validModules.includes(mod)) {
           return { success: false, error: `Módulo "${mod}" inválido.` };
         }
@@ -2147,6 +2165,78 @@ class ToolRegistry {
         return {
           success: true,
           message: confirmMsg
+        };
+      }
+
+      case 'manage_join_requests': {
+        if (!isBotAdmin) {
+          return { success: false, error: t(lang, 'common.bot_not_admin') };
+        }
+
+        const autoapprovePlugin = require('../plugins/admin/autoapprove');
+
+        if (args.action === 'enable_auto') {
+          configManager.setPluginEnabled(from, 'autoapprove', true);
+          return {
+            success: true,
+            message: '✅ *Auto-Aprovação Anti-Ban ATIVADA!*\nNovos participantes com número brasileiro (DDI 55) serão aceitos automaticamente com fila de segurança.'
+          };
+        }
+
+        if (args.action === 'disable_auto') {
+          configManager.setPluginEnabled(from, 'autoapprove', false);
+          return {
+            success: true,
+            message: '🛑 *Auto-Aprovação Anti-Ban DESATIVADA!*\nSolicitações de entrada permanecerão na fila para aprovação manual dos administradores.'
+          };
+        }
+
+        if (args.action === 'approve_all_br') {
+          const fakeReply = async (text) => {
+            await sendSafeMessage(sock, from, { text });
+          };
+          await autoapprovePlugin.execute({
+            sock,
+            msg,
+            from,
+            sender,
+            args: ['agora'],
+            reply: fakeReply,
+            t: (k, vars) => t(lang, k, vars),
+            isGroup: true,
+            prefix: configManager.getGroupPrefix(from)
+          });
+          return {
+            success: true,
+            message: '🚀 Iniciada a aprovação segura de números brasileiros pendentes com filtro anti-ban.'
+          };
+        }
+
+        // 'list' ou default
+        let pendingList = [];
+        try {
+          pendingList = await sock.groupRequestParticipantsList(from);
+        } catch (_) {
+          pendingList = [];
+        }
+
+        let brCount = 0;
+        let foreignCount = 0;
+
+        for (const item of (pendingList || [])) {
+          const jid = item.jid || item.user || item.id;
+          const num = String(jid).replace(/@.*$/, '').replace(/\D/g, '');
+          if (num.startsWith('55') && (num.length === 12 || num.length === 13)) {
+            brCount++;
+          } else {
+            foreignCount++;
+          }
+        }
+
+        const isEnabled = configManager.isPluginEnabled(from, 'autoapprove');
+        return {
+          success: true,
+          message: `📋 *Solicitações Pendentes:* ${pendingList.length} no total\n🇧🇷 *Brasileiros:* ${brCount}\n🌍 *Estrangeiros:* ${foreignCount}\n⚙️ *Auto-Aprovação:* ${isEnabled ? 'Ativada' : 'Desativada'}`
         };
       }
 

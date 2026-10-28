@@ -82,7 +82,8 @@ module.exports = {
           { cmd: `${p}setdesc [texto]`, desc: { pt: 'Alterar descrição do grupo', es: 'Cambiar descripción del grupo', en: 'Change group description' } },
           { cmd: `${p}all [texto]`, desc: { pt: 'Notificar todos os membros', es: 'Notificar a todos los miembros', en: 'Notify all group members' } },
           { cmd: `${p}adm @user`, desc: { pt: 'Promover membro a Administrador', es: 'Promover miembro a Administrador', en: 'Promote member to Admin' } },
-          { cmd: `${p}demote @user`, desc: { pt: 'Rebaixar administrador a membro', es: 'Degradar administrador a miembro', en: 'Demote admin to regular member' } }
+          { cmd: `${p}demote @user`, desc: { pt: 'Rebaixar administrador a membro', es: 'Degradar administrador a miembro', en: 'Demote admin to regular member' } },
+          { cmd: `${p}aprovar [on|off|agora]`, desc: { pt: 'Auto-aprovação de membros BRs', es: 'Auto-aprobación de miembros BRs', en: 'Auto-approve Brazilian members' } }
         ];
 
         const configActions = [
@@ -161,7 +162,8 @@ module.exports = {
         { cmd: `${p}setdesc [texto]`, desc: { pt: 'Alterar descrição do grupo', es: 'Cambiar descripción del grupo', en: 'Change group description' } },
         { cmd: `${p}all [texto]`, desc: { pt: 'Marcar todos os membros', es: 'Mencionar a todos los miembros', en: 'Mention all group members' } },
         { cmd: `${p}adm @user`, desc: { pt: 'Promover membro a Administrador', es: 'Promover miembro a Administrador', en: 'Promote member to Admin' } },
-        { cmd: `${p}demote @user`, desc: { pt: 'Rebaixar administrador a membro', es: 'Degradar administrador a miembro', en: 'Demote admin to regular member' } }
+        { cmd: `${p}demote @user`, desc: { pt: 'Rebaixar administrador a membro', es: 'Degradar administrador a miembro', en: 'Demote admin to regular member' } },
+        { cmd: `${p}aprovar [on|off|agora]`, desc: { pt: 'Auto-aprovação de membros BRs', es: 'Auto-aprobación de miembros BRs', en: 'Auto-approve Brazilian members' } }
       ];
 
       const configActions = [
