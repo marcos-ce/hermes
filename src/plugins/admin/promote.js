@@ -1,5 +1,7 @@
 const { groupCache } = require('../../utils/cache');
-const { resolveParticipant, checkAdminStatus, cleanJid, isBotIdentity } = require('../../utils/jidResolver');
+const { checkAdminStatus, checkGroupUpdateResult } = require('../../utils/jidResolver');
+const { getExplicitMentionTargets, hasExplicitMentionSyntax } = require('../../services/targetResolver');
+const logger = require('../../utils/logger');
 
 module.exports = {
   name: 'promote',
@@ -13,53 +15,64 @@ module.exports = {
   async execute({ sock, msg, from, text, reply, t, isGroup }) {
     if (!isGroup) return reply(t('common.group_only'));
 
-    // Trava de segurança obrigatória: só permite promover quem for marcado expressamente com @
-    const realMsg = msg?.message?.ephemeralMessage?.message ||
-                    msg?.message?.viewOnceMessage?.message ||
-                    msg?.message?.viewOnceMessageV2?.message ||
-                    msg?.message?.documentWithCaptionMessage?.message ||
-                    msg?.message;
-
-    const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
-                        realMsg?.imageMessage?.contextInfo ||
-                        realMsg?.videoMessage?.contextInfo ||
-                        realMsg?.documentMessage?.contextInfo ||
-                        msg?.message?.extendedTextMessage?.contextInfo;
-
-    const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
-    const nonBotMentions = rawMentions.filter(m => !isBotIdentity(sock, m));
-
-    const textMatch = typeof text === 'string' ? text.match(/@(\d{8,15})/) : null;
-    const hasValidAtText = textMatch && !isBotIdentity(sock, textMatch[1]);
-
-    if (nonBotMentions.length === 0 && !hasValidAtText) {
-      return reply(t('promote.need_explicit_mention'));
-    }
-
-    let targetData = null;
-    if (nonBotMentions.length > 0) {
-      targetData = await resolveParticipant(sock, from, cleanJid(nonBotMentions[0]));
-    } else if (hasValidAtText) {
-      targetData = await resolveParticipant(sock, from, `${textMatch[1]}@s.whatsapp.net`);
-    }
+    // Trava de segurança obrigatória: só permite promover quem for marcado
+    // expressamente com @. O resolver central cobre menções @lid/@s.whatsapp.net,
+    // números com @ e nomes literais (@Fulano) de um único membro do grupo.
+    const targets = await getExplicitMentionTargets(sock, msg, from);
+    const targetData = targets.find(target => target && target.resolved !== false);
 
     if (!targetData) {
-      return reply(t('common.not_found_target'));
+      const explicitAt = hasExplicitMentionSyntax(sock, msg);
+      logger.warn(
+        {
+          groupJid: from,
+          text,
+          resolvedTargets: targets.length,
+          explicitAt
+        },
+        'Promote: alvo explícito não resolvido'
+      );
+
+      const errorKey = explicitAt ? 'common.not_found_target' : 'promote.need_explicit_mention';
+      return reply(t(errorKey));
     }
 
-    const adminCheck = await checkAdminStatus(sock, from, targetData.phoneJid);
+    const adminCheck = await checkAdminStatus(sock, from, targetData.phoneJid || targetData.groupJid);
     if (adminCheck.isAdmin) {
       return reply(t('promote.already_admin'));
     }
 
     try {
-      await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
+      const result = await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
+      const { ok, failures } = checkGroupUpdateResult(result);
       groupCache.del(from); // Invalida o cache
 
+      if (!ok) {
+        logger.warn(
+          {
+            groupJid: from,
+            targetJid: targetData.groupJid,
+            failures
+          },
+          'Promote: WhatsApp recusou a promoção'
+        );
+        return reply(t('common.error'));
+      }
+
+      const mentions = [...new Set([targetData.groupJid, targetData.phoneJid].filter(Boolean))];
       return reply(t('promote.success', { user: targetData.displayUser || targetData.displayNum }), {
-        mentions: [targetData.groupJid, targetData.phoneJid]
+        mentions
       });
-    } catch (_err) {
+    } catch (err) {
+      groupCache.del(from); // Metadados podem ter mudado; força nova consulta
+      logger.error(
+        {
+          err,
+          groupJid: from,
+          targetJid: targetData.groupJid
+        },
+        'Promote: erro ao executar groupParticipantsUpdate'
+      );
       return reply(t('common.error'));
     }
   }

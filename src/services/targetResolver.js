@@ -1,4 +1,4 @@
-const { resolveTarget, resolveParticipant, cleanJid, getBotIdentity } = require('../utils/jidResolver');
+const { resolveTarget, resolveParticipant, cleanJid, getBotIdentity, getGroupMetadata, findParticipantJidsByName } = require('../utils/jidResolver');
 const memoryEngine = require('./memoryEngine');
 const { t } = require('../utils/i18n');
 
@@ -28,6 +28,210 @@ function extractContextInfo(msg) {
                       null;
 
   return { realMsg, contextInfo };
+}
+
+// Palavras usadas como menção coletiva/genérica que não representam um membro.
+const RESERVED_MENTION_TOKENS = new Set([
+  'todos', 'todas', 'all', 'everyone', 'here', 'aqui', 'geral', 'grupo',
+  'admin', 'admins', 'administrador', 'administradores', 'administrator', 'administrators'
+]);
+
+/**
+ * Normaliza nomes para comparação (sem acentos, caixa ou espaços duplicados).
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u200e\u200f\u202a-\u202e]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Extrai o texto legível da mensagem real (texto, legenda de imagem/vídeo).
+ * @param {object|null} realMsg
+ * @returns {string}
+ */
+function getMessageText(realMsg) {
+  return (realMsg?.conversation ||
+          realMsg?.extendedTextMessage?.text ||
+          realMsg?.imageMessage?.caption ||
+          realMsg?.videoMessage?.caption || '').trim();
+}
+
+/**
+ * Extrai tokens literais marcados com @ (ex: "@Fulano" -> "Fulano").
+ * Evita casar e-mails (foo@bar.com) e remove pontuação final.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function extractAtTokens(text) {
+  if (!text || typeof text !== 'string') return [];
+
+  const tokens = [];
+  const regex = /(?:^|\s)@([^\s@]+)/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const token = String(match[1] || '')
+      .replace(/[\u200e\u200f\u202a-\u202e]/g, '')
+      .replace(/[.,!?;:)\]}'"»”’]+$/g, '')
+      .trim();
+    if (token) tokens.push(token);
+  }
+  return [...new Set(tokens)];
+}
+
+/**
+ * Tokens numéricos de menção (@5511... ou @<lid>), sem o @.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function extractNumericMentionTokens(text) {
+  return extractAtTokens(text)
+    .map(token => token.replace(/^\+/, ''))
+    .filter(token => /^\d{8,20}$/.test(token));
+}
+
+/**
+ * Tokens de menção por nome literal (@Fulano), ignorando números e coletivos.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function extractNameMentionTokens(text) {
+  return extractAtTokens(text).filter(token => {
+    const numeric = token.replace(/^\+/, '');
+    if (/^\d{8,20}$/.test(numeric)) return false;
+    const normalized = normalizeName(token);
+    return Boolean(normalized) && !RESERVED_MENTION_TOKENS.has(normalized);
+  });
+}
+
+/**
+ * Verifica se um nome de participante corresponde ao token @Nome.
+ * Aceita nome completo exato ou o primeiro nome (ex: "@Fulano" -> "Fulano Silva").
+ * @param {string} name
+ * @param {string} token
+ * @returns {boolean}
+ */
+function nameMatchesToken(name, token) {
+  const normalizedName = normalizeName(name);
+  const normalizedToken = normalizeName(String(token || '').replace(/^@/, ''));
+  if (!normalizedName || !normalizedToken) return false;
+  if (normalizedName === normalizedToken) return true;
+  return normalizedName.split(' ')[0] === normalizedToken;
+}
+
+/**
+ * Resolve uma lista de JIDs/números e remove duplicatas do mesmo participante.
+ * @param {object} sock
+ * @param {string} from
+ * @param {string[]} candidates
+ * @param {(jidOrNum: string) => boolean} isBot
+ * @returns {Promise<Array<object>>}
+ */
+async function resolveCandidateData(sock, from, candidates, isBot) {
+  const result = [];
+  const seen = new Set();
+
+  for (const candidate of [...new Set(candidates)]) {
+    if (!candidate || isBot(candidate)) continue;
+
+    const data = await resolveParticipant(sock, from, candidate);
+    if (!data) continue;
+
+    const key = cleanJid(data.groupJid || data.phoneJid || '') || data.displayNum;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(data);
+  }
+
+  return result;
+}
+
+/**
+ * Resolve menções literais por nome (@Fulano) somente quando não há JID/número
+ * explícito. Exige correspondência estrita e única para evitar promover a pessoa errada.
+ * @param {object} sock
+ * @param {string} from
+ * @param {string[]} tokens
+ * @param {(jidOrNum: string) => boolean} isBot
+ * @returns {Promise<Array<object>>}
+ */
+async function resolveNameMentionTargets(sock, from, tokens, isBot) {
+  if (!tokens.length || !from) return [];
+
+  const collectFromMetadata = (metadata) => {
+    const candidates = new Set();
+    if (!metadata || !Array.isArray(metadata.participants)) return candidates;
+
+    for (const token of tokens) {
+      for (const participant of metadata.participants) {
+        const names = [participant.notify, participant.name, participant.verifiedName].filter(Boolean);
+        if (!names.some(name => nameMatchesToken(name, token))) continue;
+
+        for (const id of [participant.jid, participant.id, participant.lid]) {
+          const jid = cleanJid(id);
+          if (jid) candidates.add(jid);
+        }
+      }
+    }
+
+    return candidates;
+  };
+
+  let metadata = await getGroupMetadata(sock, from);
+  let metadataCandidates = collectFromMetadata(metadata);
+
+  // Metadados em cache podem ser anteriores à entrada/renomeação do membro.
+  if (metadataCandidates.size === 0) {
+    metadata = await getGroupMetadata(sock, from, { refresh: true });
+    metadataCandidates = collectFromMetadata(metadata);
+  }
+
+  if (metadataCandidates.size > 0) {
+    const resolved = (await resolveCandidateData(sock, from, [...metadataCandidates], isBot))
+      .filter(data => data.resolved !== false);
+    return resolved.length === 1 ? resolved : [];
+  }
+
+  // Fallback para pushNames vistos em mensagens do grupo (cache em RAM).
+  const cachedCandidates = new Set();
+  for (const token of tokens) {
+    for (const jid of findParticipantJidsByName(from, token)) {
+      cachedCandidates.add(jid);
+    }
+  }
+
+  if (cachedCandidates.size > 0) {
+    const resolved = (await resolveCandidateData(sock, from, [...cachedCandidates], isBot))
+      .filter(data => data.resolved !== false);
+    if (resolved.length === 1) return resolved;
+    if (resolved.length > 1) return [];
+    // Se o cache não resolveu (membro saiu), tenta o histórico persistido.
+  }
+
+  // Fallback para nomes vistos no histórico recente do grupo (SQLite).
+  const memoryCandidates = new Set();
+  const recent = memoryEngine.getRecentMessages(from, 100);
+  for (const token of tokens) {
+    for (const message of recent) {
+      if (!message.sender || message.sender === 'hermes@bot' || isBot(message.sender)) continue;
+      if (!nameMatchesToken(message.name, token)) continue;
+
+      const jid = cleanJid(message.participant || message.sender);
+      if (jid) memoryCandidates.add(jid);
+    }
+  }
+
+  if (memoryCandidates.size === 0) return [];
+
+  const resolved = (await resolveCandidateData(sock, from, [...memoryCandidates], isBot))
+    .filter(data => data.resolved !== false);
+  return resolved.length === 1 ? resolved : [];
 }
 
 /**
@@ -88,11 +292,10 @@ async function getExplicitTargets(sock, msg, from) {
                     unwrapped?.extendedTextMessage?.text ||
                     unwrapped?.imageMessage?.caption ||
                     unwrapped?.videoMessage?.caption || '').trim();
-    const textMatches = botText.match(/@(\d{8,15})\b/g) || [];
+    const textMatches = botText.match(/@(\d{8,20})\b/g) || [];
     for (const tm of textMatches) {
       const rawNum = tm.replace('@', '');
-      const jid = `${rawNum}@s.whatsapp.net`;
-      if (!isBot(jid)) candidates.push(jid);
+      if (!isBot(rawNum)) candidates.push(rawNum);
     }
   }
 
@@ -115,29 +318,52 @@ async function getExplicitMentionTargets(sock, msg, from) {
   const isBot = createBotChecker(sock);
   const { realMsg, contextInfo } = extractContextInfo(msg);
 
-  const candidates = [];
+  const mentionCandidates = [];
   const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
   for (const m of mentions) {
-    if (m && !isBot(m)) candidates.push(cleanJid(m));
+    if (m && !isBot(m)) mentionCandidates.push(cleanJid(m));
   }
 
-  const text = (realMsg?.conversation ||
-                realMsg?.extendedTextMessage?.text ||
-                realMsg?.imageMessage?.caption ||
-                realMsg?.videoMessage?.caption || '').trim();
-  const textMatches = text.match(/@(\d{8,15})\b/g) || [];
-  for (const tm of textMatches) {
-    const rawNum = tm.replace('@', '');
-    const jid = `${rawNum}@s.whatsapp.net`;
-    if (!isBot(jid)) candidates.push(jid);
+  const text = getMessageText(realMsg);
+  const numericCandidates = extractNumericMentionTokens(text).filter(token => !isBot(token));
+
+  // 1. Menções reais (@lid/@s.whatsapp.net) e números digitados com @.
+  //    O texto numérico é passado sem domínio para o resolver decidir se é PN ou LID.
+  const explicit = await resolveCandidateData(
+    sock,
+    from,
+    [...mentionCandidates, ...numericCandidates],
+    isBot
+  );
+  if (explicit.length > 0) return explicit;
+
+  // 2. Somente quando não existe nenhuma menção JID/número: aceita @Fulano digitado
+  //    literalmente, desde que corresponda a um único membro do grupo.
+  if (mentionCandidates.length === 0 && numericCandidates.length === 0) {
+    const nameTokens = extractNameMentionTokens(text);
+    if (nameTokens.length > 0) {
+      return await resolveNameMentionTargets(sock, from, nameTokens, isBot);
+    }
   }
 
-  const resolved = [];
-  for (const jid of [...new Set(candidates)]) {
-    const data = await resolveParticipant(sock, from, jid);
-    if (data) resolved.push(data);
-  }
-  return resolved;
+  return [];
+}
+
+/**
+ * Indica se a mensagem contém alguma sintaxe explícita de @ (JID, número ou nome).
+ * Usado para diferenciar "faltou @" de "marcou alguém que não foi encontrado".
+ * @param {object} sock
+ * @param {object} msg
+ * @returns {boolean}
+ */
+function hasExplicitMentionSyntax(sock, msg) {
+  const isBot = createBotChecker(sock);
+  const { realMsg, contextInfo } = extractContextInfo(msg);
+
+  const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
+  if (mentions.some(m => m && !isBot(m))) return true;
+
+  return extractAtTokens(getMessageText(realMsg)).length > 0;
 }
 
 /**
@@ -162,11 +388,13 @@ async function resolveTargetSmart(sock, msg, from, targetArg = '') {
 
   // 1. Número explícito ou JID passado em targetArg que NÃO seja o próprio bot
   if (targetArg && typeof targetArg === 'string') {
-    const numMatch = targetArg.match(/@?(\d{8,15})/);
+    const numMatch = targetArg.match(/@?(\d{8,20})/);
     if (numMatch && numMatch[1] && !isBot(numMatch[1])) {
+      const rawNum = numMatch[1];
+      // Sem domínio, deixa o resolver testar PN e LID (o texto pode ser um @lid).
       const candidateJid = targetArg.includes('@lid')
-        ? `${numMatch[1]}@lid`
-        : `${numMatch[1]}@s.whatsapp.net`;
+        ? `${rawNum}@lid`
+        : (targetArg.includes('@') ? `${rawNum}@s.whatsapp.net` : rawNum);
       return await resolveParticipant(sock, from, candidateJid);
     }
   }
@@ -201,12 +429,11 @@ async function resolveTargetSmart(sock, msg, from, targetArg = '') {
                     unwrapped?.extendedTextMessage?.text ||
                     unwrapped?.imageMessage?.caption ||
                     unwrapped?.videoMessage?.caption || '').trim();
-    const textMatches = botText.match(/@(\d{8,15})\b/g) || [];
+    const textMatches = botText.match(/@(\d{8,20})\b/g) || [];
     for (const tm of textMatches) {
       const rawNum = tm.replace('@', '');
-      const jid = `${rawNum}@s.whatsapp.net`;
-      if (!isBot(jid)) {
-        return await resolveParticipant(sock, from, jid);
+      if (!isBot(rawNum)) {
+        return await resolveParticipant(sock, from, rawNum);
       }
     }
   }
@@ -250,16 +477,33 @@ async function resolveActionTarget(sock, msg, from, targetArg = '', { requireExp
   if (requireExplicitMention) {
     const mentioned = await getExplicitMentionTargets(sock, msg, from);
     if (mentioned.length === 0) {
-      return { success: false, error: t(lang, 'promote.need_explicit_mention') };
+      const errorKey = hasExplicitMentionSyntax(sock, msg)
+        ? 'common.not_found_target'
+        : 'promote.need_explicit_mention';
+      return { success: false, error: t(lang, errorKey) };
     }
 
     const arg = String(targetArg || '').trim().toLowerCase();
     if (!arg || arg === 'mentioned') {
-      return { success: true, targetData: mentioned[0] };
+      // Prefere um alvo confirmado nos metadados do grupo; mantém o primeiro
+      // como fallback para sockets que ainda não expõem groupMetadata.
+      return {
+        success: true,
+        targetData: mentioned.find(data => data.resolved !== false) || mentioned[0]
+      };
     }
+
+    // Alvos resolvidos por nome literal (@Fulano) podem não existir no histórico
+    // do SQLite; nesse caso, valida o argumento diretamente contra o nome do membro marcado.
+    const findMentionByName = () => {
+      const matches = mentioned.filter(m => m.name && nameMatchesToken(m.name, targetArg));
+      return matches.length === 1 ? matches[0] : null;
+    };
 
     const chosen = await resolveTargetSmart(sock, msg, from, targetArg);
     if (!chosen) {
+      const byName = findMentionByName();
+      if (byName) return { success: true, targetData: byName };
       return { success: false, error: t(lang, 'common.not_found_target') };
     }
 
@@ -267,6 +511,8 @@ async function resolveActionTarget(sock, msg, from, targetArg = '', { requireExp
     const chosenIds = new Set(idsOf(chosen));
     const match = mentioned.find(m => idsOf(m).some(id => chosenIds.has(id)));
     if (!match) {
+      const byName = findMentionByName();
+      if (byName) return { success: true, targetData: byName };
       return { success: false, error: t(lang, 'promote.need_explicit_mention') };
     }
     return { success: true, targetData: match };
@@ -308,5 +554,6 @@ module.exports = {
   resolveActionTarget,
   getExplicitTargets,
   getExplicitMentionTargets,
+  hasExplicitMentionSyntax,
   resolveTargetSmart
 };

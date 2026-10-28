@@ -121,12 +121,19 @@ function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
       return m !== botJid && m !== botLid && (!botNum || num !== botNum) && (!botLidNum || num !== botLidNum);
     });
 
-  // Verifica menções por texto (@551199999999)
-  const textAtMatches = (queryText.match(/@(\d{8,15})\b/g) || [])
-    .map(tm => tm.replace('@', ''))
-    .filter(num => num !== botNum && num !== botLidNum);
+  // Verifica menções por texto: @551199999999 (PN/LID) ou @Fulano (nome literal).
+  const textAtTokens = (queryText.match(/(?:^|\s)@([^\s@]+)/g) || [])
+    .map(tm => tm.replace(/^[^@]*@/, '').replace(/[.,!?;:)\]}'"»”’]+$/g, '').trim())
+    .filter(Boolean)
+    .filter(token => {
+      const numeric = token.replace(/^\+/, '');
+      if (/^\d{8,20}$/.test(numeric)) return numeric !== botNum && numeric !== botLidNum;
 
-  const hasExplicitMention = targetMentions.length > 0 || textAtMatches.length > 0;
+      const normalized = token.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalized !== 'hermes' && normalized !== 'bot';
+    });
+
+  const hasExplicitMention = targetMentions.length > 0 || textAtTokens.length > 0;
 
   // Se tem intenção de promover MAS NÃO tem menção explícita com @ -> INTERCEPTAR!
   return !hasExplicitMention;
@@ -804,12 +811,12 @@ module.exports = {
         }
 
         if (botQuotedTargets.length === 0 && snippet) {
-          const numMatches = snippet.match(/@(\d{8,15})\b/g) || [];
+          const numMatches = snippet.match(/@(\d{8,20})\b/g) || [];
           for (const m of numMatches) {
             const rawNum = m.replace('@', '');
             if (rawNum !== botNum && rawNum !== botLidNum) {
-              const res = await resolveParticipant(sock, from, `${rawNum}@s.whatsapp.net`);
-              const name = res?.name || memoryEngine.getParticipantName(from, `${rawNum}@s.whatsapp.net`) || '';
+              const res = await resolveParticipant(sock, from, rawNum);
+              const name = res?.name || memoryEngine.getParticipantName(from, res?.phoneJid || rawNum) || '';
               botQuotedTargets.push(name ? `${name} (@${res?.displayNum || rawNum})` : `@${rawNum}`);
             }
           }
