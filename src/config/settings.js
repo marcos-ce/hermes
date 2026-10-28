@@ -35,6 +35,14 @@ class Settings {
     this.markReadOnReply = process.env.MARK_READ_ON_REPLY === 'true';
     this.timezone = process.env.TIMEZONE || 'America/Sao_Paulo';
     this.logLevel = process.env.LOG_LEVEL || 'warn';
+
+    // Backup automático offsite via Telegram
+    const backupHour = parseInt(process.env.BACKUP_HOUR, 10);
+    const backupMinute = parseInt(process.env.BACKUP_MINUTE, 10);
+    this.backupTelegramToken = process.env.BACKUP_TELEGRAM_TOKEN || '';
+    this.backupTelegramChatId = process.env.BACKUP_TELEGRAM_CHAT_ID || '';
+    this.backupHour = Number.isFinite(backupHour) ? backupHour : 4;
+    this.backupMinute = Number.isFinite(backupMinute) ? backupMinute : 0;
   }
 
   reload() {

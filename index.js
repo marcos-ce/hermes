@@ -19,6 +19,7 @@ const pluginLoader = require('./src/core/pluginLoader');
 const { connectBot } = require('./src/core/connection');
 const scheduler = require('./src/core/scheduler');
 const pollTracker = require('./src/utils/pollTracker');
+const backupService = require('./src/utils/backup');
 const logger = require('./src/utils/logger');
 
 // ==========================================
@@ -150,6 +151,9 @@ async function main() {
 
   // 5. Inicializa o Scheduler de tarefas periódicas escalonadas
   scheduler.init(sock);
+
+  // 6. Inicializa o Backup Automático Offsite (Telegram)
+  backupService.init();
 }
 
 main().catch((err) => {
