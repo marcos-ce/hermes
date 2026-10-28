@@ -14,6 +14,9 @@ const logger = pino({
         msg.includes('error in handling message') ||
         msg.includes("unexpected error in 'init queries'") ||
         msg.includes('stream errored out') ||
+        msg.includes('failed to decrypt message') ||
+        firstArg?.err?.name === 'SessionError' ||
+        firstArg?.err?.message?.includes('No session record') ||
         firstArg?.node?.attrs?.category === 'peer' ||
         firstArg?.node?.attrs?.code === '515'
       ) {
