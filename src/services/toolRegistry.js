@@ -2192,8 +2192,9 @@ class ToolRegistry {
         }
 
         if (args.action === 'approve_all_br') {
-          const fakeReply = async (text) => {
-            await sendSafeMessage(sock, from, { text });
+          let replyMsg = '';
+          const captureReply = async (text) => {
+            replyMsg = text;
           };
           await autoapprovePlugin.execute({
             sock,
@@ -2201,14 +2202,14 @@ class ToolRegistry {
             from,
             sender,
             args: ['agora'],
-            reply: fakeReply,
+            reply: captureReply,
             t: (k, vars) => t(lang, k, vars),
             isGroup: true,
             prefix: configManager.getGroupPrefix(from)
           });
           return {
             success: true,
-            message: '🚀 Iniciada a aprovação segura de números brasileiros pendentes com filtro anti-ban.'
+            message: replyMsg || '🚀 *Iniciando aprovação segura anti-ban de participantes brasileiros...*'
           };
         }
 

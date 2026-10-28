@@ -82,13 +82,13 @@ class AntiBanApprovalQueue {
     
     // Contagem no último minuto (60s)
     const lastMinuteCount = history.filter(ts => now - ts < 60 * 1000).length;
-    if (lastMinuteCount >= 5) {
+    if (lastMinuteCount >= 10) {
       return { allowed: false, reason: 'minute_limit', count: lastMinuteCount };
     }
 
     // Contagem na última hora (60m)
     const lastHourCount = history.filter(ts => now - ts < 60 * 60 * 1000).length;
-    if (lastHourCount >= 40) {
+    if (lastHourCount >= 50) {
       return { allowed: false, reason: 'hour_limit', count: lastHourCount };
     }
 
@@ -105,7 +105,7 @@ class AntiBanApprovalQueue {
     try {
       while (this.queue.length > 0) {
         const item = this.queue.shift();
-        const { sock, groupJid, participantJid, action, notifyGroup, lang, style, onComplete } = item;
+        const { sock, groupJid, participantJid, action, source, notifyGroup, lang, style, onComplete } = item;
 
         // 1. Checagem de Circuit Breaker
         if (this.isCircuitBreakerActive(groupJid)) {
@@ -117,21 +117,33 @@ class AntiBanApprovalQueue {
         // 2. Checagem de Rate Limit Deslizante
         const rateCheck = this.checkRateLimit(groupJid);
         if (!rateCheck.allowed) {
-          logger.warn({ groupJid, rateCheck }, 'AntiBan: Rate limit estrito atingido no grupo. Ativando Circuit Breaker de 3 minutos.');
-          this.triggerCircuitBreaker(groupJid, 3);
+          if (source === 'batch') {
+            // Em lote administrativo: faz pacing de segurança aguardando a janela abrir, sem descartar itens
+            const history = this.recentApprovals.get(groupJid) || [];
+            const oldestInMinute = history.length > 0 ? history[0] : Date.now();
+            const waitMs = Math.min(Math.max(60000 - (Date.now() - oldestInMinute) + 1000, 3000), 15000);
+            logger.info({ groupJid, waitMs }, 'AntiBan: Pacing de segurança na aprovação em lote para respeitar limite da janela');
+            await sleep(waitMs);
+            this.queue.unshift(item); // Reinsere no início para processar sem perda
+            continue;
+          } else {
+            // Em tempo real: se estourar o limite, é indício de flood de convites. Aciona Circuit Breaker
+            logger.warn({ groupJid, rateCheck }, 'AntiBan: Rate limit estrito atingido no grupo. Ativando Circuit Breaker de 3 minutos.');
+            this.triggerCircuitBreaker(groupJid, 3);
 
-          // Notifica os administradores no grupo apenas 1 vez por ciclo
-          const lastNotified = this.circuitBreakerNotified.get(groupJid) || 0;
-          if (Date.now() - lastNotified > 5 * 60 * 1000) {
-            this.circuitBreakerNotified.set(groupJid, Date.now());
-            const prefix = configManager.getGroupPrefix(groupJid);
-            await sendSafeMessage(sock, groupJid, {
-              text: t(lang, 'autoapprove.circuit_breaker_pause', { count: rateCheck.count, minutes: 3, prefix }, style)
-            }).catch(() => {});
+            // Notifica os administradores no grupo apenas 1 vez por ciclo
+            const lastNotified = this.circuitBreakerNotified.get(groupJid) || 0;
+            if (Date.now() - lastNotified > 5 * 60 * 1000) {
+              this.circuitBreakerNotified.set(groupJid, Date.now());
+              const prefix = configManager.getGroupPrefix(groupJid);
+              await sendSafeMessage(sock, groupJid, {
+                text: t(lang, 'autoapprove.circuit_breaker_pause', { count: rateCheck.count, minutes: 3, prefix }, style)
+              }).catch(() => {});
+            }
+
+            if (typeof onComplete === 'function') onComplete({ success: false, reason: 'rate_limit' });
+            continue;
           }
-
-          if (typeof onComplete === 'function') onComplete({ success: false, reason: 'rate_limit' });
-          continue;
         }
 
         // 3. Checagem Preemptiva de Permissão de Admin do Bot
@@ -169,9 +181,13 @@ class AntiBanApprovalQueue {
             }).catch(() => {});
           }
         } catch (err) {
-          this.consecutiveErrors++;
+          const errMsg = String(err?.message || err || '').toLowerCase();
+          const isStale = errMsg.includes('404') || errMsg.includes('not-found') || errMsg.includes('item-not-found');
+          if (!isStale) {
+            this.consecutiveErrors++;
+          }
           logger.error({ err, groupJid, participantJid, action }, 'Falha na requisição de aprovação de participante');
-          // Se houver 2 erros consecutivos, pausa por 45 segundos para despressurizar o socket
+          // Se houver 2 erros consecutivos de rede/API, pausa por 45 segundos para despressurizar o socket
           if (this.consecutiveErrors >= 2) {
             logger.warn('AntiBan: Detectados erros consecutivos na API de grupos. Pausando fila por 45 segundos.');
             await sleep(45000);
@@ -343,8 +359,9 @@ module.exports = {
       approvalQueue.enqueue({
         sock,
         groupJid,
-        participantJid: participant,
+        participantJid: cleanJid(participant),
         action: 'approve',
+        source: 'realtime',
         notifyGroup: Boolean(cfg.notifyGroup),
         lang,
         style
@@ -355,8 +372,9 @@ module.exports = {
       approvalQueue.enqueue({
         sock,
         groupJid,
-        participantJid: participant,
+        participantJid: cleanJid(participant),
         action: 'reject',
+        source: 'realtime',
         notifyGroup: false,
         lang,
         style
@@ -472,8 +490,9 @@ module.exports = {
         approvalQueue.enqueue({
           sock,
           groupJid: from,
-          participantJid,
+          participantJid: cleanJid(participantJid),
           action: 'approve',
+          source: 'batch',
           notifyGroup: false, // Em lote, não floda o grupo
           lang,
           style,
