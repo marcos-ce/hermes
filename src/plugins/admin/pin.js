@@ -27,17 +27,10 @@ module.exports = {
                        (['all', 'todas', 'todos', 'tudo'].includes(args[1]?.toLowerCase()));
 
     if (isUnpinAll) {
-      const pinnedList = pinTracker.getPinned(from);
-      if (pinnedList.length === 0) {
+      const count = await pinTracker.unpinAllMessages(sock, from);
+      if (count === 0) {
         return reply('📌 Não há mensagens fixadas registradas neste grupo.');
       }
-      for (const k of pinnedList) {
-        try {
-          await sock.sendMessage(from, { pin: k, type: 2 });
-          await new Promise(r => setTimeout(r, 400));
-        } catch (_) {}
-      }
-      pinTracker.clearPins(from);
       return reply(`📌 Todas as mensagens fixadas registradas foram desafixadas com sucesso!`);
     }
 

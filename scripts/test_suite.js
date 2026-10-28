@@ -98,7 +98,9 @@ async function runTests() {
       'autoapprove.batch_finished',
       'autoapprove.approved_single',
       'autoapprove.circuit_breaker_pause',
-      'autoapprove.approval_mode_warning'
+      'autoapprove.approval_mode_warning',
+      'autoapprove.target_approved',
+      'autoapprove.target_not_found'
     ];
 
     ['pt', 'es', 'en'].forEach(lang => {
@@ -222,6 +224,149 @@ async function runTests() {
       style: 'natural'
     });
     assert.deepStrictEqual(resBR, { stop: true }, 'Brasileiro deve ser aceito e retornar { stop: true }');
+  });
+
+  // 8. Testes Cirúrgicos de Normalização (Multi-Device, Sem DDI 55, Objetos e LIDs)
+  it('extractParticipantInfo e isNumberAllowed normalizam todos os formatos brasileiros e filtram estrangeiros', () => {
+    const { extractParticipantInfo, isNumberAllowed } = autoapprove;
+
+    // A: Multi-device com :0 e :1
+    const p1 = extractParticipantInfo('5511999998888:1@s.whatsapp.net');
+    assert.strictEqual(p1.digits, '5511999998888');
+    assert.strictEqual(p1.cleanTargetJid, '5511999998888@s.whatsapp.net');
+    assert.strictEqual(isNumberAllowed(p1.digits, ['55']), true);
+
+    const p0 = extractParticipantInfo('5511999998888:0@s.whatsapp.net');
+    assert.strictEqual(p0.digits, '5511999998888');
+    assert.strictEqual(isNumberAllowed(p0.digits, ['55']), true);
+
+    // B: Formato nacional sem DDI 55 (celular 11 dígitos com 9 no 3º dígito)
+    const pNoDdi = extractParticipantInfo('11999998888');
+    assert.strictEqual(pNoDdi.digits, '5511999998888');
+    assert.strictEqual(isNumberAllowed(pNoDdi.digits, ['55']), true);
+
+    // C: Fixo nacional sem DDI 55 (10 dígitos com início [2-5])
+    const pLandline = extractParticipantInfo('1133334444');
+    assert.strictEqual(pLandline.digits, '551133334444');
+    assert.strictEqual(isNumberAllowed(pLandline.digits, ['55']), true);
+
+    // D: Objeto do Baileys com phone_number
+    const pObj = extractParticipantInfo({ jid: '12345678@lid', phone_number: '5511999998888' });
+    assert.strictEqual(pObj.digits, '5511999998888');
+    assert.strictEqual(isNumberAllowed(pObj.digits, ['55']), true);
+
+    // E: Objeto do Baileys com sender_pn
+    const pObjPn = extractParticipantInfo({ jid: '87654321@lid', sender_pn: '11988887777:1@s.whatsapp.net' });
+    assert.strictEqual(pObjPn.digits, '5511988887777');
+    assert.strictEqual(isNumberAllowed(pObjPn.digits, ['55']), true);
+
+    // F: Número dos EUA com 11 dígitos (+1 415 555-2671) NÃO deve ser confundido com DDD 14
+    const pUsa = extractParticipantInfo('14155552671@s.whatsapp.net');
+    assert.strictEqual(pUsa.digits, '14155552671');
+    assert.strictEqual(isNumberAllowed(pUsa.digits, ['55']), false);
+
+    // G: Número da Argentina (+54 9 11 2345-6789)
+    const pArg = extractParticipantInfo('5491123456789@s.whatsapp.net');
+    assert.strictEqual(pArg.digits, '5491123456789');
+    assert.strictEqual(isNumberAllowed(pArg.digits, ['55']), false);
+
+    // H: DDD Inválido no Brasil (09)
+    assert.strictEqual(isNumberAllowed('5509999998888', ['55']), false);
+  });
+
+  // 9. Simulação de onJoinRequest com multi-device (:1) e sem DDI 55
+  await itAsync('onJoinRequest aprova participantes com sufixo de dispositivo e sem DDI', async () => {
+    const fakeGroup = '120363000000000000@g.us';
+    configManager.setPluginEnabled(fakeGroup, 'autoapprove', true);
+    configManager.updatePluginConfig(fakeGroup, 'autoapprove', {
+      enabled: true,
+      allowedDdis: ['55'],
+      actionForForeigners: 'ignore',
+      notifyGroup: false
+    });
+
+    const fakeSock = {
+      user: { id: '5511988880000:1@s.whatsapp.net' },
+      groupRequestParticipantsUpdate: async () => ({ status: 200 }),
+      sendPresenceUpdate: async () => {}
+    };
+
+    // Caso A: Participante com :1 multi-device
+    const resDevice = await autoapprove.onJoinRequest({
+      sock: fakeSock,
+      groupJid: fakeGroup,
+      participant: '5511999998888:1@s.whatsapp.net',
+      action: 'created',
+      lang: 'pt',
+      style: 'natural'
+    });
+    assert.deepStrictEqual(resDevice, { stop: true });
+
+    // Caso B: Participante enviado como objeto com phone_number
+    const resObj = await autoapprove.onJoinRequest({
+      sock: fakeSock,
+      groupJid: fakeGroup,
+      participant: { jid: '123456@lid', phone_number: '11999998888' },
+      action: 'created',
+      lang: 'pt',
+      style: 'natural'
+    });
+    assert.deepStrictEqual(resObj, { stop: true });
+  });
+
+  // 10. Execução de aprovação individual manual por comando (!aprovar <numero>)
+  await itAsync('Comando !aprovar aceita número específico ou retorna aviso de não encontrado', async () => {
+    const fakeGroup = '120363000000000000@g.us';
+    const fakeAdmin = '5511999990000@s.whatsapp.net';
+    const fakeBot = '5511988880000@s.whatsapp.net';
+
+    const { groupCache } = require('../src/utils/cache');
+    groupCache.set(fakeGroup, {
+      id: fakeGroup,
+      subject: 'Grupo Teste',
+      participants: [
+        { id: fakeAdmin, admin: 'admin' },
+        { id: fakeBot, admin: 'admin' }
+      ]
+    });
+
+    const fakeSock = {
+      user: { id: `${fakeBot}:1` },
+      groupRequestParticipantsList: async () => [
+        { jid: '5511999998888:0@s.whatsapp.net' },
+        { jid: '14155552671@s.whatsapp.net' }
+      ],
+      groupRequestParticipantsUpdate: async () => ({ status: 200 }),
+      sendPresenceUpdate: async () => {}
+    };
+
+    let replySuccess = '';
+    await autoapprove.execute({
+      sock: fakeSock,
+      msg: {},
+      from: fakeGroup,
+      sender: fakeAdmin,
+      args: ['11999998888'], // Admin digitou número BR sem DDI
+      reply: (txt) => { replySuccess = txt; },
+      t: (k, vars) => t('pt', k, vars),
+      isGroup: true,
+      prefix: '!'
+    });
+    assert(replySuccess.includes('Aprovada'), 'Deveria aprovar o participante brasileiro encontrado');
+
+    let replyNotFound = '';
+    await autoapprove.execute({
+      sock: fakeSock,
+      msg: {},
+      from: fakeGroup,
+      sender: fakeAdmin,
+      args: ['5521999990000'], // Número que não está na fila
+      reply: (txt) => { replyNotFound = txt; },
+      t: (k, vars) => t('pt', k, vars),
+      isGroup: true,
+      prefix: '!'
+    });
+    assert(replyNotFound.includes('Não Encontrada'), 'Deveria avisar que o número não está pendente');
   });
 
   console.log('\n====================================================');

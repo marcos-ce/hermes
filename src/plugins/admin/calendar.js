@@ -6,6 +6,7 @@ const { getGroupMetadata, resolveParticipant, cleanJid, getBotIdentity } = requi
 const { t } = require('../../utils/i18n');
 const pollTracker = require('../../utils/pollTracker');
 const pinTracker = require('../../utils/pinTracker');
+const { pickWinners } = require('../../utils/raffle');
 const logger = require('../../utils/logger');
 
 /**
@@ -124,17 +125,8 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
   // 4. Desafixar todas as mensagens fixadas
   if (actionType === 'unpin') {
     try {
-      const pinnedList = pinTracker.getPinned(groupJid);
-      if (pinnedList && pinnedList.length > 0) {
-        let count = 0;
-        for (const key of pinnedList) {
-          try {
-            await sock.sendMessage(groupJid, { pin: key, type: 2 });
-            count++;
-            await new Promise(r => setTimeout(r, 400));
-          } catch (_) {}
-        }
-        pinTracker.clearPins(groupJid);
+      const count = await pinTracker.unpinAllMessages(sock, groupJid);
+      if (count > 0) {
         await sendSafeMessage(sock, groupJid, {
           text: `📌 *[DESAFIXAÇÃO AUTOMÁTICA]*\n\nTodas as ${count} mensagem(ns) fixada(s) foram desafixadas conforme programado.`
         });
@@ -174,9 +166,7 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
           return true;
         });
       }
-      const qty = Math.max(1, Math.min(event.raffleQuantity || 1, pool.length));
-      const shuffled = [...pool].sort(() => 0.5 - Math.random());
-      const winners = shuffled.slice(0, qty);
+      const winners = pickWinners(pool, event.raffleQuantity || 1);
       const winnerMentions = winners.map(w => cleanJid(w.id || w.jid));
       const winnerText = winners.map(w => {
         const num = cleanJid(w.id || w.jid).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
@@ -226,6 +216,71 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
   await sendSafeMessage(sock, groupJid, { text: body, mentions });
 }
 
+/**
+ * Agenda uma ação temporizada de abertura/fechamento de grupo com persistência no calendário
+ * e timer de alta precisão em memória (com unref) se o prazo for curto (<= 120min).
+ * 
+ * @param {object} sock Instância do socket Baileys
+ * @param {string} groupJid JID do grupo
+ * @param {object} params Parâmetros da ação
+ * @param {'open_group'|'close_group'} params.action Ação a executar
+ * @param {object} params.rel Objeto de tempo retornado por parseRelativeTime
+ * @param {string} [params.text] Descrição do evento
+ * @param {string} [params.sender] Remetente solicitante
+ * @param {string} [params.lang] Idioma para avisos
+ * @returns {Promise<{ newId: string }>}
+ */
+async function scheduleTimedGroupAction(sock, groupJid, { action, rel, text, sender = '', lang = 'pt' }) {
+  const cfg = configManager.getPluginConfig(groupJid, 'calendar') || {};
+  const events = Array.isArray(cfg.events) ? cfg.events : [];
+  const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
+  const newId = String(maxId + 1);
+
+  const isClose = action === 'close_group';
+  const defaultText = isClose
+    ? 'Fechamento do grupo programado pelo administrador'
+    : 'Abertura do grupo programada pelo administrador';
+
+  const scheduledEvent = {
+    id: newId,
+    action,
+    date: rel.formattedDate,
+    time: rel.formattedTime,
+    text: text || defaultText,
+    createdBy: sender ? sender.replace(/@.*$/, '') : 'admin',
+    createdAt: Date.now(),
+    executed: false
+  };
+
+  events.push(scheduledEvent);
+  configManager.updatePluginConfig(groupJid, 'calendar', { events, enabled: true });
+
+  if (rel.delayMs && rel.delayMs <= 120 * 60 * 1000) {
+    const timer = setTimeout(async () => {
+      try {
+        const currentCfg = configManager.getPluginConfig(groupJid, 'calendar') || {};
+        const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
+        const ev = currentEvents.find(e => String(e.id) === newId);
+        if (ev && !ev.executed) {
+          ev.executed = true;
+          ev.executedAt = Date.now();
+          configManager.updatePluginConfig(groupJid, 'calendar', { events: currentEvents });
+
+          const waAction = isClose ? 'announcement' : 'not_announcement';
+          await sock.groupSettingUpdate(groupJid, waAction);
+          const msgKey = isClose ? 'mute.closed' : 'mute.opened';
+          await sendSafeMessage(sock, groupJid, { text: t(lang, msgKey) });
+        }
+      } catch (err) {
+        logger.error({ err, groupJid, newId, action }, 'Erro ao executar ação temporizada do grupo');
+      }
+    }, rel.delayMs);
+    if (timer.unref) timer.unref();
+  }
+
+  return { newId };
+}
+
 module.exports = {
   name: 'calendar',
   aliases: ['calendar', 'agenda', 'agendar', 'calendario', 'calendário', 'agendamento', 'agendamentos', 'eventos', 'evento'],
@@ -234,6 +289,7 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: false,
   executeCalendarAction,
+  scheduleTimedGroupAction,
 
   configSchema: {
     title: {

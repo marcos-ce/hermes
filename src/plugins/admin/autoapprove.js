@@ -1,6 +1,6 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
-const { cleanJid, resolveParticipant, checkAdminStatus } = require('../../utils/jidResolver');
+const { cleanJid, resolveParticipant, checkAdminStatus, lidToPhoneMap } = require('../../utils/jidResolver');
 const { sendSafeMessage, randomDelay, sleep } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
 const logger = require('../../utils/logger');
@@ -208,49 +208,106 @@ class AntiBanApprovalQueue {
 const approvalQueue = new AntiBanApprovalQueue();
 
 /**
- * Valida se um número de telefone é um número brasileiro válido e bem formado
- * @param {string} rawNumber 
- * @returns {boolean}
+ * Extrai dados padronizados e normalizados de um participante ou item de solicitação do Baileys
+ * Resolve sufixos de dispositivo (:1, :0), mapeamentos de LID, domínios e formatos nacionais sem DDI.
+ * @param {string|object} item JID, número ou objeto de solicitação do WhatsApp
+ * @returns {{ rawJid: string, cleanTargetJid: string, digits: string, isLid: boolean, displayNum: string }}
  */
-function isValidBrazilianNumber(rawNumber) {
-  if (!rawNumber || typeof rawNumber !== 'string') return false;
-  const digits = rawNumber.replace(/\D/g, '');
-  
-  // Deve iniciar com DDI 55
-  if (!digits.startsWith('55')) return false;
+function extractParticipantInfo(item) {
+  if (!item) return { rawJid: '', cleanTargetJid: '', digits: '', isLid: false, displayNum: '' };
 
-  // Comprimento válido no Brasil:
-  // 12 dígitos: 55 + DDD (2) + 8 dígitos
-  // 13 dígitos: 55 + DDD (2) + 9 dígitos
-  if (digits.length !== 12 && digits.length !== 13) return false;
+  let rawJid = '';
+  let phoneCandidate = '';
 
-  // DDDs oficiais no Brasil (11 a 99)
-  const ddd = parseInt(digits.substring(2, 4), 10);
-  if (isNaN(ddd) || ddd < 11 || ddd > 99) return false;
+  if (typeof item === 'string') {
+    rawJid = item;
+  } else if (typeof item === 'object') {
+    // Procura primeiro campos específicos de telefone que o WhatsApp/Baileys anexa
+    phoneCandidate = item.phone_number || item.phoneNumber || item.sender_pn || item.pn || item.phone || '';
+    rawJid = item.jid || item.user || item.id || phoneCandidate || '';
+  }
 
-  return true;
+  // JID normalizado sem sufixos de dispositivo (:1, :0)
+  const cleanTargetJid = cleanJid(rawJid);
+
+  // Se o JID for @lid, tenta mapear no lidToPhoneMap global
+  let resolvedPhone = phoneCandidate;
+  if (!resolvedPhone && cleanTargetJid.endsWith('@lid')) {
+    const mapped = lidToPhoneMap.get(cleanTargetJid);
+    if (mapped) resolvedPhone = mapped;
+  }
+  if (!resolvedPhone) {
+    resolvedPhone = cleanTargetJid;
+  }
+
+  // Extrai apenas a parte do usuário antes do @ e antes do : (remove device suffix)
+  let userPart = String(resolvedPhone).trim();
+  if (userPart.includes('@')) userPart = userPart.split('@')[0];
+  if (userPart.includes(':')) userPart = userPart.split(':')[0];
+
+  let digits = userPart.replace(/\D/g, '');
+
+  // Trata prefixos internacionais com zeros (0055... ou 055...)
+  if (digits.startsWith('0055')) digits = digits.substring(2);
+  else if (digits.startsWith('055')) digits = digits.substring(1);
+
+  // Se o número veio no formato nacional brasileiro sem o DDI 55
+  if (digits.length === 11) {
+    // Celular BR: DDD (2) + 9 + 8 dígitos
+    const ddd = parseInt(digits.substring(0, 2), 10);
+    const ninthDigit = digits[2];
+    if (ddd >= 11 && ddd <= 99 && ninthDigit === '9') {
+      digits = '55' + digits;
+    }
+  } else if (digits.length === 10) {
+    // Fixo BR: DDD (2) + [2-5] + 7 dígitos
+    const ddd = parseInt(digits.substring(0, 2), 10);
+    const firstDigit = digits[2];
+    if (ddd >= 11 && ddd <= 99 && ['2', '3', '4', '5'].includes(firstDigit)) {
+      digits = '55' + digits;
+    }
+  }
+
+  // Se veio com 55 + 0 + DDD (ex: 55011999998888)
+  if (digits.startsWith('550') && (digits.length === 13 || digits.length === 14)) {
+    digits = '55' + digits.substring(3);
+  }
+
+  return {
+    rawJid: rawJid || cleanTargetJid,
+    cleanTargetJid,
+    digits,
+    isLid: cleanTargetJid.endsWith('@lid'),
+    displayNum: digits || cleanTargetJid.replace(/@.*$/, '')
+  };
 }
 
 /**
- * Verifica se um número pertence aos DDIs autorizados
- * @param {string} number 
+ * Verifica se um número pertence aos DDIs autorizados (com validação robusta para o Brasil)
+ * @param {string} digits 
  * @param {string[]} allowedDdis 
  * @returns {boolean}
  */
-function isNumberAllowed(number, allowedDdis = ['55']) {
-  if (!number) return false;
-  const digits = String(number).replace(/\D/g, '');
+function isNumberAllowed(digits, allowedDdis = ['55']) {
+  if (!digits || typeof digits !== 'string') return false;
 
   for (const rawDdi of allowedDdis) {
     const ddi = String(rawDdi).replace(/\D/g, '');
     if (!ddi) continue;
 
     if (ddi === '55') {
-      if (digits.startsWith('55') && isValidBrazilianNumber(digits)) {
+      if (!digits.startsWith('55')) continue;
+      const ddd = parseInt(digits.substring(2, 4), 10);
+      if (isNaN(ddd) || ddd < 11 || ddd > 99) continue;
+      // Suporta números fixos (12), celulares (13) e formatos com dígitos de operadora/legado (14)
+      if (digits.length >= 12 && digits.length <= 14) {
         return true;
       }
-    } else if (digits.startsWith(ddi)) {
-      return true;
+    } else {
+      // Outros países: checa prefixo do DDI e comprimento mínimo de 6 dígitos
+      if (digits.startsWith(ddi) && digits.length >= ddi.length + 6) {
+        return true;
+      }
     }
   }
 
@@ -333,20 +390,21 @@ module.exports = {
   /**
    * Hook passivo: Disparado em tempo real ao receber evento group.join-request do Baileys
    */
-  async onJoinRequest({ sock, groupJid, participant, action, lang, style }) {
+  async onJoinRequest({ sock, request, groupJid, participant, action, lang, style }) {
     // Processa apenas novas solicitações criadas
     if (action !== 'created') return false;
 
     const cfg = configManager.getPluginConfig(groupJid, 'autoapprove');
     if (!cfg || !cfg.enabled) return false;
 
-    // Resolução robusta de número telefônico
-    let resolved = await resolveParticipant(sock, groupJid, participant);
-    let targetPhoneJid = resolved?.phoneJid || cleanJid(participant);
-    let participantNumber = resolved?.displayNum || targetPhoneJid.replace(/@.*$/, '').replace(/\D/g, '');
+    // Resolução robusta e precisa do participante (suporta objetos, strings, LIDs e dispositivos)
+    const candidate = participant || request?.participant || request?.user || request;
+    const info = extractParticipantInfo(candidate);
+    const targetPhoneJid = info.cleanTargetJid;
+    const participantNumber = info.digits;
 
     // Blindagem Anti-Ban: Se o participante for um LID não resolvível, não aprova cegamente
-    if (targetPhoneJid.endsWith('@lid') && (!participantNumber || participantNumber.length > 15)) {
+    if (info.isLid && (!participantNumber || participantNumber.length > 15)) {
       logger.info({ groupJid, participant }, 'AutoApprove: Participante @lid não pôde ser resolvido para telefone. Mantendo na fila por segurança.');
       return false;
     }
@@ -359,7 +417,7 @@ module.exports = {
       approvalQueue.enqueue({
         sock,
         groupJid,
-        participantJid: cleanJid(participant),
+        participantJid: targetPhoneJid || cleanJid(participant),
         action: 'approve',
         source: 'realtime',
         notifyGroup: Boolean(cfg.notifyGroup),
@@ -372,7 +430,7 @@ module.exports = {
       approvalQueue.enqueue({
         sock,
         groupJid,
-        participantJid: cleanJid(participant),
+        participantJid: targetPhoneJid || cleanJid(participant),
         action: 'reject',
         source: 'realtime',
         notifyGroup: false,
@@ -466,10 +524,9 @@ module.exports = {
       let foreignCount = 0;
 
       for (const item of pendingList) {
-        const jid = item.jid || item.user || item.id;
-        const num = String(jid).replace(/@.*$/, '').replace(/\D/g, '');
-        if (isNumberAllowed(num, allowedDdis)) {
-          brParticipants.push(jid);
+        const info = extractParticipantInfo(item);
+        if (isNumberAllowed(info.digits, allowedDdis)) {
+          brParticipants.push(info.cleanTargetJid || item.jid);
         } else {
           foreignCount++;
         }
@@ -513,7 +570,74 @@ module.exports = {
       return;
     }
 
-    // 5. Exibição de Status e Painel de Resumo (Default sem args)
+    // 5. Aprovação de Alvo Específico: !aprovar <número/menção>
+    const isTargetArg = Boolean(sub && !['config', 'wizard', 'setup', 'on', 'ativar', 'activar', 'off', 'desativar', 'agora', 'all', 'todos', 'processar', 'status', 'info', 'help', 'ajuda'].includes(sub));
+    const mentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    
+    if (isTargetArg || mentions.length > 0) {
+      let pendingList = [];
+      try {
+        pendingList = await sock.groupRequestParticipantsList(from);
+      } catch (err) {
+        logger.error({ err, from }, 'Erro ao consultar lista de solicitações pendentes para alvo específico');
+        return reply(translate('common.error'));
+      }
+
+      if (!Array.isArray(pendingList) || pendingList.length === 0) {
+        return reply(translate('autoapprove.no_pending'));
+      }
+
+      // Determina o alvo buscado
+      let rawTarget = mentions[0] || args.join(' ');
+      const targetInfo = extractParticipantInfo(rawTarget);
+      const targetDigits = targetInfo.digits;
+      const targetLast8 = targetDigits.length >= 8 ? targetDigits.slice(-8) : targetDigits;
+
+      // Busca na lista de pendentes por JID, dígitos exatos ou DDD + últimos 8 dígitos
+      let matchedItem = null;
+      for (const item of pendingList) {
+        const itemInfo = extractParticipantInfo(item);
+        
+        const isJidMatch = targetInfo.cleanTargetJid && itemInfo.cleanTargetJid === targetInfo.cleanTargetJid;
+        const isDigitsMatch = targetDigits && (itemInfo.digits === targetDigits || itemInfo.digits.endsWith(targetDigits) || targetDigits.endsWith(itemInfo.digits));
+        
+        let isBrMatch = false;
+        if (targetDigits.length >= 10 && itemInfo.digits.length >= 10) {
+          const tDdd = targetDigits.startsWith('55') ? targetDigits.substring(2, 4) : targetDigits.substring(0, 2);
+          const iDdd = itemInfo.digits.startsWith('55') ? itemInfo.digits.substring(2, 4) : itemInfo.digits.substring(0, 2);
+          const itemLast8 = itemInfo.digits.slice(-8);
+          if (tDdd === iDdd && targetLast8 === itemLast8) {
+            isBrMatch = true;
+          }
+        }
+
+        if (isJidMatch || isDigitsMatch || isBrMatch) {
+          matchedItem = { item, info: itemInfo };
+          break;
+        }
+      }
+
+      if (!matchedItem) {
+        return reply(translate('autoapprove.target_not_found', { user: targetDigits || rawTarget }));
+      }
+
+      // Enfileira aprovação individual segura
+      const approvedJid = matchedItem.info.cleanTargetJid || matchedItem.item.jid;
+      approvalQueue.enqueue({
+        sock,
+        groupJid: from,
+        participantJid: cleanJid(approvedJid),
+        action: 'approve',
+        source: 'manual',
+        notifyGroup: Boolean(cfg.notifyGroup),
+        lang,
+        style
+      });
+
+      return reply(translate('autoapprove.target_approved', { user: matchedItem.info.digits || matchedItem.info.displayNum }));
+    }
+
+    // 6. Exibição de Status e Painel de Resumo (Default sem args)
     let pendingList = [];
     try {
       pendingList = await sock.groupRequestParticipantsList(from);
@@ -526,9 +650,8 @@ module.exports = {
     let foreignCount = 0;
 
     for (const item of pendingList) {
-      const jid = item.jid || item.user || item.id;
-      const num = String(jid).replace(/@.*$/, '').replace(/\D/g, '');
-      if (isNumberAllowed(num, allowedDdis)) {
+      const info = extractParticipantInfo(item);
+      if (isNumberAllowed(info.digits, allowedDdis)) {
         brCount++;
       } else {
         foreignCount++;
@@ -551,5 +674,10 @@ module.exports = {
     }
 
     return reply(summaryText);
-  }
+  },
+
+  // Exportação de utilitários para ferramentas de IA e testes unitários
+  extractParticipantInfo,
+  isNumberAllowed,
+  approvalQueue
 };

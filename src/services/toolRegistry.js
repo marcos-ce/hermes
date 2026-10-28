@@ -4,13 +4,15 @@ const wizardEngine = require('../core/wizardEngine');
 const logger = require('../utils/logger');
 const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
 const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid, getBotIdentity } = require('../utils/jidResolver');
+const { resolveActionTarget, getExplicitTargets, resolveTargetSmart } = require('./targetResolver');
 const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
 const pollTracker = require('../utils/pollTracker');
 const pinTracker = require('../utils/pinTracker');
+const { pickWinners } = require('../utils/raffle');
 const memoryEngine = require('./memoryEngine');
 const { parseRelativeTime, parseDuration } = require('./timeParser');
-const { executeCalendarAction } = require('../plugins/admin/calendar');
+const { executeCalendarAction, scheduleTimedGroupAction } = require('../plugins/admin/calendar');
 
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
@@ -590,206 +592,26 @@ class ToolRegistry {
   }
 
   /**
-   * Resolve o participante alvo filtrando o próprio JID/LID do bot
-   * Evita que "@Hermes bane @Infrator" ou reply ao próprio bot selecione o bot como alvo
+   * Resolução inteligente de participante (delegado para targetResolver)
    */
   async _resolveTargetSmart(sock, msg, from, targetArg = '') {
-    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
-
-    const isBotIdentity = (jidOrNum) => {
-      if (!jidOrNum) return false;
-      const clean = cleanJid(jidOrNum);
-      const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      return (
-        clean === botJid ||
-        clean === botLid ||
-        (botNum && num === botNum) ||
-        (botLidNum && num === botLidNum)
-      );
-    };
-
-    const realMsg = msg?.message?.ephemeralMessage?.message ||
-                    msg?.message?.viewOnceMessage?.message ||
-                    msg?.message?.viewOnceMessageV2?.message ||
-                    msg?.message?.documentWithCaptionMessage?.message ||
-                    msg?.message;
-
-    const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
-                        realMsg?.imageMessage?.contextInfo ||
-                        realMsg?.videoMessage?.contextInfo ||
-                        realMsg?.documentMessage?.contextInfo ||
-                        msg?.message?.extendedTextMessage?.contextInfo;
-
-    // 0. Ref explícito do histórico ("m123"): resolvido por lookup determinístico no SQLite (autor real da mensagem)
-    if (typeof targetArg === 'string' && /^m\d{1,9}$/i.test(targetArg.trim())) {
-      const refData = memoryEngine.getMessageByRef(from, targetArg.trim());
-      const refJid = refData ? cleanJid(refData.participant || refData.sender) : '';
-      if (!refJid || isBotIdentity(refJid)) return null;
-      return await resolveParticipant(sock, from, refJid);
-    }
-
-    // 1. Menções na mensagem que NÃO sejam o próprio bot
-    const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
-    const nonBotMentions = mentions.filter(m => !isBotIdentity(m));
-    if (nonBotMentions.length > 0) {
-      return await resolveParticipant(sock, from, cleanJid(nonBotMentions[0]));
-    }
-
-    // 2. Número explícito passado em targetArg que NÃO seja o próprio bot
-    if (targetArg && typeof targetArg === 'string') {
-      const numMatch = targetArg.match(/@?(\d{8,15})/);
-      if (numMatch && numMatch[1] && !isBotIdentity(numMatch[1])) {
-        const candidateJid = targetArg.includes('@lid')
-          ? `${numMatch[1]}@lid`
-          : `${numMatch[1]}@s.whatsapp.net`;
-        return await resolveParticipant(sock, from, candidateJid);
-      }
-    }
-
-    // 3. Mensagem respondida (Quote), desde que não seja resposta a uma mensagem do próprio bot
-    const quotedParticipant = contextInfo?.participant || contextInfo?.quotedMessage?.participant;
-    if (quotedParticipant && !isBotIdentity(quotedParticipant)) {
-      return await resolveParticipant(sock, from, cleanJid(quotedParticipant));
-    } else if (quotedParticipant && isBotIdentity(quotedParticipant)) {
-      // Se a citação foi em uma mensagem do próprio bot (ex: aviso de infração),
-      // verifica se havia um participante mencionado na mensagem citada do bot
-      const rawQuoted = contextInfo?.quotedMessage;
-      const unwrapped = rawQuoted?.ephemeralMessage?.message ||
-                        rawQuoted?.viewOnceMessage?.message ||
-                        rawQuoted?.viewOnceMessageV2?.message ||
-                        rawQuoted?.documentWithCaptionMessage?.message ||
-                        rawQuoted;
-      const botQuotedMentions = Array.isArray(unwrapped?.extendedTextMessage?.contextInfo?.mentionedJid)
-        ? unwrapped.extendedTextMessage.contextInfo.mentionedJid
-        : [];
-      for (const m of botQuotedMentions) {
-        if (m && !isBotIdentity(m)) {
-          return await resolveParticipant(sock, from, cleanJid(m));
-        }
-      }
-      const botText = (unwrapped?.conversation ||
-                      unwrapped?.extendedTextMessage?.text ||
-                      unwrapped?.imageMessage?.caption ||
-                      unwrapped?.videoMessage?.caption || '').trim();
-      const textMatches = botText.match(/@(\d{8,15})\b/g) || [];
-      for (const tm of textMatches) {
-        const rawNum = tm.replace('@', '');
-        const jid = `${rawNum}@s.whatsapp.net`;
-        if (!isBotIdentity(jid)) {
-          return await resolveParticipant(sock, from, jid);
-        }
-      }
-    }
-
-    // 4. Busca por nome no histórico de conversas do grupo (ex: "Hermes, adverte o João")
-    if (targetArg && typeof targetArg === 'string') {
-      const cleanedArg = targetArg.trim().toLowerCase();
-      if (cleanedArg && cleanedArg !== 'quoted' && cleanedArg !== 'mentioned') {
-        const jidByName = memoryEngine.findParticipantByName(from, targetArg);
-        if (jidByName && !isBotIdentity(jidByName)) {
-          return await resolveParticipant(sock, from, cleanJid(jidByName));
-        }
-      }
-    }
-
-    // 5. Fallback padrão
-    return await resolveTarget(sock, msg, from, targetArg);
+    return await resolveTargetSmart(sock, msg, from, targetArg);
   }
 
   /**
-   * Alvos EXPLÍCITOS da mensagem do admin: pessoas marcadas (@) ou autor da mensagem respondida (reply).
-   * Exclui o próprio bot. É a única origem aceita para remoções (ban / blacklist add).
-   * @returns {Promise<Array<object>>} participantes resolvidos (mesmo formato de resolveParticipant)
+   * Alvos explícitos da mensagem do admin (delegado para targetResolver)
    */
   async _getExplicitTargets(sock, msg, from) {
-    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
-
-    const isBot = (jid) => {
-      const clean = cleanJid(jid);
-      const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      return clean === botJid || clean === botLid || (botNum && num === botNum) || (botLidNum && num === botLidNum);
-    };
-
-    const realMsg = msg?.message?.ephemeralMessage?.message ||
-                    msg?.message?.viewOnceMessage?.message ||
-                    msg?.message?.viewOnceMessageV2?.message ||
-                    msg?.message?.documentWithCaptionMessage?.message ||
-                    msg?.message;
-
-    const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
-                        realMsg?.imageMessage?.contextInfo ||
-                        realMsg?.videoMessage?.contextInfo ||
-                        realMsg?.documentMessage?.contextInfo ||
-                        msg?.message?.extendedTextMessage?.contextInfo;
-
-    const candidates = [];
-    const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
-    for (const m of mentions) {
-      if (m && !isBot(m)) candidates.push(cleanJid(m));
-    }
-    const quotedParticipant = contextInfo?.participant;
-    if (quotedParticipant && !isBot(quotedParticipant)) {
-      candidates.push(cleanJid(quotedParticipant));
-    } else if (quotedParticipant && isBot(quotedParticipant)) {
-      // Se respondeu a uma mensagem do próprio bot, extrai os membros mencionados naquela mensagem do bot
-      const rawQuoted = contextInfo?.quotedMessage;
-      const unwrapped = rawQuoted?.ephemeralMessage?.message ||
-                        rawQuoted?.viewOnceMessage?.message ||
-                        rawQuoted?.viewOnceMessageV2?.message ||
-                        rawQuoted?.documentWithCaptionMessage?.message ||
-                        rawQuoted;
-      const botQuotedMentions = Array.isArray(unwrapped?.extendedTextMessage?.contextInfo?.mentionedJid)
-        ? unwrapped.extendedTextMessage.contextInfo.mentionedJid
-        : [];
-      for (const m of botQuotedMentions) {
-        if (m && !isBot(m)) candidates.push(cleanJid(m));
-      }
-      const botText = (unwrapped?.conversation ||
-                      unwrapped?.extendedTextMessage?.text ||
-                      unwrapped?.imageMessage?.caption ||
-                      unwrapped?.videoMessage?.caption || '').trim();
-      const textMatches = botText.match(/@(\d{8,15})\b/g) || [];
-      for (const tm of textMatches) {
-        const rawNum = tm.replace('@', '');
-        const jid = `${rawNum}@s.whatsapp.net`;
-        if (!isBot(jid)) candidates.push(jid);
-      }
-    }
-
-    const resolved = [];
-    for (const jid of [...new Set(candidates)]) {
-      const data = await resolveParticipant(sock, from, jid);
-      if (data) resolved.push(data);
-    }
-    return resolved;
+    return await getExplicitTargets(sock, msg, from);
   }
 
   /**
-   * Garante que a remoção só atinja quem o admin marcou (@) ou a quem respondeu (reply).
-   * Se o modelo escolheu o alvo só pelo contexto (ref "mNN", nome ou número), a ação é recusada.
-   * @returns {Promise<{ targetData?: object, error?: string }>}
+   * Validação de alvo explícito para ações de risco (delegado para targetResolver)
    */
   async _requireExplicitTarget(sock, msg, from, targetArg, lang) {
-    const explicit = await this._getExplicitTargets(sock, msg, from);
-    if (explicit.length === 0) {
-      return { error: t(lang, 'hermes.need_explicit_target') };
-    }
-
-    const arg = String(targetArg || '').trim().toLowerCase();
-    if (!arg || arg === 'quoted' || arg === 'mentioned') {
-      return { targetData: explicit[0] };
-    }
-
-    const chosen = await this._resolveTargetSmart(sock, msg, from, targetArg);
-    if (!chosen) return { error: t(lang, 'common.not_found_target') };
-
-    const idsOf = (d) => [d.groupJid, d.phoneJid, d.displayNum].filter(Boolean).map(String);
-    const chosenIds = new Set(idsOf(chosen));
-    const match = explicit.find(e => idsOf(e).some(id => chosenIds.has(id)));
-    if (!match) {
-      return { error: t(lang, 'hermes.need_explicit_target') };
-    }
-    return { targetData: match };
+    const res = await resolveActionTarget(sock, msg, from, targetArg, { requireExplicit: true, lang });
+    if (!res.success) return { error: res.error };
+    return { targetData: res.targetData };
   }
 
   /**
@@ -838,11 +660,11 @@ class ToolRegistry {
         }
 
         // Remoção só com alvo explícito: marcado (@) ou reply (nunca inferido pelo modelo)
-        const guard = await this._requireExplicitTarget(sock, msg, from, args.target, lang);
-        if (guard.error) {
-          return { success: false, error: guard.error };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: true, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
-        const targetData = guard.targetData;
+        const targetData = targetRes.targetData;
 
         const { botJid, botLid, botNum } = getBotIdentity(sock);
 
@@ -907,44 +729,13 @@ class ToolRegistry {
           if (durRel.success && durRel.delayMinutes > 0) {
             await sock.groupSettingUpdate(from, 'announcement');
 
-            const cfg = configManager.getPluginConfig(from, 'calendar') || {};
-            const events = Array.isArray(cfg.events) ? cfg.events : [];
-            const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
-            const newId = String(maxId + 1);
-
-            const scheduledEvent = {
-              id: newId,
+            await scheduleTimedGroupAction(sock, from, {
               action: 'open_group',
-              date: durRel.formattedDate,
-              time: durRel.formattedTime,
+              rel: durRel,
               text: 'Reabertura automática do grupo após fechamento temporário',
-              createdBy: sender.replace(/@.*$/, ''),
-              createdAt: Date.now(),
-              executed: false
-            };
-
-            events.push(scheduledEvent);
-            configManager.updatePluginConfig(from, 'calendar', { events, enabled: true });
-
-            if (durRel.delayMs <= 120 * 60 * 1000) {
-              const timer = setTimeout(async () => {
-                try {
-                  const currentCfg = configManager.getPluginConfig(from, 'calendar') || {};
-                  const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
-                  const ev = currentEvents.find(e => String(e.id) === newId);
-                  if (ev && !ev.executed) {
-                    ev.executed = true;
-                    ev.executedAt = Date.now();
-                    configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
-                    await sock.groupSettingUpdate(from, 'not_announcement');
-                    await sendSafeMessage(sock, from, { text: t(lang, 'mute.opened') });
-                  }
-                } catch (err) {
-                  logger.error({ err, from, newId }, 'Erro ao reabrir grupo temporizado');
-                }
-              }, durRel.delayMs);
-              if (timer.unref) timer.unref();
-            }
+              sender,
+              lang
+            });
 
             return {
               success: true,
@@ -958,51 +749,16 @@ class ToolRegistry {
           const rel = parseRelativeTime(delayArg);
           if (rel.success && rel.delayMinutes > 0) {
             const calendarAction = args.action === 'close' ? 'close_group' : 'open_group';
-            const cfg = configManager.getPluginConfig(from, 'calendar') || {};
-            const events = Array.isArray(cfg.events) ? cfg.events : [];
-            const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
-            const newId = String(maxId + 1);
-
             const isClose = args.action === 'close';
             const actionLabel = isClose ? 'Fechamento do grupo' : 'Abertura do grupo';
-            const scheduledEvent = {
-              id: newId,
+
+            await scheduleTimedGroupAction(sock, from, {
               action: calendarAction,
-              date: rel.formattedDate,
-              time: rel.formattedTime,
+              rel,
               text: `${actionLabel} programado pelo administrador`,
-              createdBy: sender.replace(/@.*$/, ''),
-              createdAt: Date.now(),
-              executed: false
-            };
-
-            events.push(scheduledEvent);
-            configManager.updatePluginConfig(from, 'calendar', { events, enabled: true });
-
-            // Se for atraso curto (até 120 minutos), agenda timer de alta precisão em memória
-            // além da persistência no calendar.js (que garante recuperação mesmo se o bot reiniciar)
-            if (rel.delayMs <= 120 * 60 * 1000) {
-              const timer = setTimeout(async () => {
-                try {
-                  const currentCfg = configManager.getPluginConfig(from, 'calendar') || {};
-                  const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
-                  const ev = currentEvents.find(e => String(e.id) === newId);
-                  if (ev && !ev.executed) {
-                    ev.executed = true;
-                    ev.executedAt = Date.now();
-                    configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
-
-                    const waAction = isClose ? 'announcement' : 'not_announcement';
-                    await sock.groupSettingUpdate(from, waAction);
-                    const msgKey = isClose ? 'mute.closed' : 'mute.opened';
-                    await sendSafeMessage(sock, from, { text: t(lang, msgKey) });
-                  }
-                } catch (err) {
-                  logger.error({ err, from, newId }, 'Erro ao executar fechamento/abertura temporizado do grupo');
-                }
-              }, rel.delayMs);
-              if (timer.unref) timer.unref();
-            }
+              sender,
+              lang
+            });
 
             const responseText = isClose
               ? `🔒 *Fechamento Programado:*\nO grupo será fechado ${rel.humanLabel}.`
@@ -1199,10 +955,11 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
           return { success: false, error: t(lang, 'warn.cannot_warn_admin') };
@@ -1236,10 +993,11 @@ class ToolRegistry {
       }
 
       case 'unwarn_member': {
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
         const maxWarns = warnCfg.maxWarns || 3;
@@ -1257,10 +1015,11 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         const { botJid, botLid, botNum } = getBotIdentity(sock);
 
@@ -1306,10 +1065,11 @@ class ToolRegistry {
       }
 
       case 'unmute_member': {
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         const isMuted = configManager.isMemberMuted(from, targetData.phoneJid);
         if (!isMuted) {
@@ -1329,20 +1089,12 @@ class ToolRegistry {
       }
 
       case 'manage_blacklist': {
-        let targetData;
-        if (args.action === 'remove') {
-          targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-          if (!targetData) {
-            return { success: false, error: t(lang, 'common.not_found_target') };
-          }
-        } else {
-          // Adicionar à blacklist expulsa o membro: exige alvo marcado (@) ou reply
-          const guard = await this._requireExplicitTarget(sock, msg, from, args.target, lang);
-          if (guard.error) {
-            return { success: false, error: guard.error };
-          }
-          targetData = guard.targetData;
+        const isRemove = args.action === 'remove';
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: !isRemove, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         if (args.action === 'remove') {
           configManager.removeGroupBlacklist(from, targetData.phoneJid);
@@ -1465,10 +1217,11 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         const check = await checkAdminStatus(sock, from, targetData.phoneJid);
         if (check.isAdmin) {
@@ -1490,10 +1243,11 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
-        const targetData = await this._resolveTargetSmart(sock, msg, from, args.target || '');
-        if (!targetData) {
-          return { success: false, error: t(lang, 'common.not_found_target') };
+        const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+        if (!targetRes.success) {
+          return { success: false, error: targetRes.error };
         }
+        const targetData = targetRes.targetData;
 
         if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
           return { success: false, error: t(lang, 'demote.cannot_demote_owner') };
@@ -1757,13 +1511,7 @@ class ToolRegistry {
         const count = Math.min(Math.max(parseInt(args.quantity, 10) || 1, 1), pool.length);
         const prize = args.prize || 'Sorteio do Grupo';
 
-        const shuffled = [...pool];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-
-        const winners = shuffled.slice(0, count);
+        const winners = pickWinners(pool, count);
         const mentions = [];
         let winnersText = '';
 
@@ -1887,22 +1635,13 @@ class ToolRegistry {
 
         // 1. Desafixar todas as mensagens fixadas do grupo
         if (action === 'unpin_all') {
-          const pinnedList = pinTracker.getPinned(from);
-          if (pinnedList.length === 0) {
+          const count = await pinTracker.unpinAllMessages(sock, from);
+          if (count === 0) {
             return {
               success: true,
               message: '📌 Não há mensagens fixadas registradas neste grupo.'
             };
           }
-          let count = 0;
-          for (const key of pinnedList) {
-            try {
-              await sock.sendMessage(from, { pin: key, type: 2 });
-              count += 1;
-              await new Promise(r => setTimeout(r, 400));
-            } catch (_) {}
-          }
-          pinTracker.clearPins(from);
           return {
             success: true,
             message: `📌 Todas as ${count} mensagem(ns) fixada(s) foram desafixadas com sucesso!`
@@ -1938,17 +1677,8 @@ class ToolRegistry {
 
         // Se pediu para desafixar mas não apontou mensagem, tenta desafixar as conhecidas do grupo
         if (action === 'unpin' && !targetStanzaId) {
-          const pinnedList = pinTracker.getPinned(from);
-          if (pinnedList.length > 0) {
-            let count = 0;
-            for (const key of pinnedList) {
-              try {
-                await sock.sendMessage(from, { pin: key, type: 2 });
-                count += 1;
-                await new Promise(r => setTimeout(r, 400));
-              } catch (_) {}
-            }
-            pinTracker.clearPins(from);
+          const count = await pinTracker.unpinAllMessages(sock, from);
+          if (count > 0) {
             return {
               success: true,
               message: `📌 ${count} mensagem(ns) fixada(s) foram desafixadas com sucesso!`
@@ -2207,13 +1937,14 @@ class ToolRegistry {
           pendingList = [];
         }
 
+        const cfg = configManager.getPluginConfig(from, 'autoapprove') || {};
+        const allowedDdis = Array.isArray(cfg.allowedDdis) && cfg.allowedDdis.length > 0 ? cfg.allowedDdis : ['55'];
         let brCount = 0;
         let foreignCount = 0;
 
         for (const item of (pendingList || [])) {
-          const jid = item.jid || item.user || item.id;
-          const num = String(jid).replace(/@.*$/, '').replace(/\D/g, '');
-          if (num.startsWith('55') && (num.length === 12 || num.length === 13)) {
+          const info = autoapprovePlugin.extractParticipantInfo(item);
+          if (autoapprovePlugin.isNumberAllowed(info.digits, allowedDdis)) {
             brCount++;
           } else {
             foreignCount++;

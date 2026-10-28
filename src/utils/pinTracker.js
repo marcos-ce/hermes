@@ -67,6 +67,31 @@ class PinTracker {
   }
 
   /**
+   * Desafixa todas as mensagens fixadas registradas no grupo enviando pin type 2 com delay seguro.
+   * @param {object} sock Instância do socket Baileys
+   * @param {string} groupJid JID do grupo
+   * @returns {Promise<number>} Quantidade de mensagens desafixadas com sucesso
+   */
+  async unpinAllMessages(sock, groupJid) {
+    if (!sock || !groupJid) return 0;
+    const pinnedList = this.getPinned(groupJid);
+    if (!pinnedList || pinnedList.length === 0) return 0;
+
+    let count = 0;
+    for (const key of pinnedList) {
+      try {
+        await sock.sendMessage(groupJid, { pin: key, type: 2 });
+        count++;
+        await new Promise(r => setTimeout(r, 400));
+      } catch (err) {
+        logger.debug({ err, groupJid, keyId: key?.id }, 'Erro ao desafixar mensagem individual');
+      }
+    }
+    this.clearPins(groupJid);
+    return count;
+  }
+
+  /**
    * Trata mensagens do WhatsApp contendo pinInChatMessage
    * @param {string} groupJid 
    * @param {object} pinContent 

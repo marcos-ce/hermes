@@ -1,5 +1,6 @@
 const { getGroupMetadata, cleanJid, resolveParticipant, getBotIdentity } = require('../../utils/jidResolver');
 const { groupCache } = require('../../utils/cache');
+const { pickWinners } = require('../../utils/raffle');
 
 module.exports = {
   name: 'sortear',
@@ -77,14 +78,8 @@ module.exports = {
       prize = 'Prêmio do Grupo';
     }
 
-    // Embaralha com algoritmo Fisher-Yates
-    const shuffled = [...pool];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    const winners = shuffled.slice(0, count);
+    // Sorteia os vencedores com Fisher-Yates uniforme (sem viés estatístico)
+    const winners = pickWinners(pool, count);
     const mentionsSet = new Set();
     let winnersText = '';
 

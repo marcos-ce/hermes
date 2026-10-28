@@ -291,6 +291,51 @@ try {
   reportError('AutoApprove', 'test', err.stack || err.message);
 }
 
+// ----------------------------------------------------
+// 9. AUDITORIA DE NUMERAÇÃO DE COMANDOS (FONTE ÚNICA E UNICIDADE)
+// ----------------------------------------------------
+console.log('\n--- 9. Auditoria de Numeração de Comandos (Unicidade e Mapeamento Canônico) ---');
+try {
+  const pluginLoader = require(path.join(process.cwd(), 'src/core/pluginLoader'));
+  const { COMMAND_NUMBER_MAP } = require(path.join(process.cwd(), 'src/core/commandNumbers'));
+  const seenNumbers = new Map();
+
+  for (const [numStr, cmdName] of Object.entries(COMMAND_NUMBER_MAP)) {
+    const num = parseInt(numStr, 10);
+    if (isNaN(num) || num <= 0) {
+      reportError('CommandNumbers', numStr, `Número inválido no mapa canônico: "${numStr}"`);
+    }
+    if (seenNumbers.has(numStr)) {
+      reportError('CommandNumbers', numStr, `Colisão no mapa canônico: "${numStr}" mapeado para "${cmdName}" e "${seenNumbers.get(numStr)}"`);
+    }
+    seenNumbers.set(numStr, cmdName);
+
+    const plugin = pluginLoader.commands.get(cmdName.toLowerCase());
+    if (!plugin) {
+      reportError('CommandNumbers', cmdName, `Comando do mapa canônico "${cmdName}" não foi carregado pelo pluginLoader`);
+    } else if (plugin.cmdNumber !== num) {
+      reportError('CommandNumbers', cmdName, `Divergência: plugin "${cmdName}" recebeu cmdNumber=${plugin.cmdNumber}, esperado=${num}`);
+    }
+  }
+
+  const loadedNumbers = new Map();
+  for (const [cmdName, plugin] of pluginLoader.commands.entries()) {
+    if (!plugin.cmdNumber) {
+      reportError('CommandNumbers', cmdName, `Plugin "${cmdName}" não possui cmdNumber atribuído`);
+    } else {
+      const numStr = String(plugin.cmdNumber);
+      if (loadedNumbers.has(numStr)) {
+        reportError('CommandNumbers', numStr, `Número duplicado detectado entre "${loadedNumbers.get(numStr)}" e "${cmdName}"`);
+      }
+      loadedNumbers.set(numStr, cmdName);
+    }
+  }
+
+  reportOk('CommandNumbers', `Todos os ${pluginLoader.commands.size} comandos possuem numeração canônica única e sem colisões.`);
+} catch (err) {
+  reportError('CommandNumbers', 'exception', err.stack || err.message);
+}
+
 console.log('\n====================================================');
 console.log(`📊 RESULTADO DA AUDITORIA: ${totalErrors} ERROS, ${totalWarnings} AVISOS.`);
 console.log('====================================================');

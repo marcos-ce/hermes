@@ -1,42 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
-
-/**
- * Mapeamento canônico e permanente de números atrelados a cada comando.
- * Permite que qualquer comando seja executado diretamente pelo seu número:
- * Exemplo: /5 @user dá ban, /9 marca todos, /10 promove a admin, /17 dá ping.
- */
-const COMMAND_NUMBER_MAP = {
-  // 1 a 8: Módulos do Painel / Wizard
-  '1': 'antifake',
-  '2': 'antiflood',
-  '3': 'antilink',
-  '4': 'automsg',
-  '5': 'ban',
-  '6': 'schedule',
-  '7': 'warn',
-  '8': 'welcome',
-
-  // 9 a 18: Comandos Utilitários e Moderação do Grupo
-  '9': 'hidetag',
-  '10': 'promote',
-  '11': 'demote',
-  '12': 'mute',
-  '13': 'del',
-  '14': 'sortear',
-  '15': 'blacklist',
-  '16': 'idioma',
-  '17': 'ping',
-  '18': 'menu',
-
-  // 19 a 23: Comandos do Dono / SaaS (Privado)
-  '19': 'bot',
-  '20': 'autoadm',
-  '21': 'bangrupo',
-  '22': 'reload',
-  '23': 'liberar'
-};
+const { COMMAND_NUMBER_MAP, getNumberForCommand } = require('./commandNumbers');
 
 class PluginLoader {
   constructor() {
@@ -107,11 +72,21 @@ class PluginLoader {
       return prioA - prioB;
     });
 
-    // 1. Registra números declarados diretamente no próprio arquivo do plugin (prioridade ao plugin)
-    for (const [, plugin] of this.commands.entries()) {
-      if (plugin.cmdNumber) {
-        const numStr = String(plugin.cmdNumber);
+    // 1. Aplica a numeração canônica centralizada (fonte única da verdade)
+    const assignedNumbers = new Map();
+
+    for (const [numStr, cmdName] of Object.entries(COMMAND_NUMBER_MAP)) {
+      const plugin = this.commands.get(cmdName.toLowerCase());
+      if (plugin) {
+        if (plugin.cmdNumber && String(plugin.cmdNumber) !== numStr) {
+          logger.warn(
+            { plugin: plugin.name, declared: plugin.cmdNumber, canonical: numStr },
+            'Aviso de divergência de cmdNumber: aplicando número canônico da fonte única.'
+          );
+        }
+        plugin.cmdNumber = parseInt(numStr, 10);
         this.aliases.set(numStr, plugin);
+        assignedNumbers.set(numStr, plugin.name);
         if (!Array.isArray(plugin.aliases)) plugin.aliases = [];
         if (!plugin.aliases.includes(numStr)) {
           plugin.aliases.push(numStr);
@@ -119,14 +94,12 @@ class PluginLoader {
       }
     }
 
-    // 2. Registra mapeamento canônico de fallback para plugins que não declararam cmdNumber
-    let nextAvailableNumber = 23;
-
-    for (const [numStr, cmdName] of Object.entries(COMMAND_NUMBER_MAP)) {
-      const plugin = this.commands.get(cmdName.toLowerCase());
-      if (plugin && !plugin.cmdNumber) {
-        plugin.cmdNumber = parseInt(numStr, 10);
+    // 2. Se algum plugin customizado/novo não estiver no mapa canônico mas tiver cmdNumber, valida colisão
+    for (const [, plugin] of this.commands.entries()) {
+      if (plugin.cmdNumber && !assignedNumbers.has(String(plugin.cmdNumber))) {
+        const numStr = String(plugin.cmdNumber);
         this.aliases.set(numStr, plugin);
+        assignedNumbers.set(numStr, plugin.name);
         if (!Array.isArray(plugin.aliases)) plugin.aliases = [];
         if (!plugin.aliases.includes(numStr)) {
           plugin.aliases.push(numStr);
@@ -135,17 +108,16 @@ class PluginLoader {
     }
 
     // 3. Para qualquer plugin adicional que ainda não tiver número, atribui número sequencial automático
+    let nextAvailable = 34;
     for (const [, plugin] of this.commands.entries()) {
       if (!plugin.cmdNumber) {
-        while (
-          Object.keys(COMMAND_NUMBER_MAP).includes(String(nextAvailableNumber)) ||
-          this.aliases.has(String(nextAvailableNumber))
-        ) {
-          nextAvailableNumber++;
+        while (assignedNumbers.has(String(nextAvailable))) {
+          nextAvailable++;
         }
-        const numStr = String(nextAvailableNumber++);
+        const numStr = String(nextAvailable++);
         plugin.cmdNumber = parseInt(numStr, 10);
         this.aliases.set(numStr, plugin);
+        assignedNumbers.set(numStr, plugin.name);
         if (!Array.isArray(plugin.aliases)) plugin.aliases = [];
         if (!plugin.aliases.includes(numStr)) {
           plugin.aliases.push(numStr);

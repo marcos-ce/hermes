@@ -5,12 +5,15 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node --max-old-space-size=280 index.js",
+    "start": "node --max-old-space-size=380 index.js",
     "setup": "node index.js --setup",
-    "code": "node --max-old-space-size=280 index.js --code",
+    "code": "node --max-old-space-size=380 index.js --code",
     "fix-sessions": "node index.js --fix-sessions",
     "clean-auth": "node index.js --reset-auth",
     "reset-auth": "node index.js --reset-auth"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",

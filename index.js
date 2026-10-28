@@ -51,7 +51,12 @@ process.on('exit', () => {
 });
 
 process.on('uncaughtException', (err) => {
-  logger.error({ err }, 'Exceção não tratada detectada');
+  logger.fatal({ err }, 'Exceção não tratada fatal detectada. Salvando estado e reiniciando...');
+  try {
+    configManager.flushSync();
+    pollTracker.flushSync();
+  } catch (_) {}
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
