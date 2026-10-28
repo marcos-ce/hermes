@@ -9,7 +9,7 @@ const { t } = require('../utils/i18n');
 const pollTracker = require('../utils/pollTracker');
 const pinTracker = require('../utils/pinTracker');
 const memoryEngine = require('./memoryEngine');
-const { parseRelativeTime } = require('./timeParser');
+const { parseRelativeTime, parseDuration } = require('./timeParser');
 const { executeCalendarAction } = require('../plugins/admin/calendar');
 
 /**
@@ -42,6 +42,7 @@ const TOOLS = [
         type: 'object',
         properties: {
           action: { type: 'string', enum: ['close', 'open'], description: '"close" para trancar ou "open" para abrir.' },
+          duration: { type: 'string', description: 'Duração temporária para manter o grupo trancado antes de reabrir automaticamente (ex: "30m", "1h", "2h", "por 30 minutos"). Quando action for "close" e duration for fornecido, tranca o grupo imediatamente e agenda a reabertura automática após o tempo.' },
           delayMinutes: { type: 'integer', description: 'Minutos para aguardar antes da ação (ex: 15, 30, 60).' },
           time: { type: 'string', description: 'Horário ou tempo relativo (ex: "22:00", "em 1 hora", "daqui a meia hora").' }
         },
@@ -69,26 +70,26 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'toggle_group_protection',
-      description: 'Ativa, desativa ou configura plugins do grupo.',
+      description: 'Ativa, desativa ou configura plugins de proteção e moderação do grupo (antilink, antiflood, antifake, warn, welcome, automsg, etc.). Use para regras como "banimento em quem manda dois links", "bloqueia links", "limite de 3 advertências", "anti-flood com 5 mensagens".',
       parameters: {
         type: 'object',
         properties: {
           module: {
             type: 'string',
             enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember'],
-            description: 'Nome do plugin.'
+            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar".'
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
-          action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição: "delete", "warn" ou "ban".' },
+          action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição para infrações: "delete" (apenas apagar), "warn" (advertir até atingir limite de warns e banir) ou "ban" (banir imediatamente no primeiro deslize).' },
           allowedDomains: { type: 'string', description: 'Domínios liberados no antilink (ex: "youtube.com, instagram.com") ou "." para todos.' },
-          maxMessages: { type: 'integer', description: 'Máximo de mensagens em 5s no antiflood.' },
+          maxMessages: { type: 'integer', description: 'Máximo de mensagens consecutivas em 5s no antiflood.' },
           maxChars: { type: 'integer', description: 'Limite de caracteres anti-trava.' },
           allowedDdis: { type: 'string', description: 'DDIs liberados no antifake (ex: "55, 351").' },
           welcomeMessage: { type: 'string', description: 'Texto de boas-vindas ({user}, {group}, {desc}).' },
           autoDeleteSeconds: { type: 'integer', description: 'Segundos para apagar boas-vindas (0 desativa).' },
           autoMsgText: { type: 'string', description: 'Texto do comunicado periódico.' },
           intervalMinutes: { type: 'integer', description: 'Intervalo em minutos do comunicado.' },
-          maxWarns: { type: 'integer', description: 'Limite de advertências antes do ban (padrão 3).' },
+          maxWarns: { type: 'integer', description: 'Contagem/limite de advertências antes do ban automático (ex: 2 para banir no 2º link/aviso, 3 para banir no 3º). Pode ser passado diretamente com module "antilink", "antiflood" ou "warn".' },
           customBanMessage: { type: 'string', description: 'Mensagem personalizada de ban ({user}).' },
           personality: { type: 'string', enum: ['descontraido', 'formal'], description: 'Tom do Hermes IA: "descontraido" ou "formal".' }
         },
@@ -888,6 +889,60 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'common.bot_not_admin') };
         }
 
+        // Se action === 'close' e duration for fornecido (ex: "tranca por 30m", "fecha por 1 hora"):
+        // Tranca o grupo imediatamente e agenda a reabertura automática após o tempo!
+        const durationCandidate = args.duration || (args.action === 'close' && args.time && /(?:por|durante|\b\d+\s*(?:m|min|mins|minutos?|h|hrs?|horas?)\b)/i.test(args.time) && !/^(?:[aàá]s|\d{1,2}:\d{2})/i.test(args.time) ? args.time : null);
+        if (args.action === 'close' && durationCandidate) {
+          const durRel = parseRelativeTime(durationCandidate);
+          if (durRel.success && durRel.delayMinutes > 0) {
+            await sock.groupSettingUpdate(from, 'announcement');
+
+            const cfg = configManager.getPluginConfig(from, 'calendar') || {};
+            const events = Array.isArray(cfg.events) ? cfg.events : [];
+            const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
+            const newId = String(maxId + 1);
+
+            const scheduledEvent = {
+              id: newId,
+              action: 'open_group',
+              date: durRel.formattedDate,
+              time: durRel.formattedTime,
+              text: 'Reabertura automática do grupo após fechamento temporário',
+              createdBy: sender.replace(/@.*$/, ''),
+              createdAt: Date.now(),
+              executed: false
+            };
+
+            events.push(scheduledEvent);
+            configManager.updatePluginConfig(from, 'calendar', { events, enabled: true });
+
+            if (durRel.delayMs <= 120 * 60 * 1000) {
+              const timer = setTimeout(async () => {
+                try {
+                  const currentCfg = configManager.getPluginConfig(from, 'calendar') || {};
+                  const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
+                  const ev = currentEvents.find(e => String(e.id) === newId);
+                  if (ev && !ev.executed) {
+                    ev.executed = true;
+                    ev.executedAt = Date.now();
+                    configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
+                    await sock.groupSettingUpdate(from, 'not_announcement');
+                    await sendSafeMessage(sock, from, { text: t(lang, 'mute.opened') });
+                  }
+                } catch (err) {
+                  logger.error({ err, from, newId }, 'Erro ao reabrir grupo temporizado');
+                }
+              }, durRel.delayMs);
+              if (timer.unref) timer.unref();
+            }
+
+            return {
+              success: true,
+              message: `🔒 *Grupo trancado!*\n🔓 Reabertura automática programada ${durRel.humanLabel}.`
+            };
+          }
+        }
+
         const delayArg = args.delayMinutes || args.time;
         if (delayArg) {
           const rel = parseRelativeTime(delayArg);
@@ -1012,10 +1067,20 @@ class ToolRegistry {
         const enabled = args.enabled !== undefined ? Boolean(args.enabled) : (currentCfg.enabled !== false);
         const updates = { enabled };
 
+        let extraFeedback = '';
+
         if (mod === 'antilink') {
-          if (args.action && ['delete', 'warn', 'ban'].includes(args.action)) {
+          // Se especificou maxWarns (ex: "ban no 2º link", "2 links = ban"):
+          // A ação do antilink é 'warn' (adverte a cada link) e o limite de warn é maxWarns
+          if (args.maxWarns && Number(args.maxWarns) >= 1) {
+            updates.action = 'warn';
+            const warnLimit = parseInt(args.maxWarns, 10);
+            configManager.updatePluginConfig(from, 'warn', { maxWarns: warnLimit, enabled: true });
+            extraFeedback = `\n⚠️ *Regra de Punição:* Banimento automático no ${warnLimit}º link (${warnLimit} advertências).`;
+          } else if (args.action && ['delete', 'warn', 'ban'].includes(args.action)) {
             updates.action = args.action;
           }
+
           if (args.allowedDomains !== undefined) {
             const rawDoms = String(args.allowedDomains).trim();
             updates.allowedDomains = (rawDoms === '.' || rawDoms === '' || rawDoms === 'todos')
@@ -1025,7 +1090,12 @@ class ToolRegistry {
         }
 
         if (mod === 'antiflood') {
-          if (args.action && ['warn', 'ban'].includes(args.action)) {
+          if (args.maxWarns && Number(args.maxWarns) >= 1) {
+            updates.action = 'warn';
+            const warnLimit = parseInt(args.maxWarns, 10);
+            configManager.updatePluginConfig(from, 'warn', { maxWarns: warnLimit, enabled: true });
+            extraFeedback = `\n⚠️ *Regra de Punição:* Banimento automático na ${warnLimit}ª advertência de flood.`;
+          } else if (args.action && ['warn', 'ban'].includes(args.action)) {
             updates.action = args.action;
           }
           if (args.maxMessages && Number(args.maxMessages) >= 2) {
@@ -1061,6 +1131,7 @@ class ToolRegistry {
 
         if (mod === 'warn' && args.maxWarns && Number(args.maxWarns) >= 1) {
           updates.maxWarns = parseInt(args.maxWarns, 10);
+          extraFeedback = `\n⚠️ *Limite:* Banimento configurado para ${updates.maxWarns} advertências.`;
         }
 
         if (mod === 'ban' && args.customBanMessage !== undefined) {
@@ -1084,7 +1155,7 @@ class ToolRegistry {
         const stateLabel = enabled ? t(lang, 'common.enabled') : t(lang, 'common.disabled');
         return {
           success: true,
-          message: `${t(lang, 'common.saved')}\n⚙️ *${mod.toUpperCase()}:* ${stateLabel}`
+          message: `${t(lang, 'common.saved')}\n⚙️ *${mod.toUpperCase()}:* ${stateLabel}${extraFeedback}`
         };
       }
 
@@ -1198,32 +1269,7 @@ class ToolRegistry {
           return { success: false, error: t(lang, 'mutemember.cannot_mute_admin') };
         }
 
-        let parsedDuration = null;
-        if (args.duration) {
-          const raw = String(args.duration).toLowerCase().trim();
-          const match = raw.match(/^(\d+)\s*(m|min|mins|minuto|minutos|h|hr|hrs|hora|horas|d|dia|dias|s|seg|segundos)?$/i);
-          if (match) {
-            const val = parseInt(match[1], 10);
-            const unit = (match[2] || 'm').toLowerCase();
-            let minutes = 15;
-            if (['m', 'min', 'mins', 'minuto', 'minutos'].includes(unit)) minutes = val;
-            else if (['h', 'hr', 'hrs', 'hora', 'horas'].includes(unit)) minutes = val * 60;
-            else if (['d', 'dia', 'dias'].includes(unit)) minutes = val * 1440;
-            else if (['s', 'seg', 'segundos'].includes(unit)) minutes = Math.max(1, Math.round(val / 60));
-            else minutes = val;
-
-            const capped = Math.min(Math.max(minutes, 1), 1440);
-            const hours = Math.floor(capped / 60);
-            const mins = capped % 60;
-            let formatted = '';
-            if (hours > 0 && mins > 0) formatted = `${hours}h ${mins}m`;
-            else if (hours > 0) formatted = `${hours}h`;
-            else formatted = `${mins}m`;
-
-            parsedDuration = { minutes: capped, ms: capped * 60 * 1000, formatted };
-          }
-        }
-
+        let parsedDuration = parseDuration(args.duration);
         if (!parsedDuration) {
           parsedDuration = { minutes: 15, ms: 15 * 60 * 1000, formatted: '15m' };
         }

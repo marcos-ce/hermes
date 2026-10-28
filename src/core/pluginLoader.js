@@ -59,6 +59,9 @@ class PluginLoader {
 
     /** @type {Array<object>} Plugins que possuem hook onSchedule */
     this.onScheduleHooks = [];
+
+    /** @type {Array<object>} Plugins que possuem hook onJoinRequest */
+    this.onJoinRequestHooks = [];
   }
 
   /**
@@ -71,6 +74,7 @@ class PluginLoader {
     this.onMessageHooks = [];
     this.onParticipantsUpdateHooks = [];
     this.onScheduleHooks = [];
+    this.onJoinRequestHooks = [];
 
     if (!fs.existsSync(this.pluginsDir)) {
       logger.warn(`Diretório de plugins não encontrado: ${this.pluginsDir}`);
@@ -203,6 +207,10 @@ class PluginLoader {
 
       if (typeof plugin.onSchedule === 'function') {
         this.onScheduleHooks.push(plugin);
+      }
+
+      if (typeof plugin.onJoinRequest === 'function') {
+        this.onJoinRequestHooks.push(plugin);
       }
     } catch (err) {
       logger.error({ err, filePath }, 'Erro ao carregar arquivo de plugin');

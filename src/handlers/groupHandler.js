@@ -101,6 +101,52 @@ async function handleParticipantsUpdate(sock, update) {
   }
 }
 
+/**
+ * Manipulador desacoplado do evento group.join-request do Baileys
+ * Roteia solicitações de entrada de novos participantes para os plugins registrados.
+ * @param {object} sock Instância do Baileys
+ * @param {object} request Objeto do evento { id: string, author?: string, participant: string, action: string, method?: string }
+ */
+async function handleJoinRequest(sock, request) {
+  if (!sock || !request || !request.id) return;
+
+  const { id: groupJid, participant, action, method, author } = request;
+
+  // Invalidação preventiva do cache de metadados do grupo
+  groupCache.del(groupJid);
+
+  // Se o grupo estiver banido ou inativo na licença SaaS, ignora 100% em silêncio
+  if (configManager.isGroupBanned(groupJid) || !configManager.isGroupEnabled(groupJid)) {
+    return;
+  }
+
+  const lang = configManager.getGroupLang(groupJid);
+  const style = configManager.getGroupStyle(groupJid);
+
+  for (const plugin of pluginLoader.onJoinRequestHooks) {
+    try {
+      const result = await plugin.onJoinRequest({
+        sock,
+        request,
+        groupJid,
+        participant,
+        action,
+        method,
+        author,
+        lang,
+        style
+      });
+
+      if (result && result.stop === true) {
+        break;
+      }
+    } catch (err) {
+      logger.error({ err, pluginName: plugin.name }, 'Erro no hook onJoinRequest do plugin');
+    }
+  }
+}
+
 module.exports = {
-  handleParticipantsUpdate
+  handleParticipantsUpdate,
+  handleJoinRequest
 };

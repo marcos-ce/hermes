@@ -15,7 +15,7 @@ const { registerParticipantLid } = require('../utils/jidResolver');
 const pollTracker = require('../utils/pollTracker');
 const pinTracker = require('../utils/pinTracker');
 const { handleMessage } = require('../handlers/messageHandler');
-const { handleParticipantsUpdate } = require('../handlers/groupHandler');
+const { handleParticipantsUpdate, handleJoinRequest } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
 
 /**
@@ -347,6 +347,15 @@ async function connectBot(options = {}) {
       await handleParticipantsUpdate(sock, update);
     } catch (err) {
       logger.error({ err }, 'Erro no handler de participantes de grupo');
+    }
+  });
+
+  // Solicitações de entrada em grupos com aprovação de novos membros (Auto-Aprovação Anti-Ban)
+  sock.ev.on('group.join-request', async (request) => {
+    try {
+      await handleJoinRequest(sock, request);
+    } catch (err) {
+      logger.error({ err }, 'Erro no handler de group.join-request');
     }
   });
 
