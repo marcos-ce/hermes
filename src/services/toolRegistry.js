@@ -414,14 +414,19 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'manage_join_requests',
-      description: 'Gerencia as solicitações de entrada de novos membros no grupo (fila de aprovação do WhatsApp). Acione para: aceitar quem pediu para entrar, aprovar pessoas, aprovar brasileiros pendentes, ver quem está na fila para entrar, listar pedidos de aprovação, aprovar solicitações, ligar ou desligar aprovação automática de BRs.',
+      description: 'Gerencia as solicitações de entrada de novos membros no grupo (fila de aprovação do WhatsApp). Acione para: aceitar quem pediu para entrar, aprovar pessoas, aprovar todos ou brasileiros pendentes, ver quem está na fila para entrar, listar pedidos de aprovação, ligar ou desligar aprovação automática de qualquer membro ou apenas de BRs.',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'approve_all_br', 'enable_auto', 'disable_auto'],
-            description: '"list" para consultar/contar pendentes, "approve_all_br" para aprovar todos os brasileiros da fila com filtro anti-ban seguro, "enable_auto" para ativar a aprovação automática de BRs em tempo real, "disable_auto" para desativar.'
+            enum: ['list', 'approve_all_br', 'approve_all', 'enable_auto', 'disable_auto'],
+            description: '"list" para consultar/contar pendentes, "approve_all_br" para aprovar todos os brasileiros da fila, "approve_all" para aprovar todos os participantes pendentes (qualquer país), "enable_auto" para ativar a aprovação automática em tempo real, "disable_auto" para desativar.'
+          },
+          mode: {
+            type: 'string',
+            enum: ['all', 'br_only'],
+            description: 'Ao ativar (enable_auto), define se aceita qualquer membro ("all") ou apenas brasileiros ("br_only"). Padrão: "br_only".'
           }
         },
         required: ['action']
