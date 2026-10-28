@@ -38,11 +38,6 @@ const REVERSIBLE_TOOLS = new Set([
   'set_group_description'
 ]);
 
-const lastGroupActions = new Map();
-
-// Sessões de perguntas de clarificação ativas por admin (< 60s) para continuidade em 2 etapas (Ideia 5)
-const pendingClarifications = new Map();
-
 /**
  * Consome 1 unidade da cota horária de chamadas à IA do grupo
  * @param {string} groupJid
@@ -341,9 +336,19 @@ module.exports = {
     if (trimmedText.startsWith(groupPrefix) || trimmedText.startsWith('/') || trimmedText.startsWith('!')) {
       const prefixLen = trimmedText.startsWith(groupPrefix) ? groupPrefix.length : 1;
       const afterPrefix = trimmedText.slice(prefixLen).trim();
-      const firstWord = afterPrefix.split(/\s+/)[0]?.toLowerCase();
+      const parts = afterPrefix.split(/\s+/);
+      const firstWord = (parts[0] || '').toLowerCase();
       const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
       if (!cmdPlugin || cmdPlugin.name !== 'hermes') {
+        return false;
+      }
+
+      // Subcomandos determinísticos do Hermes (on/off/config/status/limpar) pertencem ao execute().
+      // Sem isso, o onMessage interceptaria "!hermes on" e o mandaria para a IA como texto livre,
+      // tornando impossível ligar/desligar/configurar o agente pelo comando.
+      const sub = (parts[1] || '').toLowerCase();
+      const HERMES_SUBCOMMANDS = ['on', 'ativar', 'activar', 'off', 'desativar', 'config', 'wizard', 'setup', 'limpar', 'clear', 'reset', 'zerar', 'status', 'info'];
+      if (!sub || HERMES_SUBCOMMANDS.includes(sub)) {
         return false;
       }
     } else if (/^@[a-zA-Z0-9_:.-]+\s+/i.test(trimmedText)) {
@@ -509,7 +514,16 @@ module.exports = {
     }
 
     // 6. Limpa apenas os prefixos de chamada ao próprio bot (preservando menções a outros membros!)
-    let cleanQuery = text
+    let cleanQuery = text;
+
+    // Remove o prefixo de comando do início quando presente (ex: "!hermes ...", "/hermes ...")
+    if (cleanQuery.startsWith(groupPrefix)) {
+      cleanQuery = cleanQuery.slice(groupPrefix.length).trim();
+    } else if (/^[!/.#$]/.test(cleanQuery)) {
+      cleanQuery = cleanQuery.slice(1).trim();
+    }
+
+    cleanQuery = cleanQuery
       .replace(/^hermes[\s,.:!?-]*/i, '')
       .replace(/(?:^|\s)(?:ei|ô|o|fala|eai|ae|por\s+favor)?\s*hermes[\s,.:!?-]*/gi, ' ')
       .replace(/@hermes\b/gi, '')
