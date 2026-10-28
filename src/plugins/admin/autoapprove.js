@@ -284,6 +284,7 @@ function extractParticipantInfo(item) {
 
 /**
  * Verifica se um número pertence aos DDIs autorizados (com validação robusta para o Brasil)
+ * Suporta wildcard '*' ou 'todos'/'all'/'qualquer' para aceitar qualquer membro de qualquer país.
  * @param {string} digits 
  * @param {string[]} allowedDdis 
  * @returns {boolean}
@@ -291,7 +292,20 @@ function extractParticipantInfo(item) {
 function isNumberAllowed(digits, allowedDdis = ['55']) {
   if (!digits || typeof digits !== 'string') return false;
 
-  for (const rawDdi of allowedDdis) {
+  const ddis = Array.isArray(allowedDdis) ? allowedDdis : [allowedDdis];
+
+  // Se configurado com '*' ou 'todos' ou 'all' ou 'qualquer': aceita qualquer membro
+  const isWildcard = ddis.some(d => {
+    const s = String(d).trim().toLowerCase();
+    return s === '*' || s === 'all' || s === 'todos' || s === 'qualquer';
+  });
+
+  if (isWildcard) {
+    // Permite qualquer número de telefone plausível (pelo menos 8 dígitos)
+    return digits.length >= 8;
+  }
+
+  for (const rawDdi of ddis) {
     const ddi = String(rawDdi).replace(/\D/g, '');
     if (!ddi) continue;
 
@@ -318,7 +332,7 @@ module.exports = {
   name: 'autoapprove',
   cmdNumber: 24,
   aliases: ['autoapprove', 'autoaprovar', 'aceitar', 'aprovar', 'pedidos', 'solicitacoes', 'joinrequests', 'autoaceitar'],
-  description: 'Aprovação automática de números brasileiros com filtro anti-ban rígido',
+  description: 'Aprovação automática de novos membros (brasileiros ou qualquer país) com filtro anti-ban rígido',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
@@ -331,18 +345,18 @@ module.exports = {
       en: 'Anti-Ban Auto-Approve'
     },
     description: {
-      pt: 'Aprova automaticamente a entrada de números brasileiros e de DDIs autorizados',
-      es: 'Aprueba automáticamente la entrada de números brasileños y prefijos autorizados',
-      en: 'Automatically approves entry of Brazilian numbers and authorized country codes'
+      pt: 'Aprova automaticamente a entrada de novos membros (brasileiros, países selecionados ou qualquer membro)',
+      es: 'Aprueba automáticamente la entrada de nuevos miembros (brasileños, países seleccionados o cualquier miembro)',
+      en: 'Automatically approves entry of new members (Brazilians, selected country codes, or any member)'
     },
     fields: [
       {
         name: 'allowedDdis',
         type: 'string_list',
         question: {
-          pt: 'Digite os DDIs permitidos para aprovação automática separados por espaço (Ex: 55 ou 55 351) ou . para apenas Brasil (55):',
-          es: 'Escribe los prefijos (DDIs) autorizados para auto-aprobación separados por espacio (Ej: 55 o 55 351) o . para solo Brasil (55):',
-          en: 'Enter allowed country codes (DDIs) separated by space (e.g. 55 or 55 351) or . for Brazil only (55):'
+          pt: 'Digite os DDIs permitidos separados por espaço (Ex: 55 ou 55 351), digite * para aceitar qualquer membro/país, ou . para manter apenas Brasil (55):',
+          es: 'Escribe los prefijos (DDIs) autorizados separados por espacio (Ej: 55 o 55 351), escribe * para aceptar cualquier miembro/país, o . para mantener solo Brasil (55):',
+          en: 'Enter allowed country codes (DDIs) separated by space (e.g. 55 or 55 351), enter * to accept any member/country, or . to keep Brazil only (55):'
         },
         default: ['55']
       },
@@ -350,9 +364,9 @@ module.exports = {
         name: 'actionForForeigners',
         type: 'choice',
         question: {
-          pt: 'O que fazer com solicitações de números estrangeiros?',
-          es: '¿Qué hacer con solicitudes de números extranjeros?',
-          en: 'What to do with requests from foreign numbers?'
+          pt: 'O que fazer com solicitações de números estrangeiros (caso não configurado para aceitar todos)?',
+          es: '¿Qué hacer con solicitudes de números extranjeros (si no está configurado para aceptar todos)?',
+          en: 'What to do with requests from foreign numbers (if not set to accept all)?'
         },
         default: 'ignore',
         choices: [
@@ -456,6 +470,7 @@ module.exports = {
     }
 
     const sub = (args[0] || '').toLowerCase();
+    const arg1 = (args[1] || '').toLowerCase();
     const cfg = configManager.getPluginConfig(from, 'autoapprove') || {};
     const lang = configManager.getGroupLang(from);
     const style = configManager.getGroupStyle(from);
@@ -466,14 +481,71 @@ module.exports = {
       return await wizardEngine.startWizard(sock, msg, from, sender, 'autoapprove');
     }
 
-    // 2. Ativação: /aprovar on
+    // 2. Ativação direta para QUALQUER membro: !aprovar qualquer, !aprovar on todos, !aprovar on all, !aprovar todos on
+    const isActivatingAll = (
+      (sub === 'qualquer' && !arg1) ||
+      (['todos', 'all', 'qualquer'].includes(sub) && ['on', 'ativar', 'activar'].includes(arg1)) ||
+      (['on', 'ativar', 'activar'].includes(sub) && ['todos', 'all', 'qualquer', '*'].includes(arg1))
+    );
+
+    if (isActivatingAll) {
+      configManager.setPluginEnabled(from, 'autoapprove', true);
+      configManager.updatePluginConfig(from, 'autoapprove', {
+        enabled: true,
+        configured: true,
+        allowedDdis: ['*']
+      });
+
+      let text = `${translate('common.saved')}\n\n`;
+      text += translate('autoapprove.activated_all');
+
+      const meta = adminStatus.metadata;
+      if (meta && meta.joinApprovalMode === false) {
+        text += `\n\n${translate('autoapprove.approval_mode_warning')}`;
+      }
+
+      return reply(text);
+    }
+
+    // 3. Ativação direta para BRASILEIROS: !aprovar on br, !aprovar br on
+    const isActivatingBr = (
+      (['br', 'brasil', 'brazil', '55'].includes(sub) && ['on', 'ativar', 'activar'].includes(arg1)) ||
+      (['on', 'ativar', 'activar'].includes(sub) && ['br', 'brasil', 'brazil', '55'].includes(arg1))
+    );
+
+    if (isActivatingBr) {
+      configManager.setPluginEnabled(from, 'autoapprove', true);
+      configManager.updatePluginConfig(from, 'autoapprove', {
+        enabled: true,
+        configured: true,
+        allowedDdis: ['55']
+      });
+
+      let text = `${translate('common.saved')}\n\n`;
+      text += translate('autoapprove.status', {
+        status: '🟢 ATIVADO',
+        ddis: '55 (Brasil)',
+        foreignAction: cfg.actionForForeigners === 'reject' ? 'Rejeitar' : 'Ignorar (Análise manual)',
+        notify: cfg.notifyGroup ? 'Sim' : 'Não (Silencioso)'
+      });
+
+      const meta = adminStatus.metadata;
+      if (meta && meta.joinApprovalMode === false) {
+        text += `\n\n${translate('autoapprove.approval_mode_warning')}`;
+      }
+
+      return reply(text);
+    }
+
+    // 4. Ativação padrão: /aprovar on
     if (sub === 'on' || sub === 'ativar' || sub === 'activar') {
       configManager.setPluginEnabled(from, 'autoapprove', true);
       if (!cfg.configured) {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'autoapprove');
       }
 
-      const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55';
+      const isAll = (cfg.allowedDdis || []).some(d => ['*', 'all', 'todos', 'qualquer'].includes(String(d).toLowerCase()));
+      const ddis = isAll ? translate('autoapprove.all_members') : ((cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55');
       const foreignAction = cfg.actionForForeigners === 'reject' ? 'Rejeitar' : 'Ignorar (Análise manual)';
       const notify = cfg.notifyGroup ? 'Sim' : 'Não (Silencioso)';
 
@@ -494,18 +566,20 @@ module.exports = {
       return reply(text);
     }
 
-    // 3. Desativação: /aprovar off
+    // 5. Desativação: /aprovar off
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'autoapprove', false);
+      const isAll = (cfg.allowedDdis || []).some(d => ['*', 'all', 'todos', 'qualquer'].includes(String(d).toLowerCase()));
+      const ddisDesc = isAll ? translate('autoapprove.all_members') : (cfg.allowedDdis?.join(', ') || '55');
       return reply(translate('common.saved') + '\n\n' + translate('autoapprove.status', {
         status: '🔴 DESATIVADO',
-        ddis: cfg.allowedDdis?.join(', ') || '55',
+        ddis: ddisDesc,
         foreignAction: 'Ignorado',
         notify: 'Não'
       }));
     }
 
-    // 4. Aprovação Imediata em Lote Seguro: /aprovar agora / /aprovar all
+    // 6. Aprovação Imediata em Lote Seguro: /aprovar agora / /aprovar todos / /aprovar all
     if (sub === 'agora' || sub === 'all' || sub === 'todos' || sub === 'processar') {
       let pendingList = [];
       try {
@@ -519,31 +593,40 @@ module.exports = {
         return reply(translate('autoapprove.no_pending'));
       }
 
-      const allowedDdis = Array.isArray(cfg.allowedDdis) && cfg.allowedDdis.length > 0 ? cfg.allowedDdis : ['55'];
-      const brParticipants = [];
-      let foreignCount = 0;
+      // Se comando foi especificamente 'todos' / 'all' ou tem argumento 'todos', aprova qualquer país
+      const wantsAll = (sub === 'todos' || sub === 'all' || ['todos', 'all', 'qualquer', '*'].includes(arg1));
+      const groupDdis = Array.isArray(cfg.allowedDdis) && cfg.allowedDdis.length > 0 ? cfg.allowedDdis : ['55'];
+      const allowedDdis = wantsAll ? ['*'] : groupDdis;
+      const isApprovingAll = allowedDdis.some(d => ['*', 'all', 'todos', 'qualquer'].includes(String(d).toLowerCase()));
+
+      const targetsToApprove = [];
+      let skippedCount = 0;
 
       for (const item of pendingList) {
         const info = extractParticipantInfo(item);
         if (isNumberAllowed(info.digits, allowedDdis)) {
-          brParticipants.push(info.cleanTargetJid || item.jid);
+          targetsToApprove.push(info.cleanTargetJid || item.jid);
         } else {
-          foreignCount++;
+          skippedCount++;
         }
       }
 
-      if (brParticipants.length === 0) {
-        return reply(translate('autoapprove.no_pending_br', { foreignCount }));
+      if (targetsToApprove.length === 0) {
+        return reply(translate('autoapprove.no_pending_br', { foreignCount: skippedCount }));
       }
 
-      await reply(translate('autoapprove.batch_starting', { count: brParticipants.length }));
+      const startingMsg = isApprovingAll
+        ? translate('autoapprove.batch_starting_all', { count: targetsToApprove.length })
+        : translate('autoapprove.batch_starting', { count: targetsToApprove.length });
+
+      await reply(startingMsg);
 
       // Enfileira cada um na fila anti-ban com delay humano e retorno assíncrono seguro
       let approvedCount = 0;
       let finishedCount = 0;
-      const total = brParticipants.length;
+      const total = targetsToApprove.length;
 
-      for (const participantJid of brParticipants) {
+      for (const participantJid of targetsToApprove) {
         approvalQueue.enqueue({
           sock,
           groupJid: from,
@@ -559,8 +642,12 @@ module.exports = {
 
             // Quando o último item terminar, envia o relatório de conclusão
             if (finishedCount === total) {
+              const finishedMsg = isApprovingAll
+                ? translate('autoapprove.batch_finished_all', { approved: approvedCount, total })
+                : translate('autoapprove.batch_finished', { approved: approvedCount, total });
+
               await sendSafeMessage(sock, from, {
-                text: translate('autoapprove.batch_finished', { approved: approvedCount, total })
+                text: finishedMsg
               }).catch(() => {});
             }
           }
@@ -570,8 +657,8 @@ module.exports = {
       return;
     }
 
-    // 5. Aprovação de Alvo Específico: !aprovar <número/menção>
-    const isTargetArg = Boolean(sub && !['config', 'wizard', 'setup', 'on', 'ativar', 'activar', 'off', 'desativar', 'agora', 'all', 'todos', 'processar', 'status', 'info', 'help', 'ajuda'].includes(sub));
+    // 7. Aprovação de Alvo Específico: !aprovar <número/menção>
+    const isTargetArg = Boolean(sub && !['config', 'wizard', 'setup', 'on', 'ativar', 'activar', 'off', 'desativar', 'agora', 'all', 'todos', 'processar', 'status', 'info', 'help', 'ajuda', 'qualquer', 'br'].includes(sub));
     const mentions = msg?.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     
     if (isTargetArg || mentions.length > 0) {
@@ -637,7 +724,7 @@ module.exports = {
       return reply(translate('autoapprove.target_approved', { user: matchedItem.info.digits || matchedItem.info.displayNum }));
     }
 
-    // 6. Exibição de Status e Painel de Resumo (Default sem args)
+    // 8. Exibição de Status e Painel de Resumo (Default sem args)
     let pendingList = [];
     try {
       pendingList = await sock.groupRequestParticipantsList(from);
@@ -645,13 +732,14 @@ module.exports = {
       pendingList = [];
     }
 
-    const allowedDdis = Array.isArray(cfg.allowedDdis) && cfg.allowedDdis.length > 0 ? cfg.allowedDdis : ['55'];
+    const groupDdis = Array.isArray(cfg.allowedDdis) && cfg.allowedDdis.length > 0 ? cfg.allowedDdis : ['55'];
+    const isAllConfigured = groupDdis.some(d => ['*', 'all', 'todos', 'qualquer'].includes(String(d).toLowerCase()));
     let brCount = 0;
     let foreignCount = 0;
 
     for (const item of pendingList) {
       const info = extractParticipantInfo(item);
-      if (isNumberAllowed(info.digits, allowedDdis)) {
+      if (isNumberAllowed(info.digits, ['55'])) {
         brCount++;
       } else {
         foreignCount++;
@@ -666,7 +754,9 @@ module.exports = {
     });
 
     const isEnabled = configManager.isPluginEnabled(from, 'autoapprove');
+    const modeDesc = isAllConfigured ? translate('autoapprove.all_members') : groupDdis.join(', ');
     summaryText += `\n\n📌 *Status do Bot neste grupo:* ${isEnabled ? '🟢 ATIVADO' : '🔴 DESATIVADO'}`;
+    summaryText += `\n🌍 *Critério de Auto-Aprovação:* ${modeDesc}`;
 
     const meta = adminStatus.metadata;
     if (meta && meta.joinApprovalMode === false) {

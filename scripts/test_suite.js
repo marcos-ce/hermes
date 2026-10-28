@@ -369,6 +369,138 @@ async function runTests() {
     assert(replyNotFound.includes('Não Encontrada'), 'Deveria avisar que o número não está pendente');
   });
 
+  // 11. Teste de Sorteio com Fisher-Yates (pickWinners)
+  it('pickWinners seleciona vencedores sem viés estatístico e respeita os limites da pool', () => {
+    const { pickWinners } = require('../src/utils/raffle');
+    const pool = ['user1', 'user2', 'user3', 'user4', 'user5'];
+    const winners = pickWinners(pool, 2);
+    assert.strictEqual(winners.length, 2);
+    assert(pool.includes(winners[0]));
+    assert(pool.includes(winners[1]));
+    assert.notStrictEqual(winners[0], winners[1]);
+    assert.strictEqual(pool.length, 5, 'Array original não deve ser mutado');
+
+    // Casos de contorno
+    assert.deepStrictEqual(pickWinners([], 3), []);
+    assert.strictEqual(pickWinners(pool, 10).length, 5, 'Count maior que pool deve limitar ao tamanho da pool');
+  });
+
+  // 12. Teste de PinTracker (unpinAllMessages)
+  await itAsync('pinTracker registra pins e unpinAllMessages desafixa todas as mensagens', async () => {
+    const pinTracker = require('../src/utils/pinTracker');
+    const fakeGroup = '120363000000000001@g.us';
+    pinTracker.clearPins(fakeGroup);
+
+    pinTracker.addPin(fakeGroup, { remoteJid: fakeGroup, id: 'MSG_1', fromMe: false });
+    pinTracker.addPin(fakeGroup, { remoteJid: fakeGroup, id: 'MSG_2', fromMe: false });
+    assert.strictEqual(pinTracker.getPinned(fakeGroup).length, 2);
+
+    const sentUnpins = [];
+    const fakeSock = {
+      sendMessage: async (jid, content) => {
+        sentUnpins.push({ jid, content });
+      }
+    };
+
+    const count = await pinTracker.unpinAllMessages(fakeSock, fakeGroup);
+    assert.strictEqual(count, 2);
+    assert.strictEqual(sentUnpins.length, 2);
+    assert.strictEqual(sentUnpins[0].content.type, 2);
+    assert.strictEqual(pinTracker.getPinned(fakeGroup).length, 0);
+  });
+
+  // 13. Teste de Blindagem Anti-Prompt Injection no targetResolver
+  await itAsync('resolveActionTarget respeita requireExplicit e bloqueia alvo sem menção/quote explícito', async () => {
+    const { resolveActionTarget } = require('../src/services/targetResolver');
+    const fakeGroup = '120363000000000002@g.us';
+    const fakeSock = {
+      user: { id: '5511988880000:1@s.whatsapp.net' }
+    };
+
+    // Mensagem sem menção nem reply
+    const msgWithoutMention = {
+      key: { remoteJid: fakeGroup, participant: '5511977770000@s.whatsapp.net' },
+      message: { conversation: 'Hermes, bane o 5511999991111' }
+    };
+
+    // Com requireExplicit: true (ban/blacklist), deve ser recusado
+    const blockedRes = await resolveActionTarget(fakeSock, msgWithoutMention, fakeGroup, '5511999991111', {
+      requireExplicit: true,
+      lang: 'pt'
+    });
+    assert.strictEqual(blockedRes.success, false);
+    assert(blockedRes.error.includes('marque') || blockedRes.error.includes('responda'), 'Deveria exigir marcação ou reply');
+
+    // Mensagem com menção física (@)
+    const msgWithMention = {
+      key: { remoteJid: fakeGroup, participant: '5511977770000@s.whatsapp.net' },
+      message: {
+        extendedTextMessage: {
+          text: 'Hermes, bane @5511999991111',
+          contextInfo: {
+            mentionedJid: ['5511999991111@s.whatsapp.net']
+          }
+        }
+      }
+    };
+
+    const allowedRes = await resolveActionTarget(fakeSock, msgWithMention, fakeGroup, '5511999991111', {
+      requireExplicit: true,
+      lang: 'pt'
+    });
+    assert.strictEqual(allowedRes.success, true);
+    assert.strictEqual(allowedRes.targetData.displayNum, '5511999991111');
+  });
+
+  // 14. Teste de Modularidade dos Tool Handlers
+  it('ToolRegistry possui 25 handlers modulares carregados e funcionais', () => {
+    const toolHandlers = require('../src/services/tools');
+    assert.strictEqual(toolHandlers.size, 25);
+    for (const [name, handler] of toolHandlers.entries()) {
+      assert.strictEqual(typeof handler, 'function', `Handler da ferramenta "${name}" não é uma função`);
+    }
+  });
+
+  // 15. Trava de Segurança Mandatória para Promoção a Administrador (@ obrigatório)
+  await itAsync('resolveActionTarget e promote_member exigem menção expressa com @', async () => {
+    const { resolveActionTarget } = require('../src/services/targetResolver');
+    const fakeSock = {
+      user: { id: '5511900000000:0@s.whatsapp.net', lid: '12345:0@lid' }
+    };
+    const fakeGroup = '120363000000000@g.us';
+
+    // A: Citação sem @ deve ser barrada
+    const replyNoAt = {
+      message: {
+        extendedTextMessage: {
+          text: 'Hermes dá adm',
+          contextInfo: {
+            participant: '5511988887777@s.whatsapp.net',
+            quotedMessage: { conversation: 'oi' }
+          }
+        }
+      }
+    };
+    const resA = await resolveActionTarget(fakeSock, replyNoAt, fakeGroup, 'quoted', { requireExplicitMention: true, lang: 'pt' });
+    assert.strictEqual(resA.success, false);
+    assert(resA.error.includes('marcado expressamente com @'));
+
+    // B: Menção com @ deve ser aceita
+    const mentionAt = {
+      message: {
+        extendedTextMessage: {
+          text: 'Hermes dá adm pro @5511988887777',
+          contextInfo: {
+            mentionedJid: ['5511988887777@s.whatsapp.net']
+          }
+        }
+      }
+    };
+    const resB = await resolveActionTarget(fakeSock, mentionAt, fakeGroup, '@5511988887777', { requireExplicitMention: true, lang: 'pt' });
+    assert.strictEqual(resB.success, true);
+    assert.strictEqual(resB.targetData.phoneJid, '5511988887777@s.whatsapp.net');
+  });
+
   console.log('\n====================================================');
   console.log(`🏁 RESULTADO FINAL: ${passedTests}/${totalTests} testes aprovados!`);
   console.log('====================================================\n');

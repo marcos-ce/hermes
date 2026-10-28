@@ -9,7 +9,8 @@ module.exports = async function promoteMember({ sock, msg, from, isBotAdmin, lan
     return { success: false, error: t(lang, 'common.bot_not_admin') };
   }
 
-  const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicit: false, lang });
+  // Trava de segurança obrigatória: só permite promover quem for marcado expressamente com @
+  const targetRes = await resolveActionTarget(sock, msg, from, args.target, { requireExplicitMention: true, lang });
   if (!targetRes.success) {
     return { success: false, error: targetRes.error };
   }

@@ -11,47 +11,46 @@
 
 ---
 
-## Lote 1 — Correções médias (baixo risco)
+## Lote 1 — Correções médias (baixo risco) — ✅ CONCLUÍDO
 
-### 1.1 Fallback de estilo formal (BUG)
+### 1.1 Fallback de estilo formal (BUG) — ✅
 - **Problema:** em `t()`, no modo formal, uma chave ausente em ES/EN cai no `i18nFormal.pt`, exibindo **texto em português** em grupos espanhóis/ingleses.
 - **Correção:** remover o fallback `|| i18nFormal.dictionaries.pt?.[key]`, deixando formal ES/EN cair no dicionário natural do próprio idioma (língua correta).
-- **Completar `i18nFormal` (es/en)** fica como esforço separado (grande, ~100 chaves × 2 idiomas).
 
-### 1.2 `antiflood` não apaga a mensagem (BUG)
+### 1.2 `antiflood` não apaga a mensagem (BUG) — ✅
 - Apagar `msg.key` (via `safeDelete`) ao detectar flood/trava, antes de punir.
 
-### 1.3 Limpezas pontuais
+### 1.3 Limpezas pontuais — ✅
 - `groupAuth.js`: `msg: _msg` → `msg` (estava passando `undefined` ao `autoAdm`).
 - `welcome.js`: remover `seconds` extra no objeto de vars (inócuo).
 - `connection.js`: corrigir comentário do `msgStore` e remover `require('fs')` redundante.
 
 ---
 
-## Lote 2 — Extração de helpers (reduz duplicação, sem mudar comportamento)
+## Lote 2 — Extração de helpers — ✅ CONCLUÍDO
 
-- **2.1** Centralizar `getBotIdentity(sock)` / `isBotIdentity(sock, jid)` em `jidResolver.js` (hoje em ~8 arquivos).
-- **2.2** Consolidar `_resolveTargetSmart` / `_getExplicitTargets` / `_requireExplicitTarget` do `toolRegistry` num único `resolveActionTarget`.
-
----
-
-## Lote 3 — Deduplicação de lógica de domínio
-
-- **3.1** Extrair `pickWinners(pool, count)` (Fisher-Yates) — corrige o viés de `.sort(() => 0.5 - Math.random())` no `calendar.js`.
-- **3.2** Extrair `unpinAllMessages(sock, groupJid)` (triplicado em `pin.js`, `toolRegistry`, `calendar`).
-- **3.3** Extrair `scheduleTimedGroupAction` para fechamento temporário + reabertura agendada (repetido 3× no `set_group_mute`).
+- **2.1** ✅ Centralizar `getBotIdentity(sock)` / `isBotIdentity(sock, jid)` em `jidResolver.js`.
+- **2.2** ✅ Consolidar `_resolveTargetSmart` / `_getExplicitTargets` / `_requireExplicitTarget` num único `resolveActionTarget` em `src/services/targetResolver.js`, mantendo o retorno idêntico `{ phoneJid, groupJid, displayNum }` e a blindagem anti-prompt-injection.
 
 ---
 
-## Lote 4 — Refatoração estrutural (maior cuidado)
+## Lote 3 — Deduplicação de lógica de domínio — ✅ CONCLUÍDO
 
-- **4.1** Quebrar `toolRegistry.js` (2250 linhas) em módulos por ferramenta (`src/services/tools/`).
-- **4.2** Numeração de comandos em fonte única (`src/core/commandNumbers.js`) + validação de unicidade no loader (causa-raiz do bug de `cmdNumber`).
+- **3.1** ✅ Extrair `pickWinners(pool, count)` (Fisher-Yates) para `src/utils/raffle.js` — corrigido o viés de `.sort(() => 0.5 - Math.random())` no `calendar.js` e unificado com `raffle.js` e `toolRegistry.js`.
+- **3.2** ✅ Extrair `unpinAllMessages(sock, groupJid)` para `src/utils/pinTracker.js` (unificado em `pin.js`, `toolRegistry` e `calendar`).
+- **3.3** ✅ Extrair `scheduleTimedGroupAction` para `src/plugins/admin/calendar.js` (unificado fechamento temporário + reabertura agendada com persistência e timer de curto prazo).
 
 ---
 
-## Lote 5 — Infra / deploy
+## Lote 4 — Refatoração estrutural — ✅ CONCLUÍDO
 
-- **5.1** `engines` no `package.json` (`node >= 22.5` por causa do `node:sqlite`).
-- **5.2** Alinhar `ecosystem.config.js` / `discloud.config` / `--max-old-space-size`.
-- **5.3** Política de `uncaughtException` (logar + `exit(1)` para o supervisor reiniciar limpo).
+- **4.1** ✅ Quebrar o switch de 1300 linhas de `toolRegistry.js` em 25 handlers modulares em `src/services/tools/<nome>.js` despachados via Map, reduzindo `toolRegistry.js` de 2250 para ~640 linhas.
+- **4.2** ✅ Numeração de comandos centralizada em fonte única (`src/core/commandNumbers.js`) com validação de colisão e teste rigoroso de unicidade na seção 9 do `audit_suite.js`.
+
+---
+
+## Lote 5 — Infra / deploy — ✅ CONCLUÍDO
+
+- **5.1** ✅ Adicionado `"engines": { "node": ">=22.5.0" }` no `package.json` (requisito do `node:sqlite`).
+- **5.2** ✅ Alinhados limites de RAM: `--max-old-space-size=380` no `package.json`, `max_memory_restart: '420M'` no `ecosystem.config.js` e `RAM=512` no `discloud.config`.
+- **5.3** ✅ Política de `uncaughtException`: `logger.fatal`, `flushSync()` de dados e `process.exit(1)` para reinício limpo pelo supervisor.

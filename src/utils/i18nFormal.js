@@ -143,6 +143,7 @@ const dictionaries = {
     'hidetag.empty': "*[Parâmetro Ausente]* Informe o texto do comunicado ou responda a uma mensagem.",
 
     'promote.already_admin': "*[Status]* O membro informado já possui privilégios de administrador.",
+    'promote.need_explicit_mention': "*[Segurança]* Apenas membros marcados expressamente com @ podem ser promovidos a administrador.",
     'promote.success': "*[Moderação]* @{user} foi promovido a Administrador do grupo.",
     'demote.already_member': "*[Status]* O usuário informado não é um administrador.",
     'demote.cannot_demote_owner': "*[Ação Inválida]* O proprietário do bot não pode ser rebaixado.",
@@ -290,6 +291,10 @@ const dictionaries = {
     'ban.success': "*[Moderación]* @{user} fue expulsado del grupo.",
     'ban.cannot_ban_admin': "*[Acción Inválida]* No está permitido expulsar a administradores del grupo.",
 
+    'promote.already_admin': "*[Status]* El miembro informado ya posee privilegios de administrador.",
+    'promote.need_explicit_mention': "*[Seguridad]* Solo los miembros mencionados expresamente con @ pueden ser promovidos a administrador.",
+    'promote.success': "*[Moderación]* @{user} fue promovido a Administrador del grupo.",
+
     'mute.closed': "*[Moderación]* Chat cerrado por administrador. Solo administradores pueden enviar mensajes.",
     'mute.opened': "*[Moderación]* Chat abierto por administrador. Envío habilitado para todos.",
 
@@ -357,6 +362,10 @@ const dictionaries = {
 
     'ban.success': "*[Moderation]* @{user} was removed from the group.",
     'ban.cannot_ban_admin': "*[Invalid Action]* Administrators cannot be banned from the group.",
+
+    'promote.already_admin': "*[Status]* The specified member already has administrator privileges.",
+    'promote.need_explicit_mention': "*[Security]* Only members explicitly mentioned with @ can be promoted to administrator.",
+    'promote.success': "*[Moderation]* @{user} was promoted to Group Administrator.",
 
     'mute.closed': "*[Moderation]* Chat locked by administrator. Only admins may send messages.",
     'mute.opened': "*[Moderation]* Chat unlocked by administrator. All members may send messages.",
