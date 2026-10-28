@@ -486,17 +486,40 @@ module.exports = {
       return reply(`💾 *AutoMsg atualizado!*\n💬 *Novo texto:*\n${customText}`);
     }
 
+    // Disparo imediato de teste (preview para o administrador)
+    if (['teste', 'test', 'probar', 'preview'].includes(sub)) {
+      const hasMedia = hasMediaAttached(cfg);
+      if (!cfg.message && !hasMedia) {
+        return reply('⚠️ O AutoMsg ainda não possui texto ou mídia configurada para teste.');
+      }
+      await reply('🧪 *Disparando teste do AutoMsg agora...*');
+      if (hasMedia) {
+        const sent = await sendAutomsgMedia(sock, from, cfg.media, cfg.message || '');
+        if (!sent && cfg.message) {
+          await sendSafeMessage(sock, from, { text: cfg.message });
+        }
+      } else {
+        await sendSafeMessage(sock, from, { text: cfg.message });
+      }
+      return;
+    }
+
     const status = configManager.isPluginEnabled(from, 'automsg') ? t('common.enabled') : t('common.disabled');
-    const minutes = cfg.intervalMinutes || 180;
-    const formattedInterval = formatHumanDuration(minutes, 'minutes', groupLang);
+    const configuredMinutes = cfg.intervalMinutes || 180;
+    const hasMedia = hasMediaAttached(cfg);
+    const effectiveMinutes = hasMedia ? Math.max(configuredMinutes, MIN_INTERVAL_WITH_MEDIA) : configuredMinutes;
+    const formattedInterval = formatHumanDuration(effectiveMinutes, 'minutes', groupLang);
     const alertMsg = cfg.message || 'Nenhuma mensagem configurada';
 
     let help = `${t('automsg.status', { status, interval: formattedInterval })}\n💬 *Mensagem atual:*\n${alertMsg}`;
+    if (hasMedia && configuredMinutes < MIN_INTERVAL_WITH_MEDIA) {
+      help += `\n⚠️ _Nota: Intervalo fixado em 3h no agendador devido à mídia anexada (anti-ban)._`;
+    }
     if (cfg.media?.path) {
       const mediaLabel = cfg.media.type === 'image' ? 'Foto' : cfg.media.type === 'video' ? 'Vídeo' : 'Áudio';
       help += `\n📎 *Mídia anexada:* ${mediaLabel} (${((cfg.media.size || 0) / 1024 / 1024).toFixed(2)} MB)`;
     }
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 3h [seu texto aqui]\` (define intervalo e mensagem direto)\n• \`/automsg tempo 2h\` (ou \`/automsg tempo 30m\`)\n• \`/automsg texto [seu texto]\` (atualiza apenas a mensagem)\n• \`/automsg midia\` (anexa foto/vídeo/áudio; com mídia o mínimo é 3h)\n• \`/automsg removermidia\` (remove a mídia anexada)\n• \`/automsg config\` (abre assistente interativo)`;
+    help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 3h [seu texto aqui]\` (define intervalo e mensagem direto)\n• \`/automsg tempo 2h\` (ou \`/automsg tempo 30m\`)\n• \`/automsg texto [seu texto]\` (atualiza apenas a mensagem)\n• \`/automsg midia\` (anexa foto/vídeo/áudio; com mídia o mínimo é 3h)\n• \`/automsg removermidia\` (remove a mídia anexada)\n• \`/automsg teste\` (dispara um envio de teste imediatamente)\n• \`/automsg config\` (abre assistente interativo)`;
     return reply(help);
   },
 
