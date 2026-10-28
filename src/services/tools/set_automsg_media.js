@@ -47,15 +47,21 @@ module.exports = async function setAutomsgMedia({ sock, msg, from, lang, args })
     updates.intervalMinutes = automsgPlugin.MIN_INTERVAL_WITH_MEDIA;
   }
 
+  // Legenda/texto que acompanha a mídia (se o admin especificar)
+  if (args.caption && String(args.caption).trim()) {
+    updates.message = String(args.caption).trim();
+  }
+
   configManager.updatePluginConfig(from, 'automsg', updates);
 
   const typeLabel = mediaMeta.type === 'image' ? 'Foto' : mediaMeta.type === 'video' ? 'Vídeo' : 'Áudio';
   const intervalNote = updates.intervalMinutes
     ? `\n⏱️ Intervalo ajustado para 3h (mínimo com mídia, anti-ban).`
     : '';
+  const captionNote = updates.message ? `\n💬 *Legenda:* ${updates.message}` : '';
 
   return {
     success: true,
-    message: `📎 *Mídia anexada ao anúncio periódico!*\n🎞️ *Tipo:* ${typeLabel} (${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB)${intervalNote}`
+    message: `📎 *Mídia anexada ao anúncio periódico!*\n🎞️ *Tipo:* ${typeLabel} (${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB)${captionNote}${intervalNote}`
   };
 };

@@ -441,7 +441,8 @@ const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['attach', 'remove'], description: '"attach" para anexar a mídia enviada/citada ao anúncio; "remove" para remover a mídia atual do anúncio periódico.' }
+          action: { type: 'string', enum: ['attach', 'remove'], description: '"attach" para anexar a mídia enviada/citada ao anúncio; "remove" para remover a mídia atual do anúncio periódico.' },
+          caption: { type: 'string', description: 'Legenda/texto que acompanha a mídia quando ela for enviada no anúncio periódico (ex: "Assista agora!", "Confira o link na bio"). Opcional.' }
         },
         required: []
       }
