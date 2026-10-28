@@ -116,6 +116,12 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     configManager.setPluginEnabled(from, mod, enabled);
   }
 
+  // Desligar a autoaprovação por qualquer caminho também interrompe lote/tempo real.
+  if (mod === 'autoapprove' && !enabled) {
+    const autoapprovePlugin = require('../../plugins/admin/autoapprove');
+    await autoapprovePlugin.approvalQueue.cancelGroup(from, 'disabled');
+  }
+
   const stateLabel = enabled ? t(lang, 'common.enabled') : t(lang, 'common.disabled');
   return {
     success: true,

@@ -36,6 +36,7 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
 
   if (args.action === 'disable_auto') {
     configManager.setPluginEnabled(from, 'autoapprove', false);
+    await autoapprovePlugin.approvalQueue.cancelGroup(from, 'disabled');
     return {
       success: true,
       message: '🛑 *Auto-Aprovação Anti-Ban DESATIVADA!*\nSolicitações de entrada permanecerão na fila para aprovação manual dos administradores.'
@@ -97,10 +98,13 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
   const cfg = configManager.getPluginConfig(from, 'autoapprove') || {};
   let brCount = 0;
   let foreignCount = 0;
+  let unknownCount = 0;
 
   for (const item of (pendingList || [])) {
     const info = autoapprovePlugin.extractParticipantInfo(item);
-    if (autoapprovePlugin.isNumberAllowed(info.digits, ['55'])) {
+    if (!info.resolved) {
+      unknownCount++;
+    } else if (autoapprovePlugin.isNumberAllowed(info.digits, ['55'])) {
       brCount++;
     } else {
       foreignCount++;
@@ -108,10 +112,10 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
   }
 
   const isEnabled = configManager.isPluginEnabled(from, 'autoapprove');
-  const isAll = (cfg.allowedDdis || []).some(d => ['*', 'all', 'todos', 'qualquer'].includes(String(d).toLowerCase()));
+  const isAll = autoapprovePlugin.isWildcardList(cfg.allowedDdis);
   const modeText = isAll ? 'Qualquer membro (Todos)' : 'Apenas Brasileiros (DDI 55)';
   return {
     success: true,
-    message: `📋 *Solicitações Pendentes:* ${pendingList.length} no total\n🇧🇷 *Brasileiros:* ${brCount}\n🌍 *Estrangeiros:* ${foreignCount}\n⚙️ *Auto-Aprovação:* ${isEnabled ? 'Ativada' : 'Desativada'} (${modeText})`
+    message: `📋 *Solicitações Pendentes:* ${pendingList.length} no total\n🇧🇷 *Brasileiros:* ${brCount}\n🌍 *Estrangeiros:* ${foreignCount}\n🔒 *LIDs não resolvidos:* ${unknownCount}\n⚙️ *Auto-Aprovação:* ${isEnabled ? 'Ativada' : 'Desativada'} (${modeText})`
   };
 };

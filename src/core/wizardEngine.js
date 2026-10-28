@@ -145,8 +145,9 @@ class WizardEngine {
    * @param {string} sender 
    * @param {string} pluginName 
    * @param {number|null} targetFieldIndex Se especificado, edita apenas a etapa solicitada
+   * @param {{ preserveEnabled?: boolean }} [options] preserveEnabled evita ligar o módulo ao salvar
    */
-  async startWizard(sock, msg, from, sender, pluginName, targetFieldIndex = null) {
+  async startWizard(sock, msg, from, sender, pluginName, targetFieldIndex = null, options = {}) {
     const schema = pluginLoader.schemas.get(pluginName.toLowerCase());
     if (!schema || !Array.isArray(schema.fields) || schema.fields.length === 0) {
       return false;
@@ -155,6 +156,7 @@ class WizardEngine {
     const lang = configManager.getGroupLang(from);
     const existingConfig = configManager.getPluginConfig(from, pluginName) || {};
     const sessionKey = `${from}:${sender}`;
+    const preserveEnabled = Boolean(options.preserveEnabled);
 
     // Se uma etapa específica foi solicitada diretamente via parâmetro:
     if (targetFieldIndex !== null && typeof targetFieldIndex === 'number') {
@@ -167,7 +169,8 @@ class WizardEngine {
         existingConfig,
         schema,
         groupJid: from,
-        sender
+        sender,
+        preserveEnabled
       };
       wizardCache.set(sessionKey, session);
       await this._sendStepPrompt(sock, msg, from, sender, session, lang);
@@ -185,7 +188,8 @@ class WizardEngine {
         existingConfig,
         schema,
         groupJid: from,
-        sender
+        sender,
+        preserveEnabled
       };
       wizardCache.set(sessionKey, session);
       await this._sendFieldSelectionPrompt(sock, msg, from, sender, session, lang);
@@ -203,7 +207,8 @@ class WizardEngine {
       existingConfig,
       schema,
       groupJid: from,
-      sender
+      sender,
+      preserveEnabled
     };
 
     wizardCache.set(sessionKey, session);
@@ -960,6 +965,22 @@ class WizardEngine {
     return true;
   }
 
+  /**
+   * Salva as respostas do wizard respeitando preserveEnabled.
+   * Sem preserveEnabled, o comportamento histórico é mantido (updatePluginConfig liga o módulo).
+   * Com preserveEnabled, o estado atual de enabled é reaplicado após o merge.
+   * @param {object} session
+   */
+  _saveAnswers(session) {
+    const answers = { ...session.answers };
+
+    if (session.preserveEnabled) {
+      answers.enabled = configManager.isPluginEnabled(session.groupJid, session.pluginName);
+    }
+
+    configManager.updatePluginConfig(session.groupJid, session.pluginName, answers);
+  }
+
   async _handleWizardStepInput(sock, msg, from, sender, text, session, lang) {
     const sessionKey = `${from}:${sender}`;
     const currentField = session.schema.fields[session.stepIndex];
@@ -1129,7 +1150,7 @@ class WizardEngine {
 
     // Se era apenas uma única etapa selecionada pelo menu de etapas:
     if (session.singleStep) {
-      configManager.updatePluginConfig(from, session.pluginName, session.answers);
+      this._saveAnswers(session);
       wizardCache.del(sessionKey);
 
       let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
@@ -1151,7 +1172,7 @@ class WizardEngine {
       await this._sendStepPrompt(sock, msg, from, sender, session, lang);
     } else {
       // Wizard concluído! Aplica Shallow Merge Não-Destrutivo
-      configManager.updatePluginConfig(from, session.pluginName, session.answers);
+      this._saveAnswers(session);
       wizardCache.del(sessionKey);
 
       let summaryText = `${t(lang, 'wizard.finished', { plugin: session.pluginName.toUpperCase() })}\n\n`;
