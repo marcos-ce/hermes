@@ -140,6 +140,7 @@ async function extractMediaBuffer(sock, msg) {
   let type = null;
   let mimeType = null;
   let isPtt = false;
+  let originalCaption = '';
 
   for (const mt of MEDIA_MSG_TYPES) {
     if (realMsg?.[mt]) {
@@ -147,6 +148,7 @@ async function extractMediaBuffer(sock, msg) {
       type = mt === 'imageMessage' ? 'image' : mt === 'videoMessage' ? 'video' : 'audio';
       mimeType = realMsg[mt]?.mimetype;
       isPtt = mt === 'audioMessage' && realMsg.audioMessage?.ptt === true;
+      originalCaption = realMsg[mt]?.caption || '';
       break;
     }
   }
@@ -165,6 +167,7 @@ async function extractMediaBuffer(sock, msg) {
         type = mt === 'imageMessage' ? 'image' : mt === 'videoMessage' ? 'video' : 'audio';
         mimeType = unwrappedQuoted[mt]?.mimetype;
         isPtt = mt === 'audioMessage' && unwrappedQuoted.audioMessage?.ptt === true;
+        originalCaption = unwrappedQuoted[mt]?.caption || '';
         break;
       }
     }
@@ -180,7 +183,7 @@ async function extractMediaBuffer(sock, msg) {
       { logger, reuploadRequest: sock?.updateMediaMessage }
     );
     if (!buffer || buffer.length === 0) return null;
-    return { buffer, type, mimeType, isPtt };
+    return { buffer, type, mimeType, isPtt, caption: originalCaption };
   } catch (err) {
     logger.warn({ err: err?.message || err }, 'Falha ao baixar mídia do AutoMsg');
     return null;
@@ -239,7 +242,7 @@ function saveAutomsgMedia(groupJid, buffer, info) {
  * @param {string} caption
  * @returns {Promise<object|null>}
  */
-async function sendAutomsgMedia(sock, groupJid, media, caption) {
+async function sendAutomsgMedia(sock, groupJid, media, caption, options = {}) {
   if (!media?.path || !fs.existsSync(media.path)) return null;
 
   let buffer;
@@ -262,7 +265,7 @@ async function sendAutomsgMedia(sock, groupJid, media, caption) {
   const hasCaption = Boolean(caption) && media.type !== 'audio';
   if (hasCaption) payload.caption = caption;
 
-  return await sendSafeMessage(sock, groupJid, payload);
+  return await sendSafeMessage(sock, groupJid, payload, options);
 }
 
 module.exports = {
@@ -420,7 +423,20 @@ module.exports = {
         return reply('❌ Não foi possível salvar a mídia. Tente novamente.');
       }
 
-      const update = { media: mediaMeta };
+      const update = {
+        media: mediaMeta,
+        lastSent: Date.now(),
+        enabled: true
+      };
+
+      // Captura o texto/link informado junto com o comando (ex: /automsg midia https://bbsesportes.com.br)
+      const customCaption = args.slice(1).join(' ').trim();
+      if (customCaption) {
+        update.message = customCaption;
+      } else if (extracted.caption && !extracted.caption.startsWith('/') && !extracted.caption.startsWith('!')) {
+        update.message = extracted.caption;
+      }
+
       const currentInterval = cfg.intervalMinutes || 180;
       let intervalNote = '';
       if (currentInterval < MIN_INTERVAL_WITH_MEDIA) {
@@ -430,7 +446,10 @@ module.exports = {
       configManager.updatePluginConfig(from, 'automsg', update);
 
       const typeLabel = mediaMeta.type === 'image' ? 'Foto' : mediaMeta.type === 'video' ? 'Vídeo' : 'Áudio';
-      return reply(`📎 *Mídia do AutoMsg atualizada!*\n🎞️ *Tipo:* ${typeLabel}\n💾 *Tamanho:* ${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB\n\nA mídia será enviada a cada intervalo configurado (com a legenda/texto, se houver).${intervalNote}`);
+      const activeCaption = update.message || cfg.message || '';
+      const captionInfo = activeCaption ? `\n💬 *Legenda:* ${activeCaption}` : '\n💬 *Legenda:* _(nenhuma)_';
+
+      return reply(`📎 *Mídia do AutoMsg atualizada!*\n🎞️ *Tipo:* ${typeLabel}\n💾 *Tamanho:* ${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB${captionInfo}\n\n⏱️ A mídia será enviada a cada intervalo configurado.${intervalNote}`);
     }
 
     // Remoção da mídia do anúncio (volta a ser apenas texto)
@@ -453,10 +472,10 @@ module.exports = {
       const customText = args.slice(1).join(' ').trim();
       const formattedTime = formatHumanDuration(parsedMinutes, 'minutes', groupLang);
       if (!customText) {
-        configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, enabled: true });
+        configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, enabled: true, lastSent: Date.now() });
         return reply(`💾 *AutoMsg atualizado:* Intervalo alterado para *a cada ${formattedTime}*.`);
       }
-      configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, message: customText, enabled: true });
+      configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, message: customText, enabled: true, lastSent: Date.now() });
       return reply(`💾 *AutoMsg atualizado e ATIVADO!*\n⏱️ *Intervalo:* a cada ${formattedTime}\n💬 *Mensagem:*\n${customText}`);
     }
 
@@ -472,7 +491,7 @@ module.exports = {
         return reply(`⚠️ Com mídia anexada, o intervalo mínimo é *3 horas* (anti-ban).\nUse \`/automsg tempo 3h\` ou mais, ou remova a mídia com \`/automsg removermidia\`.`);
       }
       const formattedTime = formatHumanDuration(minutesArg, 'minutes', groupLang);
-      configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: minutesArg, enabled: true });
+      configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: minutesArg, enabled: true, lastSent: Date.now() });
       return reply(`💾 *AutoMsg atualizado:* Intervalo definido para *a cada ${formattedTime}*.`);
     }
 
@@ -482,24 +501,29 @@ module.exports = {
       if (!customText) {
         return reply('⚠️ Digite o texto do anúncio. Ex: `/automsg texto Sejam todos bem-vindos!`');
       }
-      configManager.updatePluginConfig(from, 'automsg', { message: customText, enabled: true });
+      configManager.updatePluginConfig(from, 'automsg', { message: customText, enabled: true, lastSent: Date.now() });
       return reply(`💾 *AutoMsg atualizado!*\n💬 *Novo texto:*\n${customText}`);
     }
 
     // Disparo imediato de teste (preview para o administrador)
     if (['teste', 'test', 'probar', 'preview'].includes(sub)) {
-      const hasMedia = hasMediaAttached(cfg);
-      if (!cfg.message && !hasMedia) {
+      const activeCfg = configManager.getPluginConfig(from, 'automsg') || cfg;
+      const hasMedia = hasMediaAttached(activeCfg);
+      if (!activeCfg.message && !hasMedia) {
         return reply('⚠️ O AutoMsg ainda não possui texto ou mídia configurada para teste.');
       }
-      await reply('🧪 *Disparando teste do AutoMsg agora...*');
+
+      // Reinicia lastSent para evitar disparo duplicado pelo scheduler logo em seguida
+      configManager.updatePluginConfig(from, 'automsg', { lastSent: Date.now() });
+
+      // Envia diretamente o preview em resposta ao comando, sem poluir o chat com aviso intermediário
       if (hasMedia) {
-        const sent = await sendAutomsgMedia(sock, from, cfg.media, cfg.message || '');
-        if (!sent && cfg.message) {
-          await sendSafeMessage(sock, from, { text: cfg.message });
+        const sent = await sendAutomsgMedia(sock, from, activeCfg.media, activeCfg.message || '', { quoted: msg });
+        if (!sent && activeCfg.message) {
+          await sendSafeMessage(sock, from, { text: activeCfg.message }, { quoted: msg });
         }
       } else {
-        await sendSafeMessage(sock, from, { text: cfg.message });
+        await sendSafeMessage(sock, from, { text: activeCfg.message }, { quoted: msg });
       }
       return;
     }
