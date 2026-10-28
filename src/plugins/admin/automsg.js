@@ -498,5 +498,14 @@ module.exports = {
     }
     help += `\n\n💡 *Comandos Diretos:*\n• \`/automsg on\` ou \`/automsg off\`\n• \`/automsg 3h [seu texto aqui]\` (define intervalo e mensagem direto)\n• \`/automsg tempo 2h\` (ou \`/automsg tempo 30m\`)\n• \`/automsg texto [seu texto]\` (atualiza apenas a mensagem)\n• \`/automsg midia\` (anexa foto/vídeo/áudio; com mídia o mínimo é 3h)\n• \`/automsg removermidia\` (remove a mídia anexada)\n• \`/automsg config\` (abre assistente interativo)`;
     return reply(help);
-  }
+  },
+
+  // Helpers de mídia exportados para reuso pelas ferramentas de IA (Tool Calling)
+  extractMediaBuffer,
+  saveAutomsgMedia,
+  sendAutomsgMedia,
+  stripJpegMetadata,
+  hasMediaAttached,
+  MIN_INTERVAL_WITH_MEDIA,
+  MAX_MEDIA_BYTES
 };

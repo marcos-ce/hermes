@@ -8,6 +8,7 @@ const toolHandlers = new Map([
   ['set_group_schedule', require('./set_group_schedule')],
   ['toggle_group_protection', require('./toggle_group_protection')],
   ['set_group_settings', require('./set_group_settings')],
+  ['set_automsg_media', require('./set_automsg_media')],
   ['warn_member', require('./warn_member')],
   ['unwarn_member', require('./unwarn_member')],
   ['mute_member', require('./mute_member')],

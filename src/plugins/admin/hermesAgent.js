@@ -695,6 +695,22 @@ module.exports = {
     const groupPrefix = configManager.getGroupPrefix(from) || '!';
     userPromptParts.push(`[Contexto do Grupo: "${groupName || 'sem nome'}" | Prefixo (P): "${groupPrefix}"]`);
 
+    // Detecta mídia anexada na mensagem ATUAL do admin (foto/vídeo/áudio) para o modelo saber
+    // que pode usá-la (ex: anexar como anúncio periódico via set_automsg_media).
+    const realMsgCurrent = msg?.message?.ephemeralMessage?.message ||
+                           msg?.message?.viewOnceMessage?.message ||
+                           msg?.message?.viewOnceMessageV2?.message ||
+                           msg?.message?.documentWithCaptionMessage?.message ||
+                           msg?.message;
+
+    if (realMsgCurrent?.imageMessage) {
+      userPromptParts.push('[O admin enviou uma FOTO/IMAGEM anexada nesta mensagem]');
+    } else if (realMsgCurrent?.videoMessage) {
+      userPromptParts.push('[O admin enviou um VÍDEO anexado nesta mensagem]');
+    } else if (realMsgCurrent?.audioMessage) {
+      userPromptParts.push('[O admin enviou um ÁUDIO anexado nesta mensagem]');
+    }
+
     // Injeção de Data e Hora em Tempo Real (fuso configurado, padrão Brasília)
     const now = new Date();
     const tz = settings.timezone || 'America/Sao_Paulo';
@@ -772,6 +788,7 @@ module.exports = {
     if (unwrappedQuoted) {
       const isQuotedImage = Boolean(unwrappedQuoted.imageMessage || unwrappedQuoted.stickerMessage);
       const isQuotedVideo = Boolean(unwrappedQuoted.videoMessage);
+      const isQuotedAudio = Boolean(unwrappedQuoted.audioMessage);
       quotedPoll = unwrappedQuoted.pollCreationMessage ||
                    unwrappedQuoted.pollCreationMessageV2 ||
                    unwrappedQuoted.pollCreationMessageV3;
@@ -787,6 +804,8 @@ module.exports = {
         userPromptParts.push(`[A mensagem citada contém uma FOTO/IMAGEM${snippet ? ` com legenda: "${snippet}"` : ' (sem legenda)'}]`);
       } else if (isQuotedVideo) {
         userPromptParts.push(`[A mensagem citada contém um VÍDEO${snippet ? ` com legenda: "${snippet}"` : ''}]`);
+      } else if (isQuotedAudio) {
+        userPromptParts.push(`[A mensagem citada contém um ÁUDIO${snippet ? ` com legenda: "${snippet}"` : ''}]`);
       } else if (quotedPoll) {
         userPromptParts.push(`[A mensagem citada é uma ENQUETE: "${quotedPoll.name || 'Enquete'}"]`);
       }

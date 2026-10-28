@@ -432,6 +432,20 @@ const TOOLS = [
         required: ['action']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_automsg_media',
+      description: 'Anexa a foto/vídeo/áudio que o admin ENVIOU nesta mensagem ou CITOU (respondeu/encaminhou) como o anúncio periódico automático do grupo (automsg). Acione quando o admin pedir algo como: "usa esse vídeo como anúncio", "bota essa foto no anúncio automático", "esse áudio vira o aviso recorrente", "coloca essa mídia no comunicado", "essa mídia é o anúncio". A mídia é extraída automaticamente da mensagem atual do admin.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['attach', 'remove'], description: '"attach" para anexar a mídia enviada/citada ao anúncio; "remove" para remover a mídia atual do anúncio periódico.' }
+        },
+        required: []
+      }
+    }
   }
 ];
 
