@@ -1,7 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { floodCache } = require('../../utils/cache');
-const { safeKick, sendSafeMessage } = require('../../utils/antiBan');
+const { safeKick, safeDelete, sendSafeMessage } = require('../../utils/antiBan');
 const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
@@ -190,6 +190,9 @@ module.exports = {
     }
 
     if (!isViolation) return false;
+
+    // Ação de emergência (zero delay): apaga a mensagem do infrator antes de punir
+    await safeDelete(sock, from, msg.key);
 
     const targetData = await resolveParticipant(sock, from, sender);
     const targetPhone = targetData?.phoneJid || sender;

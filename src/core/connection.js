@@ -27,7 +27,6 @@ const scheduler = require('./scheduler');
 async function healBrokenSession(msg) {
   try {
     const authDir = path.resolve(process.cwd(), 'src', 'auth');
-    const fs = require('fs');
     if (!fs.existsSync(authDir)) return;
 
     const jid = msg?.key?.remoteJid || '';
@@ -66,7 +65,7 @@ let currentSock = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
 // Mini-store de mensagens recentes para re-decriptografia pós-reconexão (substitui makeInMemoryStore)
-// Guarda as últimas 100 mensagens em RAM com eviction FIFO. Sem TTL = sem vazamento de memória.
+// Guarda as últimas 1500 mensagens em RAM com eviction FIFO. Sem TTL = sem vazamento de memória.
 const msgStore = new Map();
 const MSG_STORE_MAX = 1500;
 

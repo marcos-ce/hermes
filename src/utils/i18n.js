@@ -196,6 +196,9 @@ const dictionaries = {
     'hermes.key_missing_short': "❌ Não configurada (.env)",
     'hermes.status_nokey': "⚠️ *Atenção:* Configure `AI_API_KEY` no arquivo `.env` para ativar as respostas.",
     'hermes.status_tip': "💡 *Dica:* Envie *{prefix}hermes on* para ativar ou fale diretamente comigo no chat!",
+    'hermes.on_ok': "🤖 *Hermes IA ATIVADO!*\n🎭 *Personalidade:* {personality}\n🧠 *Memória:* {memory}",
+    'hermes.off_ok': "🤖 *Hermes IA DESATIVADO!*",
+    'hermes.cleared': "🧹 *Memória do Hermes limpa com sucesso!* O histórico de conversas deste grupo foi zerado.",
     'hermes.disabled_hint': "⚠️ O Hermes IA está desativado neste grupo.\n👉 Peça a um administrador para ativar enviando: *{prefix}hermes on*",
     'hermes.disabled_called': "🤖 *Hermes IA está desativado neste grupo.*\n\n👉 Para ativá-lo, um administrador deve enviar:\n*{prefix}hermes on* (ou *{prefix}ia on*)",
     'hermes.usage_hint': "👉 Para falar comigo, mencione *@hermes*, digite *hermes [pergunta]* ou use *{prefix}hermes status*.",
@@ -413,6 +416,9 @@ const dictionaries = {
     'hermes.key_missing_short': "❌ No configurada (.env)",
     'hermes.status_nokey': "⚠️ *Atención:* Configura `AI_API_KEY` en el archivo `.env` para activar las respuestas.",
     'hermes.status_tip': "💡 *Consejo:* ¡Envía *{prefix}hermes on* para activar o habla directamente conmigo en el chat!",
+    'hermes.on_ok': "🤖 *¡Hermes IA ACTIVADO!*\n🎭 *Personalidad:* {personality}\n🧠 *Memoria:* {memory}",
+    'hermes.off_ok': "🤖 *Hermes IA DESACTIVADO!*",
+    'hermes.cleared': "🧹 *¡Memoria de Hermes limpiada con éxito!* El historial de conversaciones de este grupo fue eliminado.",
     'hermes.disabled_hint': "⚠️ Hermes IA está desactivado en este grupo.\n👉 Pide a un administrador que lo active enviando: *{prefix}hermes on*",
     'hermes.disabled_called': "🤖 *Hermes IA está desactivado en este grupo.*\n\n👉 Para activarlo, un administrador debe enviar:\n*{prefix}hermes on* (o *{prefix}ia on*)",
     'hermes.usage_hint': "👉 Para hablar conmigo, menciona a *@hermes*, escribe *hermes [pregunta]* o usa *{prefix}hermes status*.",
@@ -630,6 +636,9 @@ const dictionaries = {
     'hermes.key_missing_short': "❌ Not configured (.env)",
     'hermes.status_nokey': "⚠️ *Notice:* Configure `AI_API_KEY` in `.env` to enable responses.",
     'hermes.status_tip': "💡 *Tip:* Send *{prefix}hermes on* to activate or speak directly with me in chat!",
+    'hermes.on_ok': "🤖 *Hermes AI ENABLED!*\n🎭 *Personality:* {personality}\n🧠 *Memory:* {memory}",
+    'hermes.off_ok': "🤖 *Hermes AI DISABLED!*",
+    'hermes.cleared': "🧹 *Hermes memory cleared successfully!* This group's chat history has been reset.",
     'hermes.disabled_hint': "⚠️ Hermes AI is disabled in this group.\n👉 Ask an admin to enable it by sending: *{prefix}hermes on*",
     'hermes.disabled_called': "🤖 *Hermes AI is disabled in this group.*\n\n👉 To activate it, an admin must send:\n*{prefix}hermes on* (or *{prefix}ia on*)",
     'hermes.usage_hint': "👉 To speak with me, mention *@hermes*, type *hermes [question]* or use *{prefix}hermes status*.",
@@ -707,7 +716,7 @@ function t(langOrKey = 'pt', keyOrVars, varsOrStyle = {}, maybeStyle = null) {
 
   let text = null;
   if (resolvedStyle === 'formal') {
-    text = i18nFormal.dictionaries[targetLang]?.[key] || i18nFormal.dictionaries.pt?.[key];
+    text = i18nFormal.dictionaries[targetLang]?.[key];
   }
 
   if (!text) {

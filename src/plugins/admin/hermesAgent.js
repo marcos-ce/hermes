@@ -142,7 +142,7 @@ async function notifyOwnerAboutAIError({ sock, errorDetails, groupName, from, se
 module.exports = {
   name: 'hermes',
   priority: 100,
-  cmdNumber: 23,
+  cmdNumber: 33,
   aliases: ['hermes', 'ia', 'ai', 'agente', 'agent'],
   usage: 'hermes [on|off|config|status|pergunta]',
   description: 'Agente de Inteligência Artificial oficial DeepSeek para auxílio e moderação',

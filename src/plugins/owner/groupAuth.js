@@ -17,7 +17,7 @@ module.exports = {
     const cmd = (command || '').toLowerCase();
     const isDirectActivate = ['ativar', 'activar', 'activate'].includes(cmd);
     const isPvDirect = ['pv', 'dm'].includes(cmd);
-    const sub = isDirectActivate ? (args[0] ? args[0].toLowerCase() : 'on') : (args[0] || 'status').toLowerCase();
+    const sub = isDirectActivate ? 'on' : (args[0] || 'status').toLowerCase();
     const canManageGroup = isOwner || (settings.authMode === 'admin' && isAdmin);
 
     // ==========================================
@@ -126,7 +126,7 @@ module.exports = {
       const autoAdmPlugin = require('./autoAdm');
       return await autoAdmPlugin.execute({
         sock,
-        msg: _msg,
+        msg,
         from,
         sender,
         args: args.slice(1),

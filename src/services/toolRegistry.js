@@ -1186,7 +1186,7 @@ class ToolRegistry {
         if (args.prefix && String(args.prefix).trim().length === 1) {
           const newPrefix = String(args.prefix).trim();
           configManager.setGroupPrefix(from, newPrefix);
-          results.push(t(lang, 'wizard.prefix_changed', { prefix: newPrefix }));
+          results.push(t(lang, 'config.prefix_changed', { prefix: newPrefix }));
         }
         if (args.clearMemory) {
           memoryEngine.clearGroupMemory(from);

@@ -199,7 +199,7 @@ module.exports = {
     const formattedTime = formatHumanDuration(seconds, 'seconds', groupLang);
     const currentMsg = cfg.message || translate('welcome.default');
 
-    let help = `${translate('welcome.status', { status, seconds, time: formattedTime })}\n📝 *Mensagem atual:*\n${currentMsg}`;
+    let help = `${translate('welcome.status', { status, time: formattedTime })}\n📝 *Mensagem atual:*\n${currentMsg}`;
     help += `\n\n💡 *Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 1m\` (apaga após 1 minuto) ou \`/bemvindo tempo 30s\`\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre assistente interativo)`;
     return reply(help);
   }

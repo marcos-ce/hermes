@@ -4,7 +4,7 @@ const logger = require('../../utils/logger');
 
 module.exports = {
   name: 'setdesc',
-  cmdNumber: 24,
+  cmdNumber: 32,
   aliases: ['setdesc', 'desc', 'descricao', 'descrição', 'descripcion', 'description', 'mudardesc', 'modificardesc'],
   usage: 'setdesc [novo texto]',
   description: {
