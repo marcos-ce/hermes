@@ -6,7 +6,7 @@ module.exports = {
   name: 'bot',
   aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm', 'setup', 'onboarding', 'estilo', 'style'],
   usage: 'bot on/off/add/list/pv/config/setup/estilo',
-  description: 'Gestão de licenças SaaS e ativação do bot no grupo',
+  description: 'Gestão de licenças e ativação do bot no grupo',
   ownerOnly: false, // Checado dinamicamente conforme authMode no execute
   adminOnly: false,
   botAdminRequired: false,
@@ -208,13 +208,13 @@ module.exports = {
       } else if (['natural', 'n', '1', 'emojis', 'emoji'].includes(targetStyle)) {
         configManager.setGroupStyle(from, 'natural');
         configManager.flushSync();
-        return reply('🌈 *Estilo de mensagens alterado para:* *Natural (Emojis)*');
+        return reply('*Estilo de mensagens alterado para:* *Natural (Emojis)*');
       } else {
         const currentStyle = configManager.getGroupStyle(from);
         if (currentStyle === 'formal') {
           return reply(`*[Sistema - Estilo de Mensagens]*\nEstilo ativo: *Formal (Etiquetas)*\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
         } else {
-          return reply(`🎭 *Estilo Atual:* Natural (Emojis)\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
+          return reply(`*Estilo Atual:* Natural (Emojis)\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
         }
       }
     }
