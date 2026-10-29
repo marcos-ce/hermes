@@ -3,7 +3,7 @@ const configManager = require('../../core/configManager');
 
 module.exports = {
   name: 'reload',
-  aliases: ['reload', 'relaod', 'recarregar', 'recargar', 'atualizar'],
+  aliases: ['reload', 'relaod', 'recarregar', 'recargar', 'att'],
   usage: 'reload',
   description: 'Hot-reload de plugins, schemas, grupos e traduções em tempo real',
   ownerOnly: true,
