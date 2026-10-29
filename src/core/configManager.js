@@ -94,6 +94,38 @@ class ConfigManager {
     }
   }
 
+  /**
+   * Recarrega os dados de data/groups.json diretamente do disco para a memória RAM.
+   * Permite sincronizar alterações feitas no editor web da Discloud sem reiniciar o bot.
+   * @returns {{ success: boolean, error?: string }}
+   */
+  reloadFromDisk() {
+    if (!fs.existsSync(this.filePath)) {
+      return { success: false, error: 'Arquivo data/groups.json não encontrado.' };
+    }
+
+    try {
+      const raw = fs.readFileSync(this.filePath, 'utf-8');
+      const parsed = JSON.parse(raw);
+
+      // Cancela qualquer gravação assíncrona pendente para não sobrescrever com dados antigos da RAM
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout);
+        this.saveTimeout = null;
+      }
+      this.isDirty = false;
+
+      this.groups.clear();
+      this._loadIntoMemory(parsed);
+
+      logger.info('data/groups.json recarregado com sucesso do disco para a RAM via Hot-Reload.');
+      return { success: true };
+    } catch (err) {
+      logger.error({ err }, 'Erro ao recarregar data/groups.json do disco.');
+      return { success: false, error: err.message };
+    }
+  }
+
   _serialize() {
     const obj = {
       _global: this.global
@@ -174,6 +206,13 @@ class ConfigManager {
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
+    }
+
+    // Prevenção contra perda de dados em plataformas como Discloud:
+    // Se a memória RAM não possui alterações pendentes (isDirty === false) e o arquivo já existe no disco,
+    // NUNCA sobrescreve o arquivo no encerramento, preservando edições feitas no editor web da Discloud.
+    if (!this.isDirty && fs.existsSync(this.filePath)) {
+      return;
     }
 
     try {
