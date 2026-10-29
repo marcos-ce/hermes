@@ -47,7 +47,7 @@ LOG_LEVEL=warn
 
   if (process.stdout.isTTY) console.clear();
   console.log('====================================================');
-  console.log('🤖  BEM-VINDO AO ASSISTENTE DE INSTALAÇÃO DO BOT   🤖');
+  console.log('ASSISTENTE DE INSTALAÇÃO DO BOT');
   console.log('====================================================');
   console.log('Vamos configurar o ambiente em poucos passos.\n');
 
@@ -100,8 +100,8 @@ LOG_LEVEL=warn
     if (langChoice === '3') defaultLang = 'en';
 
     // 6. Modo de Autorização
-    console.log('\nModo de Autorização de Grupos (SaaS):');
-    console.log('[1] Apenas o Dono pode ativar grupos com !bot on (Recomendado para SaaS)');
+    console.log('\nModo de Autorização de Grupos:');
+    console.log('[1] Apenas o Dono pode ativar grupos com !bot on');
     console.log('[2] Qualquer Administrador do grupo pode ativar');
     const authChoice = (await rl.question('Opção [1]: ')).trim() || '1';
     const authMode = authChoice === '2' ? 'admin' : 'owner';
