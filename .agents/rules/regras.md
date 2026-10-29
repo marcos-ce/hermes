@@ -7,7 +7,7 @@ always_on: true
 # 📜 Regras de Arquitetura e Governança: Hermes AI Agent
 
 > **Documento Oficial de Regras, Diretrizes e Catálogo de Ferramentas**  
-> Este documento consolida todas as regras invioláveis de engenharia, governança de código, especificações de Prefix Caching e o catálogo completo das 24 ferramentas da integração do **Hermes Agent** (com a API oficial da **DeepSeek**) no bot WhatsApp (`hermes.wpp`).
+> Ested documento consolida todas as regras invioláveis de engenharia, governança de código, especificações de Prefix Caching e o catálogo completo das 24 ferramentas da integração do **Hermes Agent** (com a API oficial da **DeepSeek**) no bot WhatsApp (`hermes.wpp`).
 
 ---
 
