@@ -249,7 +249,7 @@ module.exports = {
   cmdNumber: 33,
   aliases: ['hermes', 'ia', 'ai', 'agente', 'agent'],
   usage: 'hermes [on|off|config|status|pergunta]',
-  description: 'Agente de Inteligência Artificial oficial DeepSeek para auxílio e moderação',
+  description: 'Agente de Inteligência Artificial para moderação agêntica',
   ownerOnly: false,
   adminOnly: false, // Permite perguntas via /ia <pergunta>; subcomandos de config checam admin internamente
   botAdminRequired: false,
