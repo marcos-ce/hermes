@@ -53,7 +53,6 @@ module.exports = {
     pingText += `${t('ping.uptime', { uptime: uptimeStr })}\n`;
     pingText += `${t('ping.ram', { ram: ramMb })}\n`;
     pingText += `${t('ping.lang', { lang: lang.toUpperCase() })}\n`;
-    pingText += `${t('ping.antiban')}\n`;
     pingText += `${t('ping.license', { expiry: expiryDisplay })}`;
 
     return reply(pingText);
