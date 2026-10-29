@@ -42,8 +42,8 @@ module.exports = {
             title: '*[Hermes AutoMod - Guia de Comandos]*',
             group: 'Grupo:',
             members: 'membros',
-            secQuick: '*[Ações Rápidas & Moderação]*',
-            secConfig: '*[Gestão & Utilidades]*',
+            secQuick: '*[Ações Rápidas e Moderação]*',
+            secConfig: '*[Gestão e Utilidades]*',
             tipHeader: '*[Painel de Controle]*',
             tipBody: `Para gerenciar módulos de proteção e filtros, envie: \`${p}config\``
           },
@@ -118,11 +118,11 @@ module.exports = {
 
       const titles = {
         pt: {
-          title: '🤖 *HERMES BOT* • Guia de Comandos',
+          title: '*HERMES BOT* • Guia de Comandos',
           group: '👥 Grupo:',
           members: 'membros',
-          secQuick: '⚡ *Ações Rápidas & Moderação*',
-          secConfig: '⚙️ *Gestão & Utilidades*',
+          secQuick: '⚡ *Ações Rápidas e Moderação*',
+          secConfig: '⚙️ *Gestão e Utilidades*',
           tipHeader: '💡 *Dica do Hermes:*',
           tipBody: `Você não precisa decorar comandos! Peça normalmente em português:\n• _"Hermes, fecha o grupo e avisa que volta às 14h"_\n• _"Hermes, cria uma votação sobre o almoço de amanhã"_\n• _"Hermes, fixa essa mensagem por 7 dias"_\n\n👉 Para abrir o painel de módulos de proteção, envie \`${p}config\``
         },
@@ -215,7 +215,7 @@ module.exports = {
         { cmd: `${p}ping`, desc: 'Status, latência e consumo de memória do bot' }
       ];
 
-      let ownerMenu = `👑 *PAINEL DO DONO & SAAS* • Hermes\n`;
+      let ownerMenu = `👑 *PAINEL ADM* • Hermes\n`;
       ownerMenu += `📌 *Prefixo:* \`${p}\` | 🌐 *Idioma:* \`${l.toUpperCase()}\`\n\n`;
 
       ownerCmds.forEach(c => {
@@ -227,6 +227,6 @@ module.exports = {
       return reply(ownerMenu);
     }
 
-    return reply(`🤖 *Hermes Bot*\nComandos disponíveis apenas para administradores em grupos autorizados.`);
+    return reply(`*Hermes Bot*\nComandos disponíveis apenas para administradores em grupos autorizados.`);
   }
 };
