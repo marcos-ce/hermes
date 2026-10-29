@@ -252,7 +252,7 @@ async function connectBot(options = {}) {
       if (sock.user?.lid) {
         console.log(`🔒 LID: ${sock.user.lid}`);
       }
-      console.log(`🛡️ Anti-Ban: ATIVO`);
+      console.log(`🛡️ATIVO`);
       console.log('====================================================\n');
 
       // Atualiza o scheduler com o socket autenticado (somente após conexão confirmada)
