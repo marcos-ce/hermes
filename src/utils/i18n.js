@@ -226,6 +226,7 @@ const dictionaries = {
     'hermes.fact_learned': "🧠 Anotado na memória permanente do grupo: *{key}* = *{value}*",
     'hermes.fact_forgotten': "🗑️ Fato *{key}* removido da memória do grupo com sucesso.",
     'hermes.fact_not_found': "ℹ️ O fato *{key}* não foi encontrado na memória do grupo.",
+    'hermes.action_hallucinated': "⚠️ A ação não foi executada no grupo. Por favor, marque o membro com @ ou use o comando com prefixo (ex: {prefix}ban, {prefix}warn).",
 
     // Onboarding Wizard Keys (Estilo Natural)
     'onboarding.welcome': "🎉 *GRUPO ATIVADO COM SUCESSO!*\nValidade: *{expiry}*\n\nVamos fazer uma configuração inicial rápida de 3 passos para ajustar o bot a este grupo!",
@@ -457,6 +458,7 @@ const dictionaries = {
     'hermes.fact_learned': "🧠 Anotado en la memoria permanente del grupo: *{key}* = *{value}*",
     'hermes.fact_forgotten': "🗑️ Dato *{key}* eliminado de la memoria del grupo con éxito.",
     'hermes.fact_not_found': "ℹ️ El dato *{key}* no se encontró en la memoria del grupo.",
+    'hermes.action_hallucinated': "⚠️ La acción no fue ejecutada en el grupo. Por favor, menciona al miembro con @ o usa el comando con prefijo (ej: {prefix}ban, {prefix}warn).",
 
     // Onboarding Wizard Keys (Estilo Natural)
     'onboarding.welcome': "🎉 *¡GRUPO ACTIVADO CON ÉXITO!*\nValidez: *{expiry}*\n\n¡Vamos a hacer una configuración inicial rápida de 3 pasos!",
@@ -688,6 +690,7 @@ const dictionaries = {
     'hermes.fact_learned': "🧠 Learned to group permanent memory: *{key}* = *{value}*",
     'hermes.fact_forgotten': "🗑️ Fact *{key}* successfully removed from group memory.",
     'hermes.fact_not_found': "ℹ️ Fact *{key}* was not found in group memory.",
+    'hermes.action_hallucinated': "⚠️ The action was not executed in the group. Please mention the member with @ or use the prefix command (e.g. {prefix}ban, {prefix}warn).",
 
     // Onboarding Wizard Keys (Estilo Natural)
     'onboarding.welcome': "🎉 *GROUP ACTIVATED SUCCESSFULLY!*\nExpires: *{expiry}*\n\nLet's do a quick 3-step initial setup for this group!",

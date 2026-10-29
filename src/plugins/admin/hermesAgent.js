@@ -141,6 +141,44 @@ function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
 }
 
 /**
+ * Guard rail R1: Detecta se a IA está afirmando em texto livre que executou uma ação
+ * administrativa sem que nenhuma Tool Call correspondente tenha sido disparada.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isActionHallucination(text) {
+  if (!text || typeof text !== 'string') return false;
+  const clean = text
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[*_`'!]/g, '')
+    .trim();
+
+  // Exceção: frases que começam com negação explícita ("Não bani", "Não removi", "No expulsé", "Did not ban")
+  if (/^nao\s+(?:bani|expulsei|adverti|mutei|silenciei|removi|desmutei|bloqueei)/i.test(clean) ||
+      /^no\s+(?:expulse|adverti|silencie|elimine|removi)/i.test(clean) ||
+      /^(?:did\s+not|didn't|have\s+not|haven't)\s+(?:ban|warn|mute|silence|kick|remove)/i.test(clean)) {
+    return false;
+  }
+
+  // 1. Verbos no pretérito perfeito ou infinitivo após 'acabei de' / 'acabo de' / 'just'
+  const pastActionRegex = /^(?:(?:pronto|ja|feito|ok|beleza|certo|listo)[\s,.]*)*(?:acabei de\s+|acabo de\s+|just\s+)?(?:bani|banir|expulsei|expulsar|expulse|adverti|advertir|mutei|mutar|silenciei|silenciar|silencie|removi|remover|desmutei|desmutar|bloqueei|bloquear|elimine|eliminar)\b/i;
+
+  // 2. Construções passivas de conclusão ("usuário banido", "membro foi advertido", "foi expulso")
+  const passiveActionRegex = /^(?:(?:o|a|el|la)\s+)?(?:usuario|membro|miembro|infrator|participante)?\s*(?:foi|esta|acaba de ser|ha sido|fue)\s+(?:banido|expulso|expulsado|advertido|mutado|silenciado|removido|eliminado)\b/i;
+  const shortPassiveRegex = /^(?:membro|miembro|usuario|infrator)\s+(?:banido|expulso|expulsado|advertido|mutado|silenciado|removido|eliminado)\b/i;
+
+  // 3. Suporte a Inglês
+  const enRegex = /^(?:(?:done|already|ok)[\s,.]*)*(?:just\s+)?(?:banned|warned|muted|silenced|removed|kicked)\b/i;
+
+  return pastActionRegex.test(clean) ||
+         passiveActionRegex.test(clean) ||
+         shortPassiveRegex.test(clean) ||
+         enRegex.test(clean);
+}
+
+/**
  * Notifica o Dono do bot no privado com diagnóstico completo caso ocorra erro na IA
  * Evita expor falhas técnicas e saldo insuficiente nos grupos
  */
@@ -1217,6 +1255,14 @@ module.exports = {
         const cleanSilence = rawContent.replace(/[*_"`']/g, '').trim();
         if (/^\[SIL[EÊ]NCIO\]/i.test(cleanSilence)) {
           logger.info({ from, sender }, 'Hermes identificou conversa direcionada a terceiros ou comentário de referência e manteve silêncio natural.');
+          return;
+        }
+
+        // Guard rail R1: Bloqueia alucinações de ação em texto sem tool_calls
+        if (isActionHallucination(rawContent)) {
+          logger.warn({ from, sender, rawContent }, 'Guard rail R1 ativado: modelo alegou execução de ação em texto sem tool_calls');
+          const groupPrefix = configManager.getGroupPrefix(from) || '!';
+          await reply(tr(lang, 'hermes.action_hallucinated', { prefix: groupPrefix }));
           return;
         }
 
