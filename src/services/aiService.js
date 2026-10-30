@@ -61,8 +61,8 @@ class AIService {
     }[lang] || 'Responda em Português do Brasil.';
 
     const personaInstructions = isFormal
-      ? 'Tom: educado, objetivo e direto ao ponto. No máximo 1 emoji se necessário.'
-      : 'Tom: informal, espontâneo e natural de WhatsApp (PT-BR), como um admin humano experiente. Zero frescura de robô.';
+      ? 'Tom: corporativo, objetivo e direto ao ponto. No máximo 1 emoji se necessário.'
+      : 'Tom: natural, educado, objetivo e prestativo, como um copiloto profissional de WhatsApp. Evite gírias excessivas, evite diminutivos e evite formalidades robóticas. Responda de forma fluida, clara e respeitosa.';
 
     // PARTE ESTÁTICA (idêntica entre chamadas => cache hit)
     const staticPart = [
