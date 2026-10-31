@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 700" width="100%" height="100%">
+  <defs>
+    <!-- Padrões de Meio-Tom (Halftone) em diagonal (45 graus) igual à gravura -->
+    <pattern id="dots-dense" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx="5" cy="5" r="4.2" fill="#FFFFFF" />
+    </pattern>
+
+    <pattern id="dots-medium" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx="5" cy="5" r="3.1" fill="#FFFFFF" />
+    </pattern>
+
+    <pattern id="dots-light" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx="5" cy="5" r="2.0" fill="#FFFFFF" />
+    </pattern>
+
+    <pattern id="dots-sparse" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx="5" cy="5" r="1.2" fill="#FFFFFF" />
+    </pattern>
+
+    <!-- Padrão inverso (pontos azuis sobre branco) para áreas de brilho intenso -->
+    <pattern id="dots-inverse" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="10" height="10" fill="#FFFFFF" />
+      <circle cx="5" cy="5" r="2.2" fill="#0C1CD6" />
+    </pattern>
+
+    <!-- Caminho de recorte principal do escudo -->
+    <clipPath id="shield-clip">
+      <path d="M 300 40 
+               C 440 40, 520 80, 520 220 
+               C 520 430, 390 570, 300 660 
+               C 210 570, 80 430, 80 220 
+               C 80 80, 160 40, 300 40 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- Fundo Azul Cobalto idêntico ao da ilustração -->
+  <rect width="100%" height="100%" fill="#0C1CD6" />
+
+  <!-- Sombra externa em pontilhado esparso -->
+  <path d="M 300 25 
+           C 455 25, 540 70, 540 220 
+           C 540 445, 400 590, 300 685 
+           C 200 590, 60 445, 60 220 
+           C 60 70, 145 25, 300 25 Z" fill="url(#dots-sparse)" />
+
+  <!-- CORPO PRINCIPAL DO ESCUDO -->
+  <g clip-path="url(#shield-clip)">
+    <!-- Base de meio-tom médio -->
+    <rect x="0" y="0" width="600" height="700" fill="url(#dots-medium)" />
+
+    <!-- Volume lateral esquerdo (Luz) -->
+    <path d="M 300 40 L 80 40 L 80 660 L 300 660 Z" fill="url(#dots-dense)" />
+    <ellipse cx="190" cy="240" rx="95" ry="170" fill="url(#dots-inverse)" />
+    <ellipse cx="175" cy="220" rx="55" ry="110" fill="#FFFFFF" />
+
+    <!-- Volume lateral direito (Sombra) -->
+    <path d="M 300 40 L 520 40 L 520 660 L 300 660 Z" fill="url(#dots-light)" />
+    <path d="M 380 40 L 520 40 L 520 660 L 380 660 Z" fill="#0C1CD6" opacity="0.45" />
+    <path d="M 380 40 L 520 40 L 520 660 L 380 660 Z" fill="url(#dots-sparse)" />
+
+    <!-- Padrão de escamas (igual ao peitoral da armadura) -->
+    <g stroke="#0C1CD6" stroke-width="4" fill="none" opacity="0.85">
+      <!-- Fileira 1 -->
+      <path d="M 120 140 A 35 35 0 0 0 190 140" />
+      <path d="M 190 140 A 35 35 0 0 0 260 140" />
+      <path d="M 260 140 A 35 35 0 0 0 330 140" />
+      <path d="M 330 140 A 35 35 0 0 0 400 140" />
+      <path d="M 400 140 A 35 35 0 0 0 470 140" />
+      <!-- Fileira 2 -->
+      <path d="M 155 185 A 35 35 0 0 0 225 185" />
+      <path d="M 225 185 A 35 35 0 0 0 295 185" />
+      <path d="M 295 185 A 35 35 0 0 0 365 185" />
+      <path d="M 365 185 A 35 35 0 0 0 435 185" />
+      <!-- Fileira 3 (Inferior) -->
+      <path d="M 155 445 A 35 35 0 0 0 225 445" />
+      <path d="M 225 445 A 35 35 0 0 0 295 445" />
+      <path d="M 295 445 A 35 35 0 0 0 365 445" />
+      <path d="M 365 445 A 35 35 0 0 0 435 445" />
+      <!-- Fileira 4 (Inferior) -->
+      <path d="M 190 490 A 35 35 0 0 0 260 490" />
+      <path d="M 260 490 A 35 35 0 0 0 330 490" />
+      <path d="M 330 490 A 35 35 0 0 0 400 490" />
+    </g>
+
+    <!-- Faixas diagonais ornamentadas (inspiradas no boldrié do guerreiro) -->
+    <g stroke="#FFFFFF" stroke-width="5" fill="#0C1CD6">
+      <line x1="80" y1="315" x2="520" y2="315" stroke-width="26" stroke="#0C1CD6" />
+      <line x1="80" y1="303" x2="520" y2="303" stroke-width="4" stroke="#FFFFFF" />
+      <line x1="80" y1="327" x2="520" y2="327" stroke-width="4" stroke="#FFFFFF" />
+      
+      <line x1="300" y1="40" x2="300" y2="660" stroke-width="26" stroke="#0C1CD6" />
+      <line x1="288" y1="40" x2="288" y2="660" stroke-width="4" stroke="#FFFFFF" />
+      <line x1="312" y1="40" x2="312" y2="660" stroke-width="4" stroke="#FFFFFF" />
+    </g>
+
+    <!-- Cravos geométricos nas faixas (como no cinturão transversal da imagem) -->
+    <g fill="#FFFFFF">
+      <!-- Horizontal Esquerda -->
+      <circle cx="115" cy="315" r="5" />
+      <circle cx="150" cy="315" r="5" />
+      <circle cx="185" cy="315" r="5" />
+      <!-- Horizontal Direita -->
+      <circle cx="415" cy="315" r="5" />
+      <circle cx="450" cy="315" r="5" />
+      <circle cx="485" cy="315" r="5" />
+      <!-- Vertical Superior -->
+      <circle cx="300" cy="95" r="5" />
+      <circle cx="300" cy="135" r="5" />
+      <circle cx="300" cy="175" r="5" />
+      <!-- Vertical Inferior -->
+      <circle cx="300" cy="455" r="5" />
+      <circle cx="300" cy="495" r="5" />
+      <circle cx="300" cy="535" r="5" />
+      <circle cx="300" cy="575" r="5" />
+      <circle cx="300" cy="615" r="5" />
+    </g>
+  </g>
+
+  <!-- BORDAS ORNAMENTAIS DO ESCUDO -->
+  <!-- Contorno externo branco sólido -->
+  <path d="M 300 40 
+           C 440 40, 520 80, 520 220 
+           C 520 430, 390 570, 300 660 
+           C 210 570, 80 430, 80 220 
+           C 80 80, 160 40, 300 40 Z" fill="none" stroke="#FFFFFF" stroke-width="8" />
+
+  <!-- Trilho azul da borda -->
+  <path d="M 300 58 
+           C 425 58, 500 94, 500 220 
+           C 500 415, 380 546, 300 632 
+           C 220 546, 100 415, 100 220 
+           C 100 94, 175 58, 300 58 Z" fill="none" stroke="#0C1CD6" stroke-width="20" />
+
+  <!-- Costura pontilhada da borda (repetindo os detalhes da armadura) -->
+  <path d="M 300 58 
+           C 425 58, 500 94, 500 220 
+           C 500 415, 380 546, 300 632 
+           C 220 546, 100 415, 100 220 
+           C 100 94, 175 58, 300 58 Z" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-dasharray="4 14" stroke-linecap="round" />
+
+  <!-- Contorno interno branco fino -->
+  <path d="M 300 72 
+           C 412 72, 484 105, 484 220 
+           C 484 402, 370 526, 300 608 
+           C 230 526, 116 402, 116 220 
+           C 116 105, 188 72, 300 72 Z" fill="none" stroke="#FFFFFF" stroke-width="4" />
+
+  <!-- UMBO CENTRAL (Emblema idêntico ao medalhão na ombreira esquerda da imagem) -->
+  <g transform="translate(300, 315)">
+    <!-- Halo de sombra em azul -->
+    <circle cx="0" cy="0" r="108" fill="#0C1CD6" />
+    
+    <!-- Anel de meio-tom ao redor do medalhão -->
+    <circle cx="0" cy="0" r="102" fill="url(#dots-dense)" stroke="#FFFFFF" stroke-width="4" />
+    
+    <!-- Anel decorativo pontilhado -->
+    <circle cx="0" cy="0" r="88" fill="#0C1CD6" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="6 8" />
+
+    <!-- Disco branco principal (como o da ombreira) -->
+    <circle cx="-4" cy="-4" r="76" fill="#FFFFFF" />
+
+    <!-- Sombra em meio-tom na borda inferior direita do disco -->
+    <path d="M 50 -50 A 76 76 0 0 1 -50 50 A 72 76 0 0 0 50 -50 Z" fill="url(#dots-inverse)" />
+
+    <!-- Recortes em pétalas/folhas azuis e pontos (replicando o emblema da ombreira) -->
+    <g fill="#0C1CD6">
+      <!-- Ponto central -->
+      <circle cx="-4" cy="-4" r="7" />
+      <!-- Pontos menores secundários -->
+      <circle cx="-24" cy="14" r="4.5" />
+      <circle cx="14" cy="24" r="5" />
+
+      <!-- Pétala Superior Esquerda (curva estilizada) -->
+      <path d="M -52 -38 C -30 -55, -8 -35, -18 -18 C -26 -5, -42 -15, -35 -26 C -30 -32, -42 -36, -52 -38 Z" />
+
+      <!-- Pétala Superior Direita -->
+      <path d="M 12 -56 C 38 -44, 48 -18, 34 -4 C 24 -22, 18 -38, 12 -56 Z" />
+
+      <!-- Pétala Inferior Esquerda -->
+      <path d="M -58 8 C -36 2, -22 16, -28 34 C -42 24, -50 16, -58 8 Z" />
+
+      <!-- Pétala Inferior Direita -->
+      <path d="M 22 14 C 46 16, 58 32, 50 50 C 36 40, 28 28, 22 14 Z" />
+    </g>
+  </g>
+</svg>
