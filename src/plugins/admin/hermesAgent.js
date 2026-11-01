@@ -25,7 +25,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|tranc|m[oó]dulo|link|links|antilink|antiflood|flood|spam|trava|antifake|ddi|warn|advert|aviso|ban|banir|banimento|kick|expuls|mut|silenci|desmut|puni|prote[cç][aã]o|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|como|usar|uso|funciona|ajuda|help|menu|comando|comandos|fun[cç][oõ]es|explica|tutorial|adm|admin|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|tranc|m[oó]dulo|link|links|antilink|antiflood|flood|spam|trava|antifake|ddi|warn|advert|aviso|ban|banir|banimento|kick|expuls|mut|silenci|desmut|puni|prote[cç][aã]o|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|boas-?vindas|aprova|licen[cç]a|assinatura|validade|vencimento|vence|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|como|usar|uso|funciona|ajuda|help|menu|comando|comandos|fun[cç][oõ]es|explica|tutorial|adm|admin|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -525,6 +525,13 @@ module.exports = {
       if (isShortResponse || hasQuotedTarget) {
         isContinuation = true;
       }
+    } else if (wizardCache.get(`post_action:${from}:${sender}`)) {
+      const isQuickCorrection = lowerText.length <= 45 &&
+        /^(?:desfa[zç]|desfazer|cancela|cancelar|reverte|reverter|volta\s+atr[aá]s|na\s+verdade\s+(?:pode\s+)?(?:banir|mutar|silenciar|apagar|fechar|abrir)|(?:por|de)\s+\d+\s*(?:m|min|minutos?|h|horas?|d|dias?))\b/i.test(lowerText);
+      if (isQuickCorrection) {
+        isContinuation = true;
+        wizardCache.del(`post_action:${from}:${sender}`);
+      }
     }
 
     const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || mentionsHermes || isContinuation;
@@ -986,6 +993,14 @@ module.exports = {
     }
 
     // Estado do grupo: só quando o pedido trata de configuração (economiza tokens em perguntas/moderação simples)
+    // Verifica em O(1) via groupCache se o bot já é admin do grupo
+    let isBotAdminNow = true;
+    try {
+      const botIdInfo = getBotIdentity(sock);
+      const botCheck = await checkAdminStatus(sock, from, botIdInfo.botJid || botIdInfo.botLid);
+      isBotAdminNow = Boolean(botCheck?.isBotAdmin || botCheck?.isAdmin);
+    } catch (_) {}
+
     if (STATE_KEYWORDS.test(queryText || '')) {
       const schedCfg = configManager.getPluginConfig(from, 'schedule') || {};
       const schedActive = configManager.isPluginEnabled(from, 'schedule');
@@ -994,7 +1009,7 @@ module.exports = {
       const antifakeCfg = configManager.getPluginConfig(from, 'antifake') || {};
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const groupData = configManager.getGroup(from) || {};
-      const activeMods = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'calendar']
+      const activeMods = ['antilink', 'antiflood', 'antifake', 'autoapprove', 'welcome', 'automsg', 'schedule', 'calendar']
         .filter(m => configManager.isPluginEnabled(from, m));
 
       const calCfg = configManager.getPluginConfig(from, 'calendar') || {};
@@ -1029,19 +1044,18 @@ module.exports = {
 
       const antilinkActive = configManager.isPluginEnabled(from, 'antilink');
       const antilinkAction = antilinkActive ? (antilinkCfg.action || 'delete') : 'off';
-      let isBotAdminNow = true;
-      try {
-        const botIdInfo = getBotIdentity(sock);
-        const botCheck = await checkAdminStatus(sock, from, botIdInfo.botJid || botIdInfo.botLid);
-        isBotAdminNow = Boolean(botCheck?.isBotAdmin || botCheck?.isAdmin);
-      } catch (_) {}
+      const licenseDays = groupData.expiresAt
+        ? `${Math.max(0, Math.ceil((groupData.expiresAt - Date.now()) / 86400000))}d`
+        : 'vitalícia';
       userPromptParts.push(
-        `[Estado] botAdmin=${isBotAdminNow ? 'sim' : 'não (precisa ser promovido a admin do grupo para moderar)'} | idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
+        `[Estado] botAdmin=${isBotAdminNow ? 'sim' : 'não (precisa ser promovido a admin do grupo para moderar)'} | licença=${licenseDays} | idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
         `antilink=${antilinkAction},liberados=${antilinkDoms} | warnLimite=${warnCfg.maxWarns || 3} | ` +
         `antiflood=${antifloodCfg.maxMessages || 6}msg/5s,${antifloodCfg.maxChars || 2500}chars,${antifloodCfg.action || 'warn'} | ` +
         `antifake=${antifakeDdis} | agenda=${calSummary} | enquete=${pollSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}` +
         (groupDesc && /descr|regra|bio/i.test(queryText || '') ? ` | descrição="${groupDesc.slice(0, 300)}"` : '')
       );
+    } else if (!isBotAdminNow) {
+      userPromptParts.push('[Aviso: Você AINDA NÃO é administrador do grupo. Se o admin pedir moderação ou perguntar se está tudo pronto, lembre-o de te promover a admin]');
     }
 
     // Ideia 4: Injeção da Pilha de Desfazer (Undo Stack) apenas sob demanda (economiza tokens)
@@ -1239,6 +1253,7 @@ module.exports = {
             await reply(execResult.error);
           }
         }
+        wizardCache.set(`post_action:${from}:${sender}`, { lastTool: validCalls[validCalls.length - 1].name }, 30);
         return;
       }
 
