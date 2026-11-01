@@ -178,6 +178,9 @@ async function processSingleMessage(sock, msg) {
   } else if (text.startsWith(groupPrefix)) {
     effectivePrefix = groupPrefix;
     rawBody = text.slice(groupPrefix.length).trim();
+  } else if ((groupPrefix === '!' || groupPrefix === '/') && (text.startsWith('/') || text.startsWith('!'))) {
+    effectivePrefix = text[0];
+    rawBody = text.slice(1).trim();
   } else if (!isGroup && (text.startsWith('/') || text.startsWith('!'))) {
     effectivePrefix = text[0];
     rawBody = text.slice(1).trim();
