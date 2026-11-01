@@ -17,6 +17,9 @@ const pinTracker = require('../utils/pinTracker');
 const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate, handleJoinRequest } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
+const configManager = require('./configManager');
+const { sendSafeMessage } = require('../utils/antiBan');
+const { t } = require('../utils/i18n');
 
 /**
  * Auto-cura de sessões de criptografia corrompidas (Over 2000 messages into the future / No matching sessions).
@@ -284,6 +287,12 @@ async function connectBot(options = {}) {
         console.log(`👥 Grupos sincronizados na inicialização: ${groupCount}`);
         for (const [gid, meta] of Object.entries(groups || {})) {
           groupCache.set(gid, meta);
+          if (!configManager.isGroupBanned(gid)) {
+            if (!configManager.getGroup(gid)) {
+              configManager.ensureGroupStarterKit(gid, meta.subject || '');
+            }
+            configManager.markWelcomeSent(gid, true);
+          }
           if (Array.isArray(meta.participants)) {
             for (const p of meta.participants) {
               registerParticipantLid(p);
@@ -385,6 +394,44 @@ async function connectBot(options = {}) {
   });
 
   // Atualização de configurações ou metadados de grupos
+  // Entrada em novos grupos: ativa automaticamente o Kit Padrão (30 dias + AntiLink + IA) e envia saudação
+  sock.ev.on('groups.upsert', async (newGroups) => {
+    if (!Array.isArray(newGroups)) return;
+    for (const g of newGroups) {
+      try {
+        if (!g?.id || !g.id.endsWith('@g.us')) continue;
+        groupCache.set(g.id, g);
+        if (Array.isArray(g.participants)) {
+          for (const p of g.participants) {
+            registerParticipantLid(p);
+          }
+        }
+        if (configManager.isGroupBanned(g.id)) continue;
+
+        const { shouldSendWelcome } = configManager.ensureGroupStarterKit(g.id, g.subject || '');
+        configManager.markWelcomeSent(g.id, true);
+        configManager.flushSync();
+
+        if (shouldSendWelcome) {
+          const groupPrefix = configManager.getGroupPrefix(g.id) || '!';
+          const groupLang = configManager.getGroupLang(g.id) || 'pt';
+          const presentationText = t(groupLang, 'saas.group_presentation', { prefix: groupPrefix });
+
+          setTimeout(async () => {
+            try {
+              await sock.groupMetadata(g.id).catch(() => {});
+              await sendSafeMessage(sock, g.id, { text: presentationText });
+            } catch (err) {
+              logger.error({ err, groupJid: g.id }, 'Erro ao enviar apresentação automática no novo grupo');
+            }
+          }, 3000);
+        }
+      } catch (err) {
+        logger.error({ err, groupJid: g?.id }, 'Erro ao processar groups.upsert');
+      }
+    }
+  });
+
   sock.ev.on('groups.update', (updates) => {
     if (Array.isArray(updates)) {
       for (const update of updates) {

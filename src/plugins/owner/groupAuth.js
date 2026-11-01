@@ -149,40 +149,24 @@ module.exports = {
     // Ativação do Grupo (!bot on [dias] ou !ativar [dias])
     // ==========================================
     if (sub === 'on' || sub === 'ativar' || sub === 'activar' || sub === 'activate') {
-      const rawDays = isDirectActivate && !isNaN(parseInt(args[0], 10)) ? args[0] : args[1];
+      const rawDays = isDirectActivate ? args[0] : args[1];
+      const isLifetimeArg = ['0', 'vitalicio', 'vitalício', 'lifetime', 'infinito'].includes(String(rawDays || '').toLowerCase());
       const daysArg = parseInt(rawDays, 10);
-      let expiryDisplay = t('common.lifetime');
+      const effectiveDays = isLifetimeArg ? 0 : ((!isNaN(daysArg) && daysArg > 0) ? daysArg : 30);
 
-      if (!isNaN(daysArg) && daysArg > 0) {
-        const expiresAt = configManager.addDaysToGroup(from, daysArg);
-        expiryDisplay = new Date(expiresAt).toLocaleDateString();
-      } else {
-        configManager.setGroupExpiry(from, null); // Vitalício
-      }
-
-      configManager.setGroupEnabled(from, true);
-
-      // Atualiza nome do grupo
+      let groupName = '';
       try {
         const meta = await getGroupMetadata(sock, from);
         if (meta?.subject) {
-          configManager.getOrCreateGroup(from, meta.subject);
+          groupName = meta.subject;
         }
       } catch (_) {}
 
-      // Aplica configurações padrão e marca como onboarded para ativação instantânea
-      if (!configManager.isGroupOnboarded(from)) {
-        configManager.setGroupOnboarded(from, true);
-        configManager.updatePluginConfig(from, 'hermes', {
-          enabled: true,
-          memoryEnabled: true,
-          configured: true
-        });
-      }
+      configManager.ensureGroupStarterKit(from, groupName, effectiveDays);
+      configManager.markWelcomeSent(from, true);
       configManager.flushSync();
 
       const groupPrefix = configManager.getGroupPrefix(from) || prefix || '!';
-      const groupLang = configManager.getGroupLang(from) || 'pt';
       return reply(t('saas.group_presentation', { prefix: groupPrefix }));
     }
 

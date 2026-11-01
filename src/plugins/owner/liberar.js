@@ -126,26 +126,14 @@ module.exports = {
       }
     } catch (_) {}
 
-    configManager.getOrCreateGroup(targetJid, groupName);
-
-    // Configura validade (vitalício ou número de dias)
-    let expiryDisplay = t('common.lifetime');
-    if (days && days > 0) {
-      const expiresAt = configManager.addDaysToGroup(targetJid, days);
-      expiryDisplay = new Date(expiresAt).toLocaleDateString();
-    } else {
-      configManager.setGroupExpiry(targetJid, null);
-    }
-
-    // Aplica configurações padrão recomendadas e marca como ativado/onboarded
-    configManager.setGroupEnabled(targetJid, true);
-    configManager.setGroupOnboarded(targetJid, true);
-    configManager.updatePluginConfig(targetJid, 'hermes', {
-      enabled: true,
-      memoryEnabled: true,
-      configured: true
-    });
+    const effectiveDays = (days && days > 0) ? days : 30;
+    const { group, shouldSendWelcome } = configManager.ensureGroupStarterKit(targetJid, groupName, effectiveDays);
+    configManager.markWelcomeSent(targetJid, true);
     configManager.flushSync();
+
+    const expiryDisplay = group.expiresAt
+      ? new Date(group.expiresAt).toLocaleDateString()
+      : t('common.lifetime');
 
     // Mensagem de apresentação oficial do bot no grupo
     const groupPrefix = configManager.getGroupPrefix(targetJid) || '!';
@@ -160,17 +148,19 @@ module.exports = {
         expiry: expiryDisplay
       }));
 
-      // 2. Envia a apresentação no grupo com delay seguro e garantia de chaves E2EE
-      setTimeout(async () => {
-        try {
+      // 2. Envia a apresentação no grupo se ainda não tiver sido disparada pelo groups.upsert
+      if (shouldSendWelcome) {
+        setTimeout(async () => {
           try {
-            await sock.groupMetadata(targetJid);
-          } catch (_) {}
-          await sendSafeMessage(sock, targetJid, { text: presentationText });
-        } catch (err) {
-          logger.error({ err }, 'Erro ao enviar mensagem de apresentação no grupo liberado');
-        }
-      }, 3000);
+            try {
+              await sock.groupMetadata(targetJid);
+            } catch (_) {}
+            await sendSafeMessage(sock, targetJid, { text: presentationText });
+          } catch (err) {
+            logger.error({ err }, 'Erro ao enviar mensagem de apresentação no grupo liberado');
+          }
+        }, 3000);
+      }
 
       return;
     }

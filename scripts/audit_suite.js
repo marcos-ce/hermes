@@ -222,6 +222,12 @@ try {
   if (!group || group.name !== 'Grupo Auditoria') {
     reportError('ConfigManager', 'getOrCreateGroup', 'Falha ao criar grupo temporário');
   }
+  if (!group.enabled || !group.onboarded || !group.expiresAt) {
+    reportError('ConfigManager', 'starterKitLicense', 'Novo grupo deve nascer enabled: true, onboarded: true e com licença de 30 dias');
+  }
+  if (!group.plugins?.hermes?.enabled || group.plugins?.antilink?.action !== 'warn' || group.plugins?.warn?.maxWarns !== 3) {
+    reportError('ConfigManager', 'starterKitPlugins', 'Novo grupo deve nascer com hermes IA, antilink (warn) e warn (3) ativos');
+  }
 
   configManager.updatePluginConfig(dummyJid, 'antilink', { enabled: true, action: 'warn' });
   const cfg = configManager.getPluginConfig(dummyJid, 'antilink');

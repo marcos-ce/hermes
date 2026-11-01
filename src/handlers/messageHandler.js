@@ -229,6 +229,9 @@ async function processSingleMessage(sock, msg) {
   // 2. Verificação de Grupo Ativo e Licença SaaS
   // ========================================================
   if (isGroup) {
+    if (!configManager.getGroup(from)) {
+      configManager.getOrCreateGroup(from);
+    }
     const isEnabled = configManager.isGroupEnabled(from);
 
     if (!isEnabled) {

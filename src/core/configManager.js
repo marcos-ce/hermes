@@ -404,17 +404,37 @@ class ConfigManager {
   getOrCreateGroup(groupJid, name = '') {
     let group = this.groups.get(groupJid);
     if (!group) {
+      const defaultLicenseMs = 30 * 24 * 60 * 60 * 1000; // 30 dias (1 mês) padrão
       group = {
         name: name || '',
-        enabled: false,
+        enabled: true,
+        onboarded: true,
+        welcomeSent: false,
         lang: settings.defaultLang || 'pt',
         prefix: settings.defaultPrefix || '!',
-        expiresAt: null, // null = vitalício ou não ativado
+        expiresAt: Date.now() + defaultLicenseMs,
         expiryNotified: false,
         lastActivity: Date.now(),
         blacklist: [],
         warns: {},
-        plugins: {}
+        plugins: {
+          hermes: {
+            enabled: true,
+            memoryEnabled: true,
+            configured: true
+          },
+          antilink: {
+            enabled: true,
+            configured: true,
+            allowedDomains: [],
+            action: 'warn'
+          },
+          warn: {
+            enabled: true,
+            configured: true,
+            maxWarns: 3
+          }
+        }
       };
       this.groups.set(groupJid, group);
       this.scheduleSave();
@@ -423,6 +443,62 @@ class ConfigManager {
       this.scheduleSave();
     }
     return group;
+  }
+
+  /**
+   * Garante que o grupo esteja ativado com o Kit Padrão (Licença de 30 dias, Hermes IA, AntiLink delete + 3 warns)
+   * sem sobrescrever configurações já personalizadas pelo grupo.
+   */
+  ensureGroupStarterKit(groupJid, name = '', days = null) {
+    const group = this.getOrCreateGroup(groupJid, name);
+    group.enabled = true;
+    group.onboarded = true;
+    group.expiryNotified = false;
+
+    if (typeof days === 'number' && days > 0) {
+      this.addDaysToGroup(groupJid, days);
+    } else if (days === 0) {
+      group.expiresAt = null; // Vitalício explícito
+    } else if (!group.expiresAt || Date.now() > group.expiresAt) {
+      group.expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+    }
+
+    group.plugins = group.plugins || {};
+    if (!group.plugins.hermes?.configured) {
+      group.plugins.hermes = {
+        ...(group.plugins.hermes || {}),
+        enabled: true,
+        memoryEnabled: true,
+        configured: true
+      };
+    }
+    if (!group.plugins.antilink?.configured) {
+      group.plugins.antilink = {
+        ...(group.plugins.antilink || {}),
+        enabled: true,
+        configured: true,
+        allowedDomains: [],
+        action: 'warn'
+      };
+    }
+    if (!group.plugins.warn?.configured) {
+      group.plugins.warn = {
+        ...(group.plugins.warn || {}),
+        enabled: true,
+        configured: true,
+        maxWarns: 3
+      };
+    }
+
+    const shouldSendWelcome = !group.welcomeSent;
+    this.scheduleSave();
+    return { group, shouldSendWelcome };
+  }
+
+  markWelcomeSent(groupJid, sent = true) {
+    const group = this.getOrCreateGroup(groupJid);
+    group.welcomeSent = Boolean(sent);
+    this.scheduleSave();
   }
 
   isGroupEnabled(groupJid) {
