@@ -96,6 +96,30 @@ module.exports = async function manageCalendar({ sock, from, sender, lang, args 
       }
     }
 
+    // Se for abertura/fechamento programado com horário fixo (sem atraso relativo de minutos),
+    // grava permanentemente na rotina diária do grupo (plugins.schedule) para funcionar todos os dias!
+    const isExplicitRelative = Boolean(args.delayMinutes) || /(?:daqui|dq|em\s+\d+|por\s+\d+|durante|minutos?|mins?)/i.test(String(relCandidate || ''));
+    if ((actionType === 'close_group' || actionType === 'open_group') && !isExplicitRelative && parsedTime) {
+      const currentSched = configManager.getPluginConfig(from, 'schedule') || {};
+      const isClose = actionType === 'close_group';
+      const updates = { enabled: true, configured: true };
+      if (isClose) {
+        updates.closeTime = parsedTime;
+        if (!currentSched.openTime) updates.openTime = '0';
+      } else {
+        updates.openTime = parsedTime;
+        if (!currentSched.closeTime) updates.closeTime = '0';
+      }
+      configManager.updatePluginConfig(from, 'schedule', updates);
+
+      return {
+        success: true,
+        message: isClose
+          ? `🔒 Fechamento diário do grupo configurado com sucesso para *${parsedTime}*.`
+          : `🔓 Abertura diária do grupo configurada com sucesso para *${parsedTime}*.`
+      };
+    }
+
     const creatorData = await resolveParticipant(sock, from, sender);
     const creatorNum = creatorData?.displayNum || sender.replace(/@.*$/, '').replace(/\D/g, '');
     const creatorDisplay = creatorData?.displayUser || creatorNum;
@@ -129,11 +153,12 @@ module.exports = async function manageCalendar({ sock, from, sender, lang, args 
         try {
           const currentCfg = configManager.getPluginConfig(from, 'calendar') || {};
           const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
-          const ev = currentEvents.find(e => String(e.id) === newId);
-          if (ev && !ev.executed) {
-            ev.executed = true;
-            ev.executedAt = Date.now();
-            configManager.updatePluginConfig(from, 'calendar', { events: currentEvents });
+          const evIdx = currentEvents.findIndex(e => String(e.id) === newId);
+          if (evIdx !== -1 && !currentEvents[evIdx].executed) {
+            const ev = currentEvents[evIdx];
+            currentEvents.splice(evIdx, 1);
+            const cleaned = currentEvents.filter(e => !e.executed);
+            configManager.updatePluginConfig(from, 'calendar', { events: cleaned });
 
             await executeCalendarAction({ sock, groupJid: from, event: ev, lang, config: currentCfg });
           }

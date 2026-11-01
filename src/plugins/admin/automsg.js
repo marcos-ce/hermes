@@ -274,8 +274,20 @@ function saveAutomsgMedia(groupJid, buffer, info) {
     }
 
     const ext = extFromMime(info.mimeType);
-    const fileName = `${sanitizeGroupId(groupJid)}${ext}`;
+    const basePrefix = sanitizeGroupId(groupJid);
+    const fileName = `${basePrefix}${ext}`;
     const filePath = path.join(AUTOMSG_MEDIA_DIR, fileName);
+
+    // Limpa arquivos anteriores do mesmo grupo caso a extensão tenha mudado (ex: .png -> .jpg)
+    try {
+      const existingFiles = fs.readdirSync(AUTOMSG_MEDIA_DIR);
+      for (const f of existingFiles) {
+        if (f.startsWith(`${basePrefix}.`) && f !== fileName) {
+          try { fs.unlinkSync(path.join(AUTOMSG_MEDIA_DIR, f)); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
     fs.writeFileSync(filePath, cleanBuffer);
 
     return {

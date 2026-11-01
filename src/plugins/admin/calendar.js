@@ -260,11 +260,11 @@ async function scheduleTimedGroupAction(sock, groupJid, { action, rel, text, sen
       try {
         const currentCfg = configManager.getPluginConfig(groupJid, 'calendar') || {};
         const currentEvents = Array.isArray(currentCfg.events) ? currentCfg.events : [];
-        const ev = currentEvents.find(e => String(e.id) === newId);
-        if (ev && !ev.executed) {
-          ev.executed = true;
-          ev.executedAt = Date.now();
-          configManager.updatePluginConfig(groupJid, 'calendar', { events: currentEvents });
+        const evIdx = currentEvents.findIndex(e => String(e.id) === newId);
+        if (evIdx !== -1 && !currentEvents[evIdx].executed) {
+          currentEvents.splice(evIdx, 1);
+          const cleaned = currentEvents.filter(e => !e.executed);
+          configManager.updatePluginConfig(groupJid, 'calendar', { events: cleaned });
 
           const waAction = isClose ? 'announcement' : 'not_announcement';
           await sock.groupSettingUpdate(groupJid, waAction);
@@ -338,7 +338,10 @@ module.exports = {
     let modified = false;
 
     for (const event of events) {
-      if (event.executed) continue;
+      if (event.executed) {
+        modified = true;
+        continue;
+      }
 
       if (event.date === currentDDMM && event.time === currentHHMM) {
         const execKey = `${groupJid}:calendar:${event.id}:${currentDateKey}:${currentHHMM}`;
@@ -364,7 +367,8 @@ module.exports = {
     }
 
     if (modified) {
-      configManager.updatePluginConfig(groupJid, 'calendar', { events });
+      const remainingEvents = events.filter(e => !e.executed);
+      configManager.updatePluginConfig(groupJid, 'calendar', { events: remainingEvents });
     }
   },
 

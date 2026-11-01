@@ -89,8 +89,32 @@ class ConfigManager {
 
     for (const [key, val] of Object.entries(parsed)) {
       if (key !== '_global' && typeof val === 'object' && val !== null) {
+        this._pruneGroupTrash(val);
         this.groups.set(key, val);
       }
+    }
+  }
+
+  /**
+   * Remove exclusivamente lixo efêmero expirado (eventos já executados e mutes já vencidos).
+   * NUNCA altera licenças (expiresAt), enabled, warns, blacklist, culture ou configs de plugins.
+   */
+  _pruneGroupTrash(group) {
+    if (!group || typeof group !== 'object') return;
+    const now = Date.now();
+
+    // 1. Limpa silenciamentos individuais cujo tempo já expirou
+    if (group.mutedMembers && typeof group.mutedMembers === 'object') {
+      for (const [mKey, mData] of Object.entries(group.mutedMembers)) {
+        if (!mData || (typeof mData.until === 'number' && now > mData.until)) {
+          delete group.mutedMembers[mKey];
+        }
+      }
+    }
+
+    // 2. Limpa lembretes/eventos do calendário que já foram executados
+    if (group.plugins?.calendar && Array.isArray(group.plugins.calendar.events)) {
+      group.plugins.calendar.events = group.plugins.calendar.events.filter(e => e && !e.executed);
     }
   }
 
@@ -131,6 +155,7 @@ class ConfigManager {
       _global: this.global
     };
     for (const [key, val] of this.groups.entries()) {
+      this._pruneGroupTrash(val);
       obj[key] = val;
     }
     return JSON.stringify(obj, null, 2);

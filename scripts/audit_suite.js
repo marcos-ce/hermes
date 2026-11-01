@@ -229,8 +229,13 @@ try {
     reportError('ConfigManager', 'updatePluginConfig', 'Falha ao salvar configuração de plugin');
   }
 
-  // Remove grupo dummy da memória
+  // Remove grupo dummy da memória e cancela timer de debounce para não sujar data/groups.json
   configManager.groups.delete(dummyJid);
+  if (configManager.saveTimeout) {
+    clearTimeout(configManager.saveTimeout);
+    configManager.saveTimeout = null;
+  }
+  configManager.isDirty = false;
   reportOk('ConfigManager', 'Operações em memória e esquemas de dados validados com sucesso.');
 } catch (err) {
   reportError('ConfigManager', 'test', err.stack || err.message);

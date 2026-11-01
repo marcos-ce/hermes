@@ -1,3 +1,4 @@
+const configManager = require('../../core/configManager');
 const { parseRelativeTime } = require('../timeParser');
 const { scheduleTimedGroupAction } = require('../../plugins/admin/calendar');
 const { t } = require('../../utils/i18n');
@@ -34,8 +35,35 @@ module.exports = async function setGroupMute({ sock, from, sender, isBotAdmin, l
   if (delayArg) {
     const rel = parseRelativeTime(delayArg);
     if (rel.success && rel.delayMinutes > 0) {
-      const calendarAction = args.action === 'close' ? 'close_group' : 'open_group';
       const isClose = args.action === 'close';
+      const rawTimeStr = String(args.time || '').trim();
+      const isExplicitRelative = Boolean(args.delayMinutes) || /(?:daqui|dq|em\s+\d+|por\s+\d+|durante|minutos?|mins?)/i.test(rawTimeStr);
+
+      // Se o admin passou um horário fixo de relógio (ex: "23:00", "às 22h", "07:00") sem pedir timer relativo de minutos:
+      // Salva permanentemente no schedule diário (plugins.schedule) para repetir todos os dias para sempre!
+      if (!isExplicitRelative && rel.formattedTime) {
+        const currentSched = configManager.getPluginConfig(from, 'schedule') || {};
+        const updates = { enabled: true, configured: true };
+        if (isClose) {
+          updates.closeTime = rel.formattedTime;
+          if (!currentSched.openTime) updates.openTime = '0';
+        } else {
+          updates.openTime = rel.formattedTime;
+          if (!currentSched.closeTime) updates.closeTime = '0';
+        }
+        configManager.updatePluginConfig(from, 'schedule', updates);
+
+        const responseText = isClose
+          ? `🔒 *Fechamento Programado:*\nO grupo será fechado diariamente às *${rel.formattedTime}* (${rel.humanLabel}).`
+          : `🔓 *Abertura Programada:*\nO grupo será aberto diariamente às *${rel.formattedTime}* (${rel.humanLabel}).`;
+
+        return {
+          success: true,
+          message: responseText
+        };
+      }
+
+      const calendarAction = isClose ? 'close_group' : 'open_group';
       const actionLabel = isClose ? 'Fechamento do grupo' : 'Abertura do grupo';
 
       await scheduleTimedGroupAction(sock, from, {

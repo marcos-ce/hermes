@@ -22,6 +22,7 @@ class PollTracker {
     /** @type {Map<string, string>} groupJid -> último pollId */
     this.latestByGroup = new Map();
     this.MAX_POLLS = 100;
+    this.POLL_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 dias
     this.filePath = path.resolve(process.cwd(), 'data', 'polls.json');
     this.saveTimer = null;
     this.isSaving = false;
@@ -48,8 +49,12 @@ class PollTracker {
       });
 
       if (Array.isArray(entries)) {
+        const now = Date.now();
         for (const [id, data] of entries) {
           if (id && data?.key && data?.message) {
+            if (data.createdAt && (now - data.createdAt > this.POLL_TTL_MS)) {
+              continue; // Descarta enquetes com mais de 14 dias
+            }
             this.polls.set(id, data);
             const groupJid = data.key.remoteJid;
             if (groupJid && groupJid.endsWith('@g.us')) {
@@ -187,16 +192,25 @@ class PollTracker {
 
     if (!hasPollCreation) return;
 
+    // Purga enquetes expiradas (> 14 dias) antes de checar o limite máximo
+    const now = Date.now();
+    for (const [id, data] of this.polls.entries()) {
+      if (data.createdAt && (now - data.createdAt > this.POLL_TTL_MS)) {
+        this._deletePollEntry(id);
+      }
+    }
+
     if (!this.polls.has(pollId) && this.polls.size >= this.MAX_POLLS) {
       const oldestId = this.polls.keys().next().value;
-      if (oldestId) this.polls.delete(oldestId);
+      if (oldestId) this._deletePollEntry(oldestId);
     }
 
     const existing = this.polls.get(pollId);
     const stored = {
       key: pollMsg.key,
       message: storedMessage,
-      pollUpdates: existing?.pollUpdates || []
+      pollUpdates: existing?.pollUpdates || [],
+      createdAt: existing?.createdAt || now
     };
 
     this.polls.set(pollId, stored);
@@ -207,6 +221,18 @@ class PollTracker {
 
     this.scheduleSave();
     logger.debug({ pollId, targetGroup }, 'Enquete registrada no pollTracker');
+  }
+
+  /**
+   * Remove uma enquete e limpa ponteiros órfãos em latestByGroup
+   */
+  _deletePollEntry(pollId) {
+    this.polls.delete(pollId);
+    for (const [gJid, pId] of this.latestByGroup.entries()) {
+      if (pId === pollId) {
+        this.latestByGroup.delete(gJid);
+      }
+    }
   }
 
   /**

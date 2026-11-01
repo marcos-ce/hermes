@@ -53,6 +53,10 @@ console.log('✅ 5. Constantes Anti-Ban: Limite de 2.5 MB e mínimo de 3h com fo
 
 // 6. Subcomandos do execute
 (async () => {
+  // Preserva o estado original de data/groups.json antes dos testes
+  const fs = require('fs');
+  const groupsFilePath = configManager.filePath;
+  const originalGroupsRaw = fs.existsSync(groupsFilePath) ? fs.readFileSync(groupsFilePath, 'utf-8') : null;
   const fakeGroup = '120363000000000099@g.us';
   const replies = [];
   const reply = (text) => { replies.push(text); return Promise.resolve(); };
@@ -241,11 +245,16 @@ console.log('✅ 5. Constantes Anti-Ban: Limite de 2.5 MB e mínimo de 3h com fo
   assert.strictEqual(remRes.success, true);
   console.log('✅ 8. Tool set_automsg_media: Remoção e validações de IA');
 
-  // Limpa o grupo de teste para não poluir data/groups.json
+  // Limpa o grupo de teste e restaura data/groups.json original
   configManager.groups.delete(fakeGroup);
   if (configManager.saveTimeout) {
     clearTimeout(configManager.saveTimeout);
     configManager.saveTimeout = null;
+  }
+  configManager.isDirty = false;
+  configManager.isSaving = false;
+  if (originalGroupsRaw !== null) {
+    fs.writeFileSync(groupsFilePath, originalGroupsRaw, 'utf-8');
   }
 
   console.log('\n🎉 TODOS OS TESTES DO AUTOMSG PASSARAM COM 100% DE SUCESSO!\n');

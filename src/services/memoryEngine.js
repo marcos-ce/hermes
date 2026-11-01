@@ -85,6 +85,20 @@ class MemoryEngine {
       this.deleteGroupStmt = this.db.prepare(`
         DELETE FROM messages WHERE group_jid = ?
       `);
+
+      // Manutenção de Boot: garante o teto de 50 mensagens por grupo e compacta páginas órfãs
+      try {
+        const distinctGroups = this.db.prepare('SELECT DISTINCT group_jid FROM messages').all();
+        for (const row of distinctGroups) {
+          if (row?.group_jid) {
+            this.cleanupStmt.run(row.group_jid, row.group_jid);
+          }
+        }
+        const freeList = this.db.prepare('PRAGMA freelist_count').get();
+        if (freeList && freeList.freelist_count > 16) {
+          this.db.exec('VACUUM;');
+        }
+      } catch (_) {}
     } catch (err) {
       this.db = null;
       logger.warn({ err: err.message }, 'Banco de memória SQLite nativo indisponível nesta versão do Node.js. Utilizando fallback em memória (Map).');
