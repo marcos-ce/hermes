@@ -437,7 +437,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_automsg_media',
-      description: 'Anexa a foto/vídeo/áudio que o admin ENVIOU nesta mensagem ou CITOU (respondeu/encaminhou) como o anúncio periódico automático do grupo (automsg). Acione quando o admin pedir algo como: "usa esse vídeo como anúncio", "bota essa foto no anúncio automático", "esse áudio vira o aviso recorrente", "coloca essa mídia no comunicado", "essa mídia é o anúncio". A mídia é extraída automaticamente da mensagem atual do admin.',
+      description: 'Anexa a foto/imagem que o admin ENVIOU nesta mensagem ou CITOU (respondeu/encaminhou) como o anúncio periódico automático do grupo (automsg). Por segurança Anti-Ban, apenas fotos leves (máx 2.5 MB) são aceitas; vídeos e áudios são bloqueados. Acione quando o admin pedir algo como: "bota essa foto no anúncio", "usa essa imagem no anúncio automático", "coloca esse banner no comunicado", "essa foto é o anúncio". A imagem é extraída automaticamente da mensagem atual do admin.',
       parameters: {
         type: 'object',
         properties: {
