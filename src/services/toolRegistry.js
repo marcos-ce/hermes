@@ -1,20 +1,9 @@
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');
-const wizardEngine = require('../core/wizardEngine');
 const logger = require('../utils/logger');
-const { safeKick, safeDelete, sendSafeMessage } = require('../utils/antiBan');
-const { resolveTarget, resolveParticipant, checkAdminStatus, getGroupMetadata, cleanJid, getBotIdentity } = require('../utils/jidResolver');
-const { resolveActionTarget, getExplicitTargets, resolveTargetSmart } = require('./targetResolver');
-const { normalizeTime, formatUserDisplay } = require('./toolHelpers');
+const { checkAdminStatus } = require('../utils/jidResolver');
 const toolHandlers = require('./tools');
-const { groupCache } = require('../utils/cache');
 const { t } = require('../utils/i18n');
-const pollTracker = require('../utils/pollTracker');
-const pinTracker = require('../utils/pinTracker');
-const { pickWinners } = require('../utils/raffle');
-const memoryEngine = require('./memoryEngine');
-const { parseRelativeTime, parseDuration } = require('./timeParser');
-const { executeCalendarAction, scheduleTimedGroupAction } = require('../plugins/admin/calendar');
 
 /**
  * Definição dos Schemas de Ferramentas (Tool Calling) compatíveis com OpenAI / DeepSeek
@@ -574,42 +563,6 @@ class ToolRegistry {
     }
 
     return { ok: true, args: clean };
-  }
-
-  /**
-   * Normaliza um horário para o formato HH:MM (ex: "7:00" -> "07:00", "23h" -> "23:00") ou "0"
-   * @param {string} val
-   * @returns {string|null}
-   */
-  _normalizeTime(val) {
-    return normalizeTime(val);
-  }
-
-  _formatUserDisplay(from, targetData) {
-    return formatUserDisplay(from, targetData);
-  }
-
-  /**
-   * Resolução inteligente de participante (delegado para targetResolver)
-   */
-  async _resolveTargetSmart(sock, msg, from, targetArg = '') {
-    return await resolveTargetSmart(sock, msg, from, targetArg);
-  }
-
-  /**
-   * Alvos explícitos da mensagem do admin (delegado para targetResolver)
-   */
-  async _getExplicitTargets(sock, msg, from) {
-    return await getExplicitTargets(sock, msg, from);
-  }
-
-  /**
-   * Validação de alvo explícito para ações de risco (delegado para targetResolver)
-   */
-  async _requireExplicitTarget(sock, msg, from, targetArg, lang) {
-    const res = await resolveActionTarget(sock, msg, from, targetArg, { requireExplicit: true, lang });
-    if (!res.success) return { error: res.error };
-    return { targetData: res.targetData };
   }
 
   /**

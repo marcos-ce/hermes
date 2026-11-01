@@ -8,7 +8,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 const logger = require('./logger');
-const { lidToPhoneMap, phoneToLidMap, cleanJid } = require('./jidResolver');
+const { lidToPhoneMap, phoneToLidMap } = require('./jidResolver');
 
 /**
  * Gerenciador, agregador e decriptador de enquetes ativas e seus votos no WhatsApp.
@@ -24,6 +24,9 @@ class PollTracker {
     this.MAX_POLLS = 100;
     this.filePath = path.resolve(process.cwd(), 'data', 'polls.json');
     this.saveTimer = null;
+    this.isSaving = false;
+    this.pendingSave = false;
+    this.isDirty = false;
 
     this.load();
   }
@@ -65,6 +68,7 @@ class PollTracker {
    * Agenda gravação atômica em disco com debounce de 500ms
    */
   scheduleSave() {
+    this.isDirty = true;
     if (this.saveTimer) return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
@@ -78,6 +82,13 @@ class PollTracker {
    * Grava enquetes em data/polls.json de forma atômica (.tmp -> .json)
    */
   async flushAsync() {
+    if (this.isSaving) {
+      this.pendingSave = true;
+      return;
+    }
+    this.isSaving = true;
+    this.isDirty = false;
+
     try {
       const dir = path.dirname(this.filePath);
       if (!fs.existsSync(dir)) {
@@ -89,9 +100,25 @@ class PollTracker {
       const data = JSON.stringify(entries, null, 2);
 
       await fs.promises.writeFile(tmpPath, data, 'utf-8');
-      await fs.promises.rename(tmpPath, this.filePath);
+      try {
+        await fs.promises.rename(tmpPath, this.filePath);
+      } catch (renameErr) {
+        if (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY') {
+          await fs.promises.copyFile(tmpPath, this.filePath);
+          try { await fs.promises.unlink(tmpPath); } catch (_) {}
+        } else {
+          throw renameErr;
+        }
+      }
     } catch (err) {
+      this.isDirty = true;
       logger.error({ err }, 'Erro ao persistir atomicamente data/polls.json');
+    } finally {
+      this.isSaving = false;
+      if (this.pendingSave) {
+        this.pendingSave = false;
+        this.scheduleSave();
+      }
     }
   }
 
@@ -104,6 +131,9 @@ class PollTracker {
         clearTimeout(this.saveTimer);
         this.saveTimer = null;
       }
+      if (!this.isDirty && !this.isSaving && fs.existsSync(this.filePath)) {
+        return;
+      }
       const dir = path.dirname(this.filePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -112,7 +142,17 @@ class PollTracker {
       const entries = Array.from(this.polls.entries());
       const data = JSON.stringify(entries, null, 2);
       fs.writeFileSync(tmpPath, data, 'utf-8');
-      fs.renameSync(tmpPath, this.filePath);
+      try {
+        fs.renameSync(tmpPath, this.filePath);
+      } catch (renameErr) {
+        if (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY') {
+          fs.copyFileSync(tmpPath, this.filePath);
+          try { fs.unlinkSync(tmpPath); } catch (_) {}
+        } else {
+          throw renameErr;
+        }
+      }
+      this.isDirty = false;
     } catch (_) {}
   }
 

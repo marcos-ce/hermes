@@ -237,12 +237,22 @@ async function connectBot(options = {}) {
         }
 
         reconnectAttempts = 0;
-        reconnectTimer = setTimeout(() => connectBot(options), 3000);
+        reconnectTimer = setTimeout(() => {
+          connectBot(options).catch(err => {
+            logger.error({ err }, 'Falha ao reconectar. Reagendando em 5s...');
+            reconnectTimer = setTimeout(() => connectBot(options).catch(() => {}), 5000);
+          });
+        }, 3000);
       } else {
         const delay = Math.min(3000 * Math.pow(1.3, reconnectAttempts), 30000);
         reconnectAttempts++;
         console.log(`🔄 Reconectando ao WhatsApp em ${(delay / 1000).toFixed(1)} segundos (tentativa ${reconnectAttempts})...`);
-        reconnectTimer = setTimeout(() => connectBot(options), delay);
+        reconnectTimer = setTimeout(() => {
+          connectBot(options).catch(err => {
+            logger.error({ err }, 'Falha ao reconectar. Reagendando em 5s...');
+            reconnectTimer = setTimeout(() => connectBot(options).catch(() => {}), 5000);
+          });
+        }, delay);
       }
     } else if (connection === 'open') {
       reconnectAttempts = 0;

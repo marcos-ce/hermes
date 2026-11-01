@@ -139,11 +139,11 @@ class Scheduler {
         }
       }
 
-      // Limpeza seletiva de execuções antigas (> 2 min): evita acúmulo em RAM sem apagar estado recente
+      // Limpeza seletiva de execuções antigas (> 2 min): evita acúmulo em RAM sem apagar estado recente ou em fila (-1)
       if (this.lastExecutedSchedule.size > 500) {
         const cutoff = Date.now() - 2 * 60 * 1000;
         for (const [k, ts] of this.lastExecutedSchedule.entries()) {
-          if (ts < cutoff) this.lastExecutedSchedule.delete(k);
+          if (ts > 0 && ts < cutoff) this.lastExecutedSchedule.delete(k);
         }
       }
     } catch (err) {

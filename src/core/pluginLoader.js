@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
-const { COMMAND_NUMBER_MAP, getNumberForCommand } = require('./commandNumbers');
+const { COMMAND_NUMBER_MAP } = require('./commandNumbers');
 
 class PluginLoader {
   constructor() {
@@ -226,7 +226,14 @@ class PluginLoader {
       }
     }
 
-    // Recarrega também o dicionário i18n sincronizando a referência em memória
+    // Recarrega também o dicionário i18n (e variante formal) sincronizando a referência em memória
+    const i18nFormalPath = path.resolve(process.cwd(), 'src', 'utils', 'i18nFormal.js');
+    if (fs.existsSync(i18nFormalPath)) {
+      try {
+        delete require.cache[require.resolve(i18nFormalPath)];
+      } catch (_) {}
+    }
+
     const i18nPath = path.resolve(process.cwd(), 'src', 'utils', 'i18n.js');
     if (fs.existsSync(i18nPath)) {
       const currentI18n = require('../utils/i18n');

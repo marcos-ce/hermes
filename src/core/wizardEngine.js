@@ -467,11 +467,10 @@ class WizardEngine {
 
     const lower = text.toLowerCase().trim();
 
-    // Cancelamento expresso ou resposta de cancelamento durante decisão de foco pendente
+    // Cancelamento expresso
     const isCancelExplicit = ['x', 'cancelar', 'sair', 'cancel'].includes(lower);
-    const isFocusCancel = session.focusSwitchPending && ['2', 'nao', 'não', 'no', 'parar', 'fechar', 'dispensa'].includes(lower);
 
-    if (isCancelExplicit || isFocusCancel) {
+    if (isCancelExplicit) {
       const keysToDelete = [];
       if (session.menuMsgKey) keysToDelete.push(session.menuMsgKey);
       if (Array.isArray(session.promptKeys)) {
@@ -493,33 +492,6 @@ class WizardEngine {
       }
       wizardCache.del(sessionKey);
       await sendSafeMessage(sock, from, { text: t(lang, 'wizard.cancelled') });
-      return true;
-    }
-
-    // Se o usuário estava com decisão de foco pendente
-    if (session.focusSwitchPending) {
-      if (['1', 'continuar', 'sim', 'seguir', 'voltar', 'manter'].includes(lower)) {
-        session.focusSwitchPending = false;
-        wizardCache.set(sessionKey, session);
-        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.continued') }, { quoted: msg });
-        if (session.type === 'config_menu') {
-          return await this.startConfigPanel(sock, msg, from, sender);
-        } else if (session.type === 'wizard') {
-          return await this._sendStepPrompt(sock, msg, from, sender, session, lang);
-        } else if (session.type === 'wizard_select_field') {
-          return await this._sendFieldSelectionPrompt(sock, msg, from, sender, session, lang);
-        } else if (session.type === 'lang_selection') {
-          return await this.startLangSelection(sock, msg, from, sender);
-        } else if (session.type === 'mute_selection') {
-          return await this.startMuteSelection(sock, msg, from, sender);
-        } else if (session.type === 'onboarding') {
-          return await this._sendOnboardingStepPrompt(sock, msg, from, sender, session, lang);
-        }
-        return true;
-      }
-
-      // Se continua pendente e a mensagem não foi continuar nem cancelar,
-      // ignora silenciosamente a conversa paralela para não disparar opções acidentais no menu
       return true;
     }
 
@@ -1248,21 +1220,16 @@ wizardCache.on('expired', async (key, session) => {
     const sock = getSocket();
     if (!sock) return;
 
-    const lang = configManager.getGroupLang(session.groupJid);
-    const timeoutMsg = t(lang, 'wizard.session_expired');
-
-    // Apaga prompts órfãos antes de notificar (limpeza do chat)
+    // Apaga prompts órfãos antes de encerrar (limpeza do chat)
     if (Array.isArray(session.promptKeys)) {
       for (const pk of session.promptKeys) {
         try {
-          const { safeDelete } = require('../utils/antiBan');
           await safeDelete(sock, session.groupJid, pk);
         } catch (_) {}
       }
     }
     if (session.menuMsgKey) {
       try {
-        const { safeDelete } = require('../utils/antiBan');
         await safeDelete(sock, session.groupJid, session.menuMsgKey);
       } catch (_) {}
     }

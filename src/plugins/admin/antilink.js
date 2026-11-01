@@ -116,7 +116,7 @@ function extractAllTextForLinks(message) {
 
 module.exports = {
   name: 'antilink',
-  aliases: ['antilink', 'antlink', 'link', 'links', 'antienlace'],
+  aliases: ['antilink', 'antlink', 'links', 'antienlace'],
   description: 'Filtro inteligente de links não autorizados com whitelist',
   ownerOnly: false,
   adminOnly: true,

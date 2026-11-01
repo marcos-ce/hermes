@@ -209,9 +209,9 @@ class ConfigManager {
     }
 
     // Prevenção contra perda de dados em plataformas como Discloud:
-    // Se a memória RAM não possui alterações pendentes (isDirty === false) e o arquivo já existe no disco,
+    // Se a memória RAM não possui alterações pendentes (isDirty === false e !isSaving) e o arquivo já existe no disco,
     // NUNCA sobrescreve o arquivo no encerramento, preservando edições feitas no editor web da Discloud.
-    if (!this.isDirty && fs.existsSync(this.filePath)) {
+    if (!this.isDirty && !this.isSaving && fs.existsSync(this.filePath)) {
       return;
     }
 

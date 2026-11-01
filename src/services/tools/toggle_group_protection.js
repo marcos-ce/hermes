@@ -4,7 +4,7 @@ const { t } = require('../../utils/i18n');
 module.exports = async function toggleGroupProtection({ from, lang, args }) {
   const rawMod = String(args.module || '').toLowerCase();
   const mod = rawMod === 'agenda' ? 'calendar' : rawMod;
-  const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'autoapprove'];
+  const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove'];
   if (!validModules.includes(mod)) {
     return { success: false, error: `Módulo "${mod}" inválido.` };
   }

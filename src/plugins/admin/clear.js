@@ -10,7 +10,9 @@ module.exports = {
   adminOnly: true,
   botAdminRequired: true,
 
-  async execute({ sock, msg, from, reply, t }) {
+  async execute({ sock, msg, from, isGroup, reply, t }) {
+    if (!isGroup) return reply(t('common.group_only'));
+
     const realMsg = msg?.message?.ephemeralMessage?.message ||
                     msg?.message?.viewOnceMessage?.message ||
                     msg?.message?.viewOnceMessageV2?.message ||

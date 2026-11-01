@@ -361,4 +361,21 @@ class MemoryEngine {
 }
 
 const memoryEngine = new MemoryEngine();
+
+// Encerramento limpo e idempotente do SQLite WAL ao finalizar o processo (zero vazamento no Core)
+let isMemoryClosed = false;
+function closeMemorySafely() {
+  if (isMemoryClosed || !memoryEngine.db) return;
+  isMemoryClosed = true;
+  const db = memoryEngine.db;
+  memoryEngine.db = null;
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  } catch (_) {}
+  try {
+    db.close();
+  } catch (_) {}
+}
+process.on('exit', closeMemorySafely);
+
 module.exports = memoryEngine;
