@@ -5,224 +5,222 @@
  * Sem placeholders ou omissões de tradução.
  */
 
-const i18nFormal = require('./i18nFormal');
-
 const dictionaries = {
   pt: {
     // ─── COMUM ───
     'common.bot_name': "Hermes Admin Bot",
-    'common.success': ["Pronto! Ação realizada com sucesso.","Tudo certo, comando executado.","Feito! Operação concluída com sucesso."],
-    'common.error': ["Não foi possível concluir esta ação no momento. Por favor, tente novamente.","Ocorreu uma falha temporária ao executar o comando. Tente novamente em instantes."],
-    'common.no_permission_admin': ["Este comando pode ser utilizado apenas por administradores do grupo.","Apenas os administradores do grupo têm permissão para usar este comando."],
-    'common.no_permission_owner': ["Este comando é restrito ao desenvolvedor e proprietário do bot.","Apenas o proprietário do bot pode utilizar este comando."],
-    'common.bot_not_admin': ["Para executar esta ação, você precisa me promover a administrador do grupo.","Preciso de permissão de administrador no grupo para conseguir realizar este comando."],
-    'common.group_only': ["Este comando funciona exclusivamente dentro de grupos.","Este recurso pode ser utilizado apenas em grupos."],
-    'common.private_disabled': ["O atendimento a comandos por mensagem privada está desativado no momento.","No momento, comandos no privado não estão disponíveis."],
-    'common.not_found_target': ["Não consegui identificar o usuário. Por favor, mencione com @ ou responda à mensagem da pessoa.","Usuário não localizado. Marque a pessoa com @ ou responda à mensagem correspondente."],
-    'common.invalid_args': ["Os parâmetros informados estão incorretos. Por favor, verifique o formato do comando.","Faltam informações para executar o comando. Verifique a sintaxe recomendada."],
+    'common.success': ["Pronto! Feito com sucesso.","Tudo certo, comando executado.","Pronto, já fiz isso para você."],
+    'common.error': ["Não consegui concluir essa ação agora. Tente novamente em instantes.","Tive um problema temporário ao executar esse comando. Tente de novo daqui a pouco."],
+    'common.no_permission_admin': ["Apenas administradores do grupo podem usar este comando.","Somente os administradores têm permissão para fazer isso."],
+    'common.no_permission_owner': ["Este comando é exclusivo do proprietário do bot.","Apenas o dono do bot pode usar este comando."],
+    'common.bot_not_admin': ["Preciso ser administrador do grupo para fazer isso.","Me promova a administrador do grupo para que eu consiga executar essa ação."],
+    'common.group_only': ["Este comando só funciona dentro de grupos.","Use este recurso apenas dentro de um grupo."],
+    'common.private_disabled': ["Os comandos no privado estão desativados no momento.","No momento, não respondo a comandos no privado."],
+    'common.not_found_target': ["Não identifiquei quem é o membro. Marque a pessoa com @ ou responda à mensagem dela.","Não encontrei esse membro. Mencione com @ ou responda diretamente à mensagem da pessoa."],
+    'common.invalid_args': ["Faltou alguma informação no comando. Confira o formato correto e tente novamente.","Os dados do comando estão incompletos. Veja como usar corretamente."],
     'common.enabled': "ATIVADO",
     'common.disabled': "DESATIVADO",
-    'common.saved': ["Configurações salvas com sucesso!","Tudo pronto! As preferências foram gravadas."],
-    'common.canceled': ["Operação cancelada.","Ação cancelada com sucesso."],
+    'common.saved': ["Configurações salvas!","Pronto, já salvei as preferências."],
+    'common.canceled': ["Cancelado.","Ação cancelada."],
     'common.yes': "Sim",
     'common.no': "Não",
     'common.days': "dias",
     'common.lifetime': "Vitalício",
-    'common.mention_greeting': "*Hermes Bot*\n📌 Prefixo atual: `{prefix}`\n👉 Envie *{prefix}menu* para ver os comandos ou *{prefix}config* para o painel de controle!",
+    'common.mention_greeting': "*Hermes Bot*\n📌 Prefixo atual: `{prefix}`\n👉 Envie *{prefix}menu* para ver os comandos ou *{prefix}config* para abrir o painel de controle!",
 
     // ─── SAAS / LICENÇA / OWNER ───
-    'saas.group_not_active': "Este grupo não possui uma licença ativa do bot.",
-    'saas.inactive_group_hint': "*Grupo Não Ativado*\nO bot está conectado ao grupo, mas ainda não foi ativado.\n\nPara ativar o bot neste grupo, envie:\n*{prefix}bot on*",
-    'saas.license_expired': ["A licença do bot para este grupo chegou ao fim. Para renovar o acesso e manter a moderação ativa, entre em contato com o suporte.","O período de ativação deste grupo expirou. Para continuar utilizando os recursos de segurança e automação, fale com o suporte."],
-    'saas.activated': ["Grupo ativado com sucesso!\nValidade: *{expiry}*\nAs configurações anteriores foram restauradas.","Tudo pronto! O bot está ativado neste grupo até *{expiry}* com as configurações restauradas."],
-    'saas.days_added': "Foram adicionados *{days} dias* à licença deste grupo.\nNova validade: *{expiry}*.",
-    'saas.deactivated': "Atividades pausadas neste grupo. As configurações foram preservadas para quando desejar reativar.",
+    'saas.group_not_active': "Este grupo ainda não tem uma licença ativa do bot.",
+    'saas.inactive_group_hint': "*Grupo Não Ativado*\nEstou no grupo, mas minha licença ainda não foi ativada por aqui.\n\nPara ativar, envie:\n*{prefix}bot on*",
+    'saas.license_expired': ["A licença do bot neste grupo venceu. Para renovar e manter a moderação ativa, fale com o suporte.","O prazo de uso do bot neste grupo terminou. Entre em contato com o suporte para renovar."],
+    'saas.activated': ["Grupo ativado! A licença vale até *{expiry}* e todas as configurações anteriores foram mantidas.","Pronto! Ativei o bot neste grupo até *{expiry}* e restaurei suas configurações."],
+    'saas.days_added': "Adicionei *{days} dias* à licença deste grupo.\nNova validade: *{expiry}*.",
+    'saas.deactivated': "Pausei minhas atividades neste grupo. Suas configurações continuam salvas para quando quiser reativar.",
     'saas.status': "📊 *Status da Licença do Grupo*\n🏷️ Identificador: `{id}`\nEstado: *{status}*\nValidade: *{expiry}*\nMódulos ativos: {modules}",
     'saas.list_header': "📋 *Grupos Registrados no Sistema:*",
     'saas.list_item': "• {name} (`{id}`): *{status}* | Restam: *{remaining}*",
-    'saas.list_empty': "Nenhum grupo cadastrado no momento.",
-    'saas.pv_on': "Respostas a comandos no privado foram ativadas para todos os usuários.",
-    'saas.pv_off': "Respostas a comandos no privado foram desativadas (Modo de proteção ativo: apenas o proprietário pode utilizar no privado).",
-    'saas.group_presentation': "Olá a todos! Eu sou o Hermes Bot, assistente de administração e segurança deste grupo.\n\n• Digite *{prefix}menu* para conhecer as funções disponíveis.\n• Administradores podem enviar *{prefix}config* para gerenciar as proteções.\n\n*Aos administradores:* lembrem-se de me promover a administrador para que eu possa aplicar a moderação corretamente.",
-    'saas.liberate_success_owner': "Grupo liberado com sucesso!\n\n• Grupo: *{name}*\n• Identificador: `{id}`\n• Validade: *{expiry}*\n• Configuração: Padrões recomendados aplicados (IA e Moderação ativas).\n\nA mensagem de apresentação foi enviada ao grupo.",
-    'saas.liberate_usage': "Uso correto do comando:\n• `{prefix}liberar <link_do_grupo> [dias]`\n• `{prefix}liberar <id_do_grupo> [dias]`\n\nExemplo:\n`{prefix}liberar https://chat.whatsapp.com/ABC123xyz 30`",
-    'saas.liberate_invite_error': "Não foi possível entrar no grupo pelo link informado. Motivo: o link é inválido, expirou, o grupo está cheio ou o bot foi bloqueado no grupo.",
+    'saas.list_empty': "Não há nenhum grupo cadastrado no momento.",
+    'saas.pv_on': "Liberei o uso de comandos no privado para todos os usuários.",
+    'saas.pv_off': "Desativei comandos no privado para usuários comuns (apenas o dono pode usar no privado).",
+    'saas.group_presentation': "Olá, pessoal! Sou o Hermes, assistente de administração e moderação deste grupo.\n\n• Envie *{prefix}menu* para ver o que posso fazer.\n• Administradores podem usar *{prefix}config* para ajustar as proteções.\n\n*Para os administradores:* lembrem-se de me colocar como administrador do grupo para que eu consiga moderar corretamente.",
+    'saas.liberate_success_owner': "Grupo liberado com sucesso!\n\n• Grupo: *{name}*\n• Identificador: `{id}`\n• Validade: *{expiry}*\n• Configuração: Padrões ativados (IA e Moderação prontas).\n\nJá enviei a mensagem de apresentação lá no grupo.",
+    'saas.liberate_usage': "Como usar o comando:\n• `{prefix}liberar <link_do_grupo> [dias]`\n• `{prefix}liberar <id_do_grupo> [dias]`\n\nExemplo:\n`{prefix}liberar https://chat.whatsapp.com/ABC123xyz 30`",
+    'saas.liberate_invite_error': "Não consegui entrar no grupo por esse link. Verifique se o link está correto, se expirou ou se o grupo está cheio.",
 
     // ─── BAN GROUP ───
-    'bangroup.banned': "O grupo `{id}` foi banido do sistema. O bot permanecerá inativo neste grupo.\nPara reverter: `/desbanirgrupo {id}`",
-    'bangroup.unbanned': "O grupo `{id}` foi desbanido e o bot voltou a operar normalmente no grupo.",
-    'bangroup.already_banned': "Este grupo já consta na lista de grupos banidos.",
-    'bangroup.not_banned': "Este grupo não consta na lista de bloqueios.",
-    'bangroup.list_title': "🛑 *Grupos Banidos do Sistema:*",
-    'bangroup.list_empty': "Nenhum grupo está banido no momento.",
+    'bangroup.banned': "Bloqueei o grupo `{id}` no sistema. Não vou mais responder nele.\nPara desbloquear: `/desbanirgrupo {id}`",
+    'bangroup.unbanned': "Desbloqueei o grupo `{id}`. Já voltei a funcionar normalmente por lá.",
+    'bangroup.already_banned': "Esse grupo já está na lista de bloqueados.",
+    'bangroup.not_banned': "Esse grupo não está bloqueado.",
+    'bangroup.list_title': "🛑 *Grupos Bloqueados:*",
+    'bangroup.list_empty': "Não há nenhum grupo bloqueado no momento.",
 
     // ─── RELOAD ───
-    'reload.success': "Atualização concluída! Todos os plugins, esquemas e traduções foram recarregados com sucesso em tempo real.",
-    'reload.error': "Falha ao recarregar módulos: {error}",
+    'reload.success': "Pronto! Recarreguei todos os plugins, configurações e traduções.",
+    'reload.error': "Erro ao recarregar os módulos: {error}",
 
     // ─── CONFIG / PAINEL ───
     'config.panel_title': "⚙️ *Painel de Controle • Hermes*",
     'config.panel_desc': "Envie o número do módulo para ativar, desativar ou configurar.\nAtalhos: *[P] [novo]* prefixo • *[L]* idioma • *[X]* fechar\nComandos de moderação: {prefix}menu",
     'config.panel_item': "[{num}] {status} *{name}* - {desc}",
-    'config.prefix_changed': "Prefixo deste grupo alterado com sucesso para: *{prefix}*",
-    'config.invalid_option': "Opção inválida. Escolha um número do menu ou [X] para fechar.",
-    'config.module_toggled_on': "O módulo *{module}* foi ativado no grupo.",
-    'config.module_toggled_off': "O módulo *{module}* foi desativado no grupo.",
+    'config.prefix_changed': "Pronto, mudei o prefixo deste grupo para: *{prefix}*",
+    'config.invalid_option': "Opção inválida. Digite um número do menu ou *X* para fechar.",
+    'config.module_toggled_on': "Ativei o módulo *{module}* neste grupo.",
+    'config.module_toggled_off': "Desativei o módulo *{module}* neste grupo.",
 
     // ─── IDIOMA / LANG ───
-    'lang.prompt': "🌐 *Seleção de Idioma*\nEscolha o idioma do grupo:\n[1] Português\n[2] Español\n[3] English\n\nResponda com 1, 2 ou 3.",
-    'lang.changed': "Idioma do grupo alterado para: *Português*.",
-    'lang.invalid': "Idioma inválido. Utilize: !idioma pt, !idioma es ou !idioma en.",
+    'lang.prompt': "🌐 *Idioma do Grupo*\nQual idioma você prefere usar aqui?\n[1] Português\n[2] Español\n[3] English\n\nResponda com 1, 2 ou 3.",
+    'lang.changed': "Pronto, mudei o idioma do grupo para *Português*.",
+    'lang.invalid': "Idioma inválido. Use: !idioma pt, !idioma es ou !idioma en.",
     'lang.invalid_option': "Opção inválida.\nEscolha *1* (Português), *2* (Español), *3* (English) ou envie *X* para cancelar.",
 
     // ─── ANTILINK ───
-    'antilink.detected': ["@{user}, o envio de links não é permitido neste grupo. A mensagem foi apagada para manter a organização.","@{user}, não é permitido compartilhar links aqui. Removi a sua mensagem de acordo com as regras do grupo."],
-    'antilink.warned': ["@{user}, o envio de links é proibido por aqui. Você recebeu uma advertência ({warns}/{max}) e a mensagem foi removida.","Atenção, @{user}: links não autorizados geram advertência. Registro atualizado para {warns}/{max}."],
-    'antilink.banned': ["@{user} foi removido do grupo por insistência no envio de links não autorizados.","Remoção aplicada para @{user} por descumprimento da política de links do grupo."],
+    'antilink.detected': ["@{user}, não é permitido enviar links neste grupo. Apaguei sua mensagem.","@{user}, links não são permitidos por aqui. Tive que apagar sua mensagem."],
+    'antilink.warned': ["@{user}, não é permitido enviar links aqui. Apaguei a mensagem e registrei uma advertência ({warns}/{max}).","@{user}, links são proibidos nas regras do grupo. Você recebeu uma advertência ({warns}/{max})."],
+    'antilink.banned': ["Removi @{user} do grupo por insistir no envio de links proibidos.","@{user} foi removido por enviar links não permitidos no grupo."],
     'antilink.status': "🛡️ *AntiLink:* {status}\n🌐 *Domínios permitidos:* {domains}\n⚡ *Ação:* {action}",
 
     // ─── BOAS-VINDAS / WELCOME ───
-    'welcome.default': ["Seja muito bem-vindo ao grupo *{group}*, @{user}!\nConsulte a descrição para conhecer as regras de convivência:\n\n{desc}","Olá, @{user}! Seja bem-vindo ao *{group}*.\nRecomendamos a leitura da descrição do grupo para conferir as nossas diretrizes:\n\n{desc}"],
+    'welcome.default': ["Bem-vindo(a) ao *{group}*, @{user}!\nDê uma olhada na descrição do grupo para conhecer nossas regras:\n\n{desc}","Olá, @{user}! Seja muito bem-vindo(a) ao *{group}*.\nConfira abaixo a descrição e as regras do grupo:\n\n{desc}"],
     'welcome.status': "👋 *Boas-Vindas:* {status}\n⏱️ *Auto-delete:* {time}",
 
     // ─── ADVERTÊNCIAS / WARN ───
-    'warn.added': ["Atenção, @{user}: você recebeu uma advertência por *{reason}*.\nVocê possui {warns} de {max} advertências no grupo.","@{user}, advertência aplicada por *{reason}*.\nTotal acumulado: {warns} de {max} advertências. Por favor, colabore com as regras."],
-    'warn.max_reached': ["@{user} atingiu o limite de {max} advertências e foi removido do grupo.","O limite de {max} advertências foi alcançado por @{user}, resultando em sua remoção do grupo."],
-    'warn.removed': ["Uma advertência foi removida de @{user}. Total atual: {warns}/{max}.","Advertência revogada para @{user}. Contagem atual: {warns}/{max}."],
+    'warn.added': ["@{user}, você recebeu uma advertência por *{reason}*.\nAgora você tem {warns} de {max} advertências.","Registrei uma advertência para @{user} por *{reason}* ({warns}/{max}). Por favor, siga as regras do grupo."],
+    'warn.max_reached': ["@{user} chegou ao limite de {max} advertências e foi removido do grupo.","Como @{user} atingiu {max} advertências, fiz a remoção do grupo."],
+    'warn.removed': ["Retirei uma advertência de @{user}. Agora restam {warns}/{max}.","Removi uma advertência de @{user}. Total atual: {warns}/{max}."],
     'warn.list_title': "📋 *Membros Advertidos no Grupo:*",
-    'warn.list_empty': "Nenhum membro possui advertências ativas neste grupo.",
+    'warn.list_empty': "Ninguém tem advertências neste grupo no momento.",
     'warn.list_item': "• @{user}: *{count}* advertência(s)",
-    'warn.cannot_warn_admin': "Administradores do grupo não podem receber advertências.",
+    'warn.cannot_warn_admin': "Não posso aplicar advertências em administradores do grupo.",
 
     // ─── ANTIFLOOD ───
-    'antiflood.flood_detected': ["@{user}, por favor, evite enviar mensagens consecutivas em curto intervalo para não sobrecarregar o grupo.","@{user}, o envio repetido de mensagens em sequência prejudica a conversa. Aguarde alguns instantes."],
-    'antiflood.trava_detected': ["@{user}, mensagens excessivamente extensas ou que possam travar o aplicativo não são permitidas.","@{user}, esta mensagem excede o limite seguro de caracteres e foi removida por proteção."],
-    'antiflood.banned_flood': ["@{user} foi removido do grupo por excesso repetido de mensagens consecutivas (flood).","Remoção aplicada a @{user} devido a envio excessivo de mensagens."],
-    'antiflood.banned_trava': ["@{user} foi removido do grupo por envio de mensagem maliciosa com potencial de travamento.","Remoção de segurança aplicada para @{user} por envio de texto nocivo."],
+    'antiflood.flood_detected': ["@{user}, evite mandar várias mensagens seguidas tão rápido para não atrapalhar a conversa.","@{user}, vá com calma nas mensagens em sequência para não poluir o grupo."],
+    'antiflood.trava_detected': ["@{user}, apaguei sua mensagem porque era longa demais e podia travar o chat.","@{user}, mensagens muito grandes não são permitidas aqui por segurança."],
+    'antiflood.banned_flood': ["Removi @{user} do grupo por mandar mensagens repetidas sem parar (flood).","@{user} foi removido por excesso de mensagens seguidas no grupo."],
+    'antiflood.banned_trava': ["Removi @{user} por tentar enviar mensagem de trava no grupo.","@{user} foi removido por segurança após enviar texto excessivamente longo."],
     'antiflood.status': "*AntiFlood:* {status}\n⚡ *Máx Msgs:* {msgs}/5s | *Máx Caracteres:* {chars}\n⚡ *Ação:* {action}",
 
     // ─── ANTIFAKE ───
-    'antifake.detected': "@{user}, números com este código de país (DDI) não são permitidos nas regras deste grupo.",
+    'antifake.detected': "Removi @{user} porque números com esse código de país (DDI) não são permitidos neste grupo.",
     'antifake.status': "*AntiFake:* {status}\n🌍 *DDIs permitidos:* {ddis}",
 
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprovação:* {status}\nDDIs autorizados: {ddis}\nAção para estrangeiros: {foreignAction}\nNotificação no grupo: {notify}",
-    'autoapprove.summary': "📋 *Solicitações de Entrada Pendentes*\n\nTotal aguardando aprovação: {total}\n• Números Nacionais (DDI 55): {brCount}\n• Números Estrangeiros: {foreignCount}\n• Identificadores LIDs: {unknownCount}\n\nProteção Anti-Ban: ATIVA (Fila Segura com Intervalo Humano)\n\nComandos disponíveis:\n• `{prefix}aprovar agora` - Aprovar {brCount} números nacionais via fila segura\n• `{prefix}aprovar todos` - Aprovar a totalidade ({total}) de participantes pendentes\n• `{prefix}aprovar <número>` - Aprovar um participante específico\n• `{prefix}aprovar on` - Ativar a auto-aprovação em tempo real\n• `{prefix}aprovar on todos` - Ativar a auto-aprovação irrestrita\n• `{prefix}aprovar off` - Desativar a auto-aprovação\n• `{prefix}aprovar config` - Configurar DDIs e ações",
-    'autoapprove.no_pending': "Não há solicitações pendentes de aprovação neste grupo no momento.",
-    'autoapprove.no_pending_br': "Não há solicitações de números brasileiros pendentes no momento ({foreignCount} estrangeiros e {unknownCount} LIDs aguardando análise manual).",
-    'autoapprove.batch_starting': "Iniciando a aprovação segura de {count} participante(s) com intervalo humano. Por favor, aguarde a conclusão.",
-    'autoapprove.batch_starting_all': "Iniciando a aprovação segura de todos os {count} participantes pendentes. Por favor, aguarde a conclusão.",
-    'autoapprove.batch_finished': "Aprovação em lote concluída com sucesso.\nAprovados: *{approved}/{total}* | Falhas: *{failed}* | Cancelados: *{cancelled}*.",
-    'autoapprove.batch_finished_all': "Aprovação geral concluída com sucesso.\nAprovados: *{approved}/{total}* | Falhas: *{failed}* | Cancelados: *{cancelled}*.",
-    'autoapprove.batch_cancelled': "Aprovação em lote interrompida.\nAprovados: *{approved}/{total}* | Falhas: *{failed}* | Cancelados: *{cancelled}*.",
-    'autoapprove.approved_single': "@{user} foi aprovado no grupo com sucesso. Seja bem-vindo!",
-    'autoapprove.circuit_breaker_pause': "Proteção Anti-Ban: detectado volume incomum de solicitações (+{count} em menos de 1 minuto). Para proteger a conta, a auto-aprovação foi pausada por {minutes} minutos. As solicitações pendentes permanecem guardadas e podem ser aprovadas via `{prefix}aprovar agora`.",
-    'autoapprove.approval_mode_warning': "Atenção: a opção 'Aprovar novos participantes' está desativada nas configurações do WhatsApp deste grupo. Para que as solicitações entrem na fila de aprovação, ative-a nas configurações do grupo.",
-    'autoapprove.target_approved': "Solicitação aprovada com sucesso!\nParticipante: +{user}\nO participante foi aceito no grupo com proteção anti-ban.",
-    'autoapprove.target_failed': "Não foi possível aprovar a solicitação do participante +{user}.\nMotivo: {reason}.\nA solicitação permanece na fila para nova tentativa.",
-    'autoapprove.target_ambiguous': "Mais de uma solicitação corresponde a +{user} ({count} encontradas).\nEnvie o número completo com DDI para aprovar com precisão.",
-    'autoapprove.target_not_found': "Solicitação não encontrada. O número informado (+{user}) não consta na lista de solicitações pendentes deste grupo.",
-    'autoapprove.queue_cancelled': "Fila de aprovação cancelada. {count} solicitação(ões) em andamento foram interrompidas.",
+    'autoapprove.summary': "📋 *Solicitações de Entrada Pendentes*\n\nTotal na fila: {total}\n• Números do Brasil (DDI 55): {brCount}\n• Números Estrangeiros: {foreignCount}\n• Identificadores LIDs: {unknownCount}\n\nProteção Anti-Ban: ATIVA (Fila Segura com Intervalo Humano)\n\nComandos disponíveis:\n• `{prefix}aprovar agora` - Aprovar os {brCount} números brasileiros\n• `{prefix}aprovar todos` - Aprovar todas as {total} solicitações pendentes\n• `{prefix}aprovar <número>` - Aprovar um número específico\n• `{prefix}aprovar on` - Ativar aprovação automática em tempo real\n• `{prefix}aprovar on todos` - Aprovar automaticamente qualquer país\n• `{prefix}aprovar off` - Desativar aprovação automática\n• `{prefix}aprovar config` - Configurar DDIs e regras",
+    'autoapprove.no_pending': "Não há ninguém aguardando aprovação para entrar no grupo agora.",
+    'autoapprove.no_pending_br': "Não há números brasileiros aguardando aprovação no momento (há {foreignCount} estrangeiros e {unknownCount} LIDs na fila).",
+    'autoapprove.batch_starting': "Começando a aprovar {count} participante(s) em fila segura. Aguarde um instante.",
+    'autoapprove.batch_starting_all': "Começando a aprovar todas as {count} solicitações pendentes. Aguarde um instante.",
+    'autoapprove.batch_finished': "Aprovação concluída!\nAprovados: *{approved}/{total}* | Falhas: *{failed}* | Cancelados: *{cancelled}*.",
+    'autoapprove.batch_finished_all': "Aprovação geral concluída!\nAprovados: *{approved}/{total}* | Falhas: *{failed}* | Cancelados: *{cancelled}*.",
+    'autoapprove.batch_cancelled': "Aprovação interrompida.\nAprovados: *{approved}/{total}* | Falhas: *{failed}* | Cancelados: *{cancelled}*.",
+    'autoapprove.approved_single': "Aprovei a entrada de @{user} no grupo. Seja bem-vindo(a)!",
+    'autoapprove.circuit_breaker_pause': "Proteção Anti-Ban: entraram mais de {count} pedidos em menos de 1 minuto. Por segurança, pausei a aprovação automática por {minutes} minutos. Você pode aprovar a fila manualmente usando `{prefix}aprovar agora`.",
+    'autoapprove.approval_mode_warning': "A opção 'Aprovar novos participantes' está desativada nas configurações do WhatsApp deste grupo. Ative essa opção nos dados do grupo para que a fila funcione.",
+    'autoapprove.target_approved': "Pronto! Aprovei a entrada do número +{user} no grupo.",
+    'autoapprove.target_failed': "Não consegui aprovar o número +{user}.\nMotivo: {reason}.",
+    'autoapprove.target_ambiguous': "Encontrei {count} solicitações parecidas com +{user}.\nDigite o número completo com DDI para eu aprovar a pessoa certa.",
+    'autoapprove.target_not_found': "Não encontrei o número +{user} na lista de solicitações pendentes deste grupo.",
+    'autoapprove.queue_cancelled': "Cancelei a fila de aprovação ({count} solicitação(ões) parada(s)).",
     'autoapprove.all_members': "Qualquer participante (Todos os países)",
-    'autoapprove.activated_all': "Auto-Aprovação ativada para qualquer participante. Todos os novos membros serão aceitos automaticamente com fila segura.",
+    'autoapprove.activated_all': "Ativei a aprovação automática para todos os países. Quem pedir para entrar será aceito automaticamente.",
 
     // ─── AGENDAMENTO DE HORÁRIOS (SCHEDULE) ───
-    'schedule.closed': ["O grupo foi fechado automaticamente conforme o horário programado.","Horário de fechamento alcançado: o grupo está pausado para envio de mensagens."],
-    'schedule.opened': ["O grupo foi aberto automaticamente conforme o horário programado. Bom diálogo a todos!","Horário de abertura: envio de mensagens liberado para todos os membros."],
+    'schedule.closed': ["Deu o horário programado: fechei o grupo por agora. Mais tarde abrimos novamente!","Grupo fechado automaticamente pelo horário programado."],
+    'schedule.opened': ["Grupo aberto! Já podem mandar mensagens normalmente.","Abri o grupo conforme o horário programado. Bom dia de conversa a todos!"],
     'schedule.status': "⏰ *Horários Automáticos:* {status}\n🔒 Fechar: *{close}* | 🔓 Abrir: *{open}*",
 
     // ─── MENSAGENS PERIÓDICAS (AUTOMSG) ───
     'automsg.status': "📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* a cada {interval}\n💬 *Mensagem:* {msg}",
 
     // ─── BAN / EXPULSÃO ───
-    'ban.cannot_ban_admin': "Administradores do grupo não podem ser removidos pelo bot.",
-    'ban.cannot_ban_owner': "O proprietário do bot não pode ser removido.",
-    'ban.cannot_ban_bot': "Não é possível aplicar a remoção a mim mesmo.",
-    'ban.success': ["Pronto, @{user} foi removido do grupo.","A remoção de @{user} foi concluída com sucesso.","O participante @{user} foi removido do grupo."],
+    'ban.cannot_ban_admin': "Não posso remover um administrador do grupo.",
+    'ban.cannot_ban_owner': "Não posso remover o dono do bot.",
+    'ban.cannot_ban_bot': "Não posso remover a mim mesmo do grupo.",
+    'ban.success': ["Pronto, removi @{user} do grupo.","Feito! @{user} foi removido do grupo.","@{user} não faz mais parte do grupo."],
 
     // ─── MUTE / FECHAMENTO DE GRUPO ───
-    'mute.closed': ["O grupo foi fechado temporariamente pela administração. Apenas administradores podem enviar mensagens no momento.","Envio de mensagens pausado pelos administradores. Em breve o grupo será aberto novamente."],
-    'mute.opened': ["O grupo foi reaberto. Todos os membros podem enviar mensagens.","Envio de mensagens liberado para todos os participantes do grupo."],
-    'mute.prompt': "Como deseja proceder com o grupo?\n[1] Fechar o grupo agora\n[2] Abrir o grupo agora\n\nResponda com 1 ou 2.",
+    'mute.closed': ["Fechei o grupo temporariamente. Por enquanto, só administradores podem mandar mensagens.","Grupo fechado pela administração. Em breve reabriremos para todos."],
+    'mute.opened': ["Grupo reaberto! Todos os membros já podem enviar mensagens.","Abri o grupo novamente. Podem conversar à vontade."],
+    'mute.prompt': "O que você quer fazer no grupo?\n[1] Fechar o grupo agora\n[2] Abrir o grupo agora\n\nResponda com 1 ou 2.",
 
     // ─── MUTE MEMBER / SILENCIAMENTO INDIVIDUAL ───
-    'mutemember.muted': ["@{user} foi silenciado por {duration}.{admin}{reason}\nSuas mensagens serão apagadas automaticamente durante esse período.","Silenciamento aplicado a @{user} por {duration}.{admin}{reason}\nO participante não poderá interagir no grupo temporariamente."],
-    'mutemember.unmuted': ["O silenciamento de @{user} foi encerrado. O participante pode voltar a enviar mensagens normalmente.","@{user} foi desmutado e está liberado para conversar no grupo."],
-    'mutemember.not_muted': "O participante @{user} não se encontra silenciado no momento.",
-    'mutemember.list_empty': "Nenhum membro está silenciado neste grupo no momento.",
+    'mutemember.muted': ["Silenciei @{user} por {duration}.{admin}{reason}\nQualquer mensagem enviada nesse período será apagada.","@{user} ficará silenciado por {duration}.{admin}{reason}\nAs mensagens serão removidas até o tempo acabar."],
+    'mutemember.unmuted': ["Liberei @{user} do silenciamento. Já pode voltar a mandar mensagens.","Pronto, @{user} não está mais silenciado e já pode conversar normalmente."],
+    'mutemember.not_muted': "@{user} não está silenciado no momento.",
+    'mutemember.list_empty': "Não há ninguém silenciado neste grupo agora.",
     'mutemember.list_title': "🔇 *Membros Silenciados no Grupo:*",
-    'mutemember.cannot_mute_admin': "Administradores do grupo não podem ser silenciados.",
-    'mutemember.cannot_mute_owner': "O proprietário do bot não pode ser silenciado.",
+    'mutemember.cannot_mute_admin': "Não posso silenciar um administrador do grupo.",
+    'mutemember.cannot_mute_owner': "Não posso silenciar o dono do bot.",
     'mutemember.cannot_mute_bot': "Não posso silenciar a mim mesmo.",
-    'mutemember.abuse_banned': "@{user} foi removido do grupo por insistência no envio de mensagens durante o período em que estava silenciado.",
-    'mutemember.insistence_banned': "@{user} foi removido do grupo após enviar mais de {count} mensagens enquanto se encontrava silenciado.",
+    'mutemember.abuse_banned': "Removi @{user} do grupo porque continuou mandando mensagens mesmo estando silenciado.",
+    'mutemember.insistence_banned': "Removi @{user} do grupo após insistir e mandar mais de {count} mensagens enquanto estava silenciado.",
 
     // ─── LINK DE CONVITE ───
-    'link.success': "🔗 *Link de Convite do Grupo:*\n\nhttps://chat.whatsapp.com/{code}\n\nCompartilhe este link com quem deseja convidar para o grupo.",
-    'link.revoked': "O link de convite anterior foi cancelado com sucesso.\n\n🔗 *Novo link:* https://chat.whatsapp.com/{code}",
-    'link.error': "Não foi possível obter o link de convite. Certifique-se de que o bot possui permissão de administrador no grupo.",
+    'link.success': "🔗 *Link de Convite do Grupo:*\n\nhttps://chat.whatsapp.com/{code}\n\nUse este link para convidar novas pessoas para o grupo.",
+    'link.revoked': "Redefini o link do grupo. O link antigo não funciona mais.\n\n🔗 *Novo link:* https://chat.whatsapp.com/{code}",
+    'link.error': "Não consegui buscar o link do grupo. Confirme se eu estou como administrador.",
 
     // ─── DESCRIÇÃO DO GRUPO (SETDESC) ───
-    'setdesc.success': "A descrição do grupo foi atualizada com sucesso!",
-    'setdesc.cleared': "A descrição do grupo foi removida com sucesso.",
-    'setdesc.current': "📌 *Descrição Atual do Grupo:*\n\n{description}\n\nPara alterar: envie `{prefix}setdesc <novo texto>` ou responda a uma mensagem com `{prefix}setdesc`.",
-    'setdesc.empty': "(O grupo não possui uma descrição definida no momento)",
-    'setdesc.error': "Não foi possível atualizar a descrição do grupo. Verifique se o bot possui privilégios de administrador.",
+    'setdesc.success': "Pronto, atualizei a descrição do grupo!",
+    'setdesc.cleared': "Removi a descrição do grupo.",
+    'setdesc.current': "📌 *Descrição Atual do Grupo:*\n\n{description}\n\nPara mudar, envie `{prefix}setdesc <novo texto>` ou responda a uma mensagem com `{prefix}setdesc`.",
+    'setdesc.empty': "(O grupo está sem descrição no momento)",
+    'setdesc.error': "Não consegui alterar a descrição. Verifique se sou administrador do grupo.",
 
     // ─── FOTO DO GRUPO (SETPIC) ───
-    'setpic.success': "A foto de perfil do grupo foi atualizada com sucesso!",
-    'setpic.cleared': "A foto do grupo foi removida com sucesso.",
-    'setpic.no_image': "Por favor, envie uma imagem com `{prefix}foto` na legenda ou responda a uma imagem existente.",
-    'setpic.error': "Não foi possível atualizar a foto do grupo. Verifique se o bot é administrador.",
+    'setpic.success': "Pronto, atualizei a foto do grupo!",
+    'setpic.cleared': "Removi a foto de perfil do grupo.",
+    'setpic.no_image': "Envie uma foto com `{prefix}foto` na legenda ou responda a uma imagem com o comando.",
+    'setpic.error': "Não consegui trocar a foto do grupo. Verifique se estou como administrador.",
 
     // ─── FIXAR MENSAGEM (PIN) ───
-    'pin.pinned': "A mensagem foi fixada com sucesso por {duration}.",
-    'pin.unpinned': "A mensagem foi desafixada com sucesso.",
-    'pin.reply_required': "Por favor, responda à mensagem que deseja fixar ou desafixar acompanhada do comando.",
-    'pin.error': "Não foi possível fixar ou desafixar a mensagem. Verifique os privilégios do bot no grupo.",
+    'pin.pinned': "Fixei a mensagem no topo do grupo por {duration}.",
+    'pin.unpinned': "Desafixei a mensagem.",
+    'pin.reply_required': "Responda à mensagem que você quer fixar ou desafixar usando o comando.",
+    'pin.error': "Não consegui fixar a mensagem. Verifique se eu sou administrador do grupo.",
 
     // ─── ENQUETES (POLL) ───
-    'poll.success': "Enquete criada com sucesso!\n\n📝 *Pergunta:* {title}\n🔢 *Tipo:* {type}\n📋 *Opções:* {count} alternativas",
+    'poll.success': "Enquete criada!\n\n📝 *Pergunta:* {title}\n🔢 *Tipo:* {type}\n📋 *Opções:* {count} alternativas",
     'poll.type_single': "Escolha única (1 voto)",
     'poll.type_multi': "Múltipla escolha (vários votos)",
-    'poll.usage': "📊 *Como Criar Enquetes:*\n\n1️⃣ *Em Linha (com barra |):*\n`{prefix}enquete Pergunta | Opção 1 | Opção 2 | Opção 3`\n\n2️⃣ *Múltipla Escolha (--multi):*\n`{prefix}enquete --multi Pergunta | Opção 1 | Opção 2`\n\n3️⃣ *Em Várias Linhas:*\n`{prefix}enquete Pergunta\n1. Opção A\n2. Opção B`",
-    'poll.error_options': "A enquete precisa de um título e de pelo menos 2 alternativas válidas para votação.",
-    'poll.error': "Não foi possível gerar a enquete. Verifique os parâmetros informados.",
+    'poll.usage': "📊 *Como Criar uma Enquete:*\n\n1️⃣ *Em uma linha (separando com |):*\n`{prefix}enquete Pergunta | Opção 1 | Opção 2 | Opção 3`\n\n2️⃣ *Múltipla escolha (--multi):*\n`{prefix}enquete --multi Pergunta | Opção 1 | Opção 2`\n\n3️⃣ *Em várias linhas:*\n`{prefix}enquete Pergunta\n1. Opção A\n2. Opção B`",
+    'poll.error_options': "Informe a pergunta e pelo menos 2 opções para eu criar a enquete.",
+    'poll.error': "Não consegui criar a enquete. Confira o formato do comando e tente de novo.",
 
     // ─── MARCAÇÃO GERAL (HIDETAG) ───
-    'hidetag.empty': "Por favor, informe a mensagem do comunicado ou responda a uma mensagem existente.",
+    'hidetag.empty': "Digite o aviso que você quer mandar ou responda a uma mensagem com o comando.",
 
     // ─── PROMOÇÃO / PROMOVER ───
-    'promote.already_admin': "Este membro já possui privilégios de administrador no grupo.",
-    'promote.need_explicit_mention': "Por motivos de segurança, mencione expressamente o membro com @ para promovê-lo a administrador.",
-    'promote.success': "@{user} agora é um administrador do grupo.",
+    'promote.already_admin': "Esse membro já é administrador do grupo.",
+    'promote.need_explicit_mention': "Por segurança, marque a pessoa diretamente com @ para que eu possa promovê-la a administrador.",
+    'promote.success': "Pronto! Promovi @{user} a administrador do grupo.",
 
     // ─── REBAIXAMENTO / DEMOTE ───
-    'demote.already_member': "Este usuário não é um administrador do grupo.",
-    'demote.cannot_demote_owner': "O proprietário do bot não pode ser rebaixado de cargo.",
-    'demote.success': "@{user} foi rebaixado a membro comum.",
+    'demote.already_member': "Essa pessoa já é um membro comum e não está como administrador.",
+    'demote.cannot_demote_owner': "Não posso remover o cargo de administrador do dono do bot.",
+    'demote.success': "Pronto, @{user} não é mais administrador do grupo.",
 
     // ─── LIMPEZA DE MENSAGEM (CLEAR) ───
-    'clear.reply_required': "Por favor, responda à mensagem que deseja apagar acompanhada do comando.",
-    'clear.success': "Mensagem apagada com sucesso.",
+    'clear.reply_required': "Responda à mensagem que você quer apagar junto com o comando.",
+    'clear.success': "Mensagem apagada.",
 
     // ─── LISTA NEGRA (BLACKLIST) ───
-    'blacklist.added': "@{user} foi adicionado à Lista Negra do grupo e removido.",
-    'blacklist.added_global': "@{user} foi adicionado à Lista Negra global do sistema.",
-    'blacklist.removed': "@{user} foi removido da Lista Negra do grupo.",
-    'blacklist.removed_global': "@{user} foi removido da Lista Negra global.",
+    'blacklist.added': "Coloquei @{user} na Lista Negra e fiz a remoção do grupo.",
+    'blacklist.added_global': "Adicionei @{user} na Lista Negra global.",
+    'blacklist.removed': "Tirei @{user} da Lista Negra deste grupo.",
+    'blacklist.removed_global': "Tirei @{user} da Lista Negra global.",
     'blacklist.list_title': "📋 *Lista Negra do Grupo:*",
-    'blacklist.list_empty': "A lista negra deste grupo está vazia no momento.",
-    'blacklist.banned_entry': "Entrada bloqueada: @{user} consta na Lista Negra e foi removido automaticamente.",
+    'blacklist.list_empty': "Não há ninguém na Lista Negra deste grupo.",
+    'blacklist.banned_entry': "Removi @{user} imediatamente porque o número está na Lista Negra.",
 
     // ─── SORTEIO (RAFFLE) ───
-    'raffle.not_enough': "Não há participantes suficientes no grupo para realizar o sorteio.",
+    'raffle.not_enough': "Não há membros suficientes no grupo para fazer esse sorteio.",
     'raffle.title': "🎉 *Resultado do Sorteio*",
     'raffle.prize': "🎁 *Prêmio:* {prize}",
     'raffle.winners': "🏆 *Ganhador(es):*\n{winners}",
 
     // ─── DIAGNÓSTICO E STATUS (PING) ───
-    'ping.title': "🏓 *Status Operacional do Sistema*",
+    'ping.title': "🏓 *Status do Bot*",
     'ping.latency': "⚡ *Latência:* `{latency}ms`",
     'ping.uptime': "⏱️ *Tempo Ativo:* `{uptime}`",
     'ping.ram': "💾 *Consumo de RAM:* `{ram} MB`",
@@ -233,74 +231,72 @@ const dictionaries = {
     // ─── ENGINE DO WIZARD ───
     'wizard.step_header': "🧙‍♂️ *Configuração: {plugin}* (Etapa {step}/{total})",
     'wizard.current_val': "📌 Valor atual: `{current}`",
-    'wizard.invalid_input': "Resposta inválida. Por favor, leia a pergunta e tente novamente.",
-    'wizard.finished': "Configuração de *{plugin}* concluída com sucesso!",
-    'wizard.choice_prompt': "Escolha uma das opções abaixo enviando o número correspondente:\n{choices}",
+    'wizard.invalid_input': "Não entendi essa resposta. Confira as opções acima e tente novamente.",
+    'wizard.finished': "Pronto! A configuração de *{plugin}* foi salva.",
+    'wizard.choice_prompt': "Escolha uma opção enviando o número correspondente:\n{choices}",
     'wizard.boolean_prompt': "*[1]* Sim (Ativado)\n*[2]* Não (Desativado)\n\nResponda com *1* ou *2*",
-    'wizard.select_field_title': "🧙‍♂️ *Configuração: {plugin}*\n\nEscolha qual etapa você deseja alterar:\n\n",
-    'wizard.select_field_footer': "*[T]* Reconfigurar Todas as Etapas\n*[X]* Cancelar e Fechar\n\nResponda com o número da etapa que deseja alterar.",
-    'wizard.select_field_invalid': "Opção inválida. Escolha o número da etapa (1 a {max}), *T* para todas ou *X* para cancelar.",
-    'wizard.summary_single': "📋 *Configuração atualizada com sucesso:*",
+    'wizard.select_field_title': "🧙‍♂️ *Configuração: {plugin}*\n\nQual item você quer alterar?\n\n",
+    'wizard.select_field_footer': "*[T]* Reconfigurar Tudo\n*[X]* Cancelar e Fechar\n\nEnvie o número da opção desejada.",
+    'wizard.select_field_invalid': "Opção inválida. Digite o número da etapa (1 a {max}), *T* para configurar tudo ou *X* para sair.",
+    'wizard.summary_single': "📋 *Alteração salva:*",
     'wizard.summary_all': "📋 *Resumo das configurações salvas:*",
     'wizard.tip_keep': "Dica: Envie *.* (ponto) para manter o valor atual.",
-    'wizard.tip_default': "📌 Valor padrão: `{default}`\nDica: Envie *.* (ponto) para utilizar o valor padrão.",
+    'wizard.tip_default': "📌 Valor padrão: `{default}`\nDica: Envie *.* (ponto) para usar o valor padrão.",
     'wizard.cancel_hint': "Envie *X* a qualquer momento para cancelar.",
-    'wizard.out_of_range': "Valor fora do intervalo permitido{range}. Tente novamente.",
-    'wizard.session_expired': "Sessão expirada. O menu de configuração ficou inativo por muito tempo e foi encerrado por segurança.",
-    'wizard.focus_switch_prompt': "Você possui uma configuração ativa em andamento (*{module}*).\n\nDeseja cancelar ou continuar?\n• Digite *X* para cancelar e fechar\n• Digite *1* para continuar configurando",
-    'wizard.hermes_focus_detected': "@{user}, notei que você me chamou, mas você ainda está com o menu de *{module}* aberto.\n\nDeseja cancelar a configuração ou continuar de onde parou?\n• Digite *X* para encerrar o menu\n• Digite *1* para continuar configurando",
-    'wizard.cancelled': "Configuração cancelada com sucesso. Menu fechado.",
+    'wizard.out_of_range': "Esse valor está fora do limite permitido{range}. Tente novamente.",
+    'wizard.session_expired': "Fechei o menu de configuração porque ficou algum tempo sem resposta.",
+    'wizard.focus_switch_prompt': "Você ainda está configurando o módulo *{module}*.\n\nO que prefere fazer?\n• Digite *X* para fechar o menu\n• Digite *1* para continuar de onde parou",
+    'wizard.hermes_focus_detected': "@{user}, vi que você me chamou, mas o menu de *{module}* ainda está aberto.\n\nO que você prefere?\n• Digite *X* para sair do menu\n• Digite *1* para continuar configurando",
+    'wizard.cancelled': "Configuração cancelada. Fechei o menu.",
     'wizard.continued': "Continuando a configuração...",
 
     // ─── AGENDA / CALENDÁRIO ───
-    'calendar.added': "📅 *Evento Agendado com Sucesso!*\n\nData/Hora: {date} às {time}\nCompromisso: {text}\nIdentificador: #{id}",
-    'calendar.list_title': "📅 *Calendário de Agendamentos do Grupo*",
-    'calendar.list_empty': "Nenhum agendamento ou evento marcado no calendário.\nPara agendar, envie: `{prefix}agenda add DD/MM HH:MM Mensagem do evento`",
+    'calendar.added': "📅 *Compromisso Agendado!*\n\nData e Hora: {date} às {time}\nAviso: {text}\nID: #{id}",
+    'calendar.list_title': "📅 *Agenda do Grupo*",
+    'calendar.list_empty': "Não há nenhum lembrete agendado neste grupo.\nPara criar um, envie: `{prefix}agenda add DD/MM HH:MM Mensagem`",
     'calendar.item': "• [#{id}] {date} às {time} — {text}",
-    'calendar.deleted': "Agendamento #{id} removido do calendário com sucesso.",
-    'calendar.not_found': "Agendamento com ID #{id} não foi encontrado no calendário.",
-    'calendar.cleared': "Todos os agendamentos do calendário foram removidos.",
-    'calendar.invalid_format': "Formato inválido. Utilize: `{prefix}agenda add DD/MM HH:MM Sua mensagem aqui`\nExemplo: `{prefix}agenda add 28/10 20:00 Reunião geral`",
-    'calendar.event_announcement': "📢 *[Lembrete de Agenda / Evento]*\n\n⏰ Horário: {time}\nCompromisso: {text}{creator}",
-    'calendar.creator_tag': "\nSolicitado por: @{user}",
+    'calendar.deleted': "Removi o agendamento #{id} da agenda.",
+    'calendar.not_found': "Não encontrei nenhum agendamento com o ID #{id}.",
+    'calendar.cleared': "Limpei todos os compromissos da agenda deste grupo.",
+    'calendar.invalid_format': "Formato inválido. Use: `{prefix}agenda add DD/MM HH:MM Sua mensagem`\nExemplo: `{prefix}agenda add 28/10 20:00 Reunião geral`",
+    'calendar.event_announcement': "📢 *Lembrete da Agenda*\n\n⏰ Horário: {time}\nAssunto: {text}{creator}",
+    'calendar.creator_tag': "\nAgendado por: @{user}",
 
     // ─── HERMES IA ───
-    'hermes.status': "🤖 *Status do Hermes IA*\n\nEstado no grupo: *{state}*\nPersonalidade: `{personality}`\nMemória em cache: {count} mensagens registradas\nProvedor: DeepSeek Oficial (`{model}`)\nChave de API: {key}",
-    'hermes.status_off_hint': "DESATIVADO (utilize {prefix}hermes on)",
+    'hermes.status': "🤖 *Status do Hermes IA*\n\nEstado no grupo: *{state}*\nPersonalidade: `{personality}`\nMemória recente: {count} mensagens\nModelo: DeepSeek Oficial (`{model}`)\nChave de API: {key}",
+    'hermes.status_off_hint': "DESATIVADO (use {prefix}hermes on)",
     'hermes.key_ok': "Configurada (.env)",
     'hermes.key_missing_short': "Não configurada (.env)",
-    'hermes.status_nokey': "Atenção: configure `AI_API_KEY` no arquivo `.env` para ativar as respostas inteligentes.",
-    'hermes.status_tip': "Dica: envie *{prefix}hermes on* para ativar ou fale diretamente comigo no chat!",
-    'hermes.on_ok': "Hermes IA ativado com sucesso!\nPersonalidade: {personality}\nMemória de contexto: {memory}",
-    'hermes.off_ok': "Hermes IA desativado com sucesso.",
-    'hermes.cleared': "Memória do Hermes limpa com sucesso. O histórico de conversas deste grupo foi redefinido.",
-    'hermes.disabled_hint': "O Hermes IA está desativado neste grupo.\nPara ativar, um administrador deve enviar: *{prefix}hermes on*",
-    'hermes.disabled_called': "O Hermes IA encontra-se desativado neste grupo.\nPara ativá-lo, um administrador deve enviar: *{prefix}hermes on*",
-    'hermes.usage_hint': "Para falar comigo, mencione *@hermes*, digite *hermes [pergunta]* ou use *{prefix}hermes status*.",
-    'hermes.key_missing': "A chave da DeepSeek não foi detectada no arquivo `.env` (`AI_API_KEY`). Por favor, adicione sua chave e reinicie a aplicação.",
+    'hermes.status_nokey': "Atenção: adicione sua `AI_API_KEY` no arquivo `.env` para ativar a IA.",
+    'hermes.status_tip': "Dica: envie *{prefix}hermes on* para ativar ou fale direto comigo aqui no grupo!",
+    'hermes.on_ok': "Ativei o Hermes IA neste grupo!\nPersonalidade: {personality}\nMemória de contexto: {memory}",
+    'hermes.off_ok': "Desativei o Hermes IA neste grupo.",
+    'hermes.cleared': "Limpei minha memória de conversa deste grupo.",
+    'hermes.disabled_hint': "Minha IA está desativada neste grupo.\nUm administrador pode ativar enviando: *{prefix}hermes on*",
+    'hermes.disabled_called': "Minha IA está desativada aqui no grupo no momento.\nSe um administrador quiser ativar, basta enviar: *{prefix}hermes on*",
+    'hermes.usage_hint': "Para falar comigo, marque *@hermes*, escreva *hermes [sua dúvida]* ou veja *{prefix}hermes status*.",
+    'hermes.key_missing': "Não encontrei a chave da DeepSeek (`AI_API_KEY`) no arquivo `.env`. Configure a chave e reinicie o bot.",
     'hermes.greeting_formal': "Olá! Como posso ajudar você ou o grupo agora?",
     'hermes.greeting_casual': "Olá! Como posso ajudar na administração do grupo hoje?",
-    'hermes.quota': "O limite de requisições de IA para este período foi atingido. Por favor, utilize os comandos por prefixo temporariamente.",
-    'hermes.degraded': "Modo texto ativo: não é possível executar ações automáticas no momento.",
-    'hermes.unclear': "Não consegui compreender claramente a solicitação. Por favor, poderia reformular?",
-    'hermes.tool_failed': "Não foi possível executar esta ação no momento.",
-    'hermes.msg_not_found': "Não localizei essa mensagem no histórico recente do grupo.",
-    'hermes.oscillation': "Ocorreu uma oscilação momentânea na conexão com a IA. Por favor, tente novamente em alguns instantes.",
-    'hermes.need_explicit_target': "Para executar ações em um participante, marque a pessoa com @ ou responda à mensagem dela.",
-    'hermes.fact_learned': "Registrado na memória permanente do grupo: *{key}* = *{value}*",
-    'hermes.fact_forgotten': "Registro *{key}* removido da memória do grupo com sucesso.",
-    'hermes.fact_not_found': "O registro *{key}* não foi encontrado na memória do grupo.",
-    'hermes.action_hallucinated': "A ação não pôde ser confirmada no grupo. Por favor, marque o membro com @ ou utilize o comando com prefixo (exemplo: {prefix}ban, {prefix}warn).",
+    'hermes.quota': "Atingi o limite de uso da IA por agora. Enquanto isso, você pode usar os comandos normais com prefixo.",
+    'hermes.degraded': "Estou respondendo apenas em texto no momento e não consigo executar ações automáticas agora.",
+    'hermes.unclear': "Não entendi muito bem o que você pediu. Pode explicar de outro jeito?",
+    'hermes.tool_failed': "Não consegui concluir essa ação agora.",
+    'hermes.msg_not_found': "Não encontrei essa mensagem no histórico recente do grupo.",
+    'hermes.oscillation': "A conexão com a IA oscilou agora. Tente novamente em alguns segundos.",
+    'hermes.need_explicit_target': "Para eu fazer isso, marque a pessoa com @ ou responda diretamente à mensagem dela.",
+    'hermes.fact_learned': "Anotei na memória do grupo: *{key}* = *{value}*",
+    'hermes.fact_forgotten': "Apaguei *{key}* da memória do grupo.",
+    'hermes.fact_not_found': "Não encontrei *{key}* salvo na memória do grupo.",
+    'hermes.action_hallucinated': "Não consegui confirmar essa ação no grupo. Marque o membro com @ ou use o comando direto (como {prefix}ban ou {prefix}warn).",
 
     // ─── ONBOARDING WIZARD ───
-    'onboarding.welcome': "Grupo ativado com sucesso!\nValidade: *{expiry}*\n\nIniciaremos uma configuração inicial de 3 etapas para ajustar o bot a este grupo.",
-    'onboarding.step1_header': "Configuração Inicial (Etapa 1/3)",
-    'onboarding.step1_question': "Deseja ativar a IA neste grupo?\n\n*[1]* Sim - Ativar IA para conversar e executar comandos por texto, como assistente.\n*[2]* Não - Apenas moderação tradicional utilizando comandos diretos, como: /menu\n\nResponda com 1 ou 2 (ou envie . para padrão [1])",
-    'onboarding.step2_header': "Configuração Inicial (Etapa 2/3)",
-    'onboarding.step2_question': "Deseja que a IA leia e se lembre do contexto das conversas do grupo?\n\n*[1]* Sim - Respostas mais precisas e comandos contextuais conforme o andamento do grupo.\n*[2]* Não - Nenhum dado de contexto é mantido pela IA.\n\nResponda com 1 ou 2 (ou envie . para padrão [1])",
-    'onboarding.step3_header': "Configuração Inicial (Etapa 3/3)",
-    'onboarding.step3_question': "Qual estilo de mensagens e avisos você prefere para o bot?\n\n*[1]* Natural - Estilo amigável e comunicativo, com frases bem estruturadas.\n*[2]* Formal - Estilo corporativo com etiquetas *[Moderação]* e avisos sóbrios.\n\nResponda com 1 ou 2 (ou envie . para padrão [1])",
-    'onboarding.finished': "Configuração concluída com sucesso!\nO bot está pronto para operar no grupo.\n\n• Inteligência Artificial: *{ai}*\n• Memória de Contexto: *{memory}*\n• Estilo de Mensagens: *{style}*\n\nEnvie *{prefix}menu* para consultar os comandos ou *{prefix}config* para o painel completo!"
+    'onboarding.welcome': "Grupo ativado com sucesso!\nValidade: *{expiry}*\n\nVamos fazer uma configuração rápida de 2 passos para deixar tudo do seu jeito.",
+    'onboarding.step1_header': "Configuração Inicial (Etapa 1/2)",
+    'onboarding.step1_question': "Você quer ativar a Inteligência Artificial neste grupo?\n\n*[1]* Sim - Ativar IA para conversar e executar comandos por texto natural.\n*[2]* Não - Usar apenas comandos tradicionais por prefixo (ex: /menu).\n\nResponda com 1 ou 2 (ou envie . para manter o padrão [1])",
+    'onboarding.step2_header': "Configuração Inicial (Etapa 2/2)",
+    'onboarding.step2_question': "Quer que a IA acompanhe o contexto das conversas do grupo?\n\n*[1]* Sim - Permite respostas mais inteligentes baseadas no que está sendo falado.\n*[2]* Não - A IA responde apenas à mensagem chamada, sem guardar contexto.\n\nResponda com 1 ou 2 (ou envie . para manter o padrão [1])",
+    'onboarding.finished': "Tudo pronto! O bot já está configurado e funcionando no grupo.\n\n• Inteligência Artificial: *{ai}*\n• Memória de Contexto: *{memory}*\n\nEnvie *{prefix}menu* para ver os comandos ou *{prefix}config* para abrir o painel de controle!"
   },
 
   es: {
@@ -588,14 +584,12 @@ const dictionaries = {
     'hermes.action_hallucinated': "La acción no pudo ser confirmada en el grupo. Por favor, menciona al miembro con @ o utiliza el comando con prefijo (ejemplo: {prefix}ban, {prefix}warn).",
 
     // ─── ONBOARDING WIZARD ───
-    'onboarding.welcome': "¡Grupo activado con éxito!\nValidez: *{expiry}*\n\nIniciaremos una configuración inicial de 3 pasos para ajustar el bot a este grupo.",
-    'onboarding.step1_header': "Configuración Inicial (Paso 1/3)",
+    'onboarding.welcome': "¡Grupo activado con éxito!\nValidez: *{expiry}*\n\nIniciaremos una configuración inicial de 2 pasos para ajustar el bot a este grupo.",
+    'onboarding.step1_header': "Configuración Inicial (Paso 1/2)",
     'onboarding.step1_question': "¿Deseas activar la IA en este grupo?\n\n*[1]* Sí - Activar IA para conversar y ejecutar comandos por texto, como asistente.\n*[2]* No - Solo moderación tradicional mediante comandos directos, como: /menu\n\nResponde con 1 o 2 (o envía . para predeterminado [1])",
-    'onboarding.step2_header': "Configuración Inicial (Paso 2/3)",
+    'onboarding.step2_header': "Configuración Inicial (Paso 2/2)",
     'onboarding.step2_question': "¿Deseas que la IA lea y recuerde el contexto de las conversaciones del grupo?\n\n*[1]* Sí - Respuestas más precisas y comandos contextuales según el desarrollo del grupo.\n*[2]* No - Ningún dato de contexto es conservado por la IA.\n\nResponde con 1 o 2 (o envía . para predeterminado [1])",
-    'onboarding.step3_header': "Configuración Inicial (Paso 3/3)",
-    'onboarding.step3_question': "¿Qué estilo de mensajes y avisos prefieres para el bot?\n\n*[1]* Natural - Estilo comunicativo y empático, con frases bien estructuradas.\n*[2]* Formal - Estilo corporativo con etiquetas *[Moderación]* y avisos sobrios.\n\nResponde con 1 o 2 (o envía . para predeterminado [1])",
-    'onboarding.finished': "¡Configuración completada con éxito!\nEl bot se encuentra listo para operar en el grupo.\n\n• Inteligencia Artificial: *{ai}*\n• Memoria de Contexto: *{memory}*\n• Estilo de Mensajes: *{style}*\n\nEnvía *{prefix}menu* para consultar comandos o *{prefix}config* para el panel completo!"
+    'onboarding.finished': "¡Configuración completada con éxito!\nEl bot se encuentra listo para operar en el grupo.\n\n• Inteligencia Artificial: *{ai}*\n• Memoria de Contexto: *{memory}*\n\nEnvía *{prefix}menu* para consultar comandos o *{prefix}config* para el panel completo!"
   },
 
   en: {
@@ -883,72 +877,45 @@ const dictionaries = {
     'hermes.action_hallucinated': "The action could not be confirmed in the group. Please mention the member with @ or use the prefix command (e.g. {prefix}ban, {prefix}warn).",
 
     // ─── ONBOARDING WIZARD ───
-    'onboarding.welcome': "Group activated successfully!\nValidity: *{expiry}*\n\nWe will now run a quick 3-step initial setup to configure the bot for this group.",
-    'onboarding.step1_header': "Initial Setup (Step 1/3)",
+    'onboarding.welcome': "Group activated successfully!\nValidity: *{expiry}*\n\nWe will now run a quick 2-step initial setup to configure the bot for this group.",
+    'onboarding.step1_header': "Initial Setup (Step 1/2)",
     'onboarding.step1_question': "Would you like to activate AI in this group?\n\n*[1]* Yes - Enable AI to chat and execute text commands as an assistant.\n*[2]* No - Traditional moderation only using direct commands like: /menu\n\nReply with 1 or 2 (or send . for default [1])",
-    'onboarding.step2_header': "Initial Setup (Step 2/3)",
+    'onboarding.step2_header': "Initial Setup (Step 2/2)",
     'onboarding.step2_question': "Allow the AI to read and remember group conversation context?\n\n*[1]* Yes - More accurate responses and contextual commands as the group progresses.\n*[2]* No - No context data is retained by the AI.\n\nReply with 1 or 2 (or send . for default [1])",
-    'onboarding.step3_header': "Initial Setup (Step 3/3)",
-    'onboarding.step3_question': "Which message and alert style do you prefer for the bot?\n\n*[1]* Natural - Friendly and communicative style with well-structured phrases.\n*[2]* Formal - Corporate style with bold *[Moderation]* tags and clean phrasing.\n\nReply with 1 or 2 (or send . for default [1])",
-    'onboarding.finished': "Configuration completed successfully!\nThe bot is ready to operate in the group.\n\n• Artificial Intelligence: *{ai}*\n• Context Memory: *{memory}*\n• Message Style: *{style}*\n\nSend *{prefix}menu* to view commands or *{prefix}config* for the full panel!"
+    'onboarding.finished': "Configuration completed successfully!\nThe bot is ready to operate in the group.\n\n• Artificial Intelligence: *{ai}*\n• Context Memory: *{memory}*\n\nSend *{prefix}menu* to view commands or *{prefix}config* for the full panel!"
   }
 };
 
 /**
- * Traduz uma chave para o idioma solicitado com interpolação de variáveis, suporte a estilo e phrase pools
+ * Traduz uma chave para o idioma solicitado com interpolação de variáveis e phrase pools
  * Suporta assinaturas:
- * - t(lang, key, vars, style)
- * - t(key, vars, style)
+ * - t(lang, key, vars)
+ * - t(key, vars)
  * @param {string} langOrKey Idioma ('pt', 'es', 'en') ou chave da mensagem
  * @param {string|object} [keyOrVars] Chave da mensagem ou objeto de variáveis
- * @param {object|string} [varsOrStyle] Variáveis dinâmicas ou estilo
- * @param {string} [maybeStyle] Estilo ('natural' | 'formal')
+ * @param {object} [varsOrStyle] Variáveis dinâmicas
  * @returns {string} Texto formatado com fallback para português
  */
-function t(langOrKey = 'pt', keyOrVars, varsOrStyle = {}, maybeStyle = null) {
+function t(langOrKey = 'pt', keyOrVars, varsOrStyle = {}) {
   let lang = 'pt';
   let key = '';
   let vars = {};
-  let style = null;
 
-  // Overload 1: t('common.saved', { ... }, 'formal')
+  // Overload 1: t('common.saved', { ... })
   if (typeof langOrKey === 'string' && (langOrKey.includes('.') || !['pt', 'es', 'en'].includes(langOrKey.toLowerCase()))) {
     key = langOrKey;
     lang = 'pt';
     vars = (keyOrVars && typeof keyOrVars === 'object') ? keyOrVars : {};
-    style = typeof varsOrStyle === 'string' ? varsOrStyle : (maybeStyle || null);
   } else {
-    // Normal: t(lang, key, vars, style)
+    // Normal: t(lang, key, vars)
     lang = langOrKey || 'pt';
     key = keyOrVars;
     vars = (varsOrStyle && typeof varsOrStyle === 'object') ? varsOrStyle : {};
-    style = maybeStyle;
   }
 
   const targetLang = (lang || 'pt').toLowerCase();
-
-  // Resolve estilo ('natural' ou 'formal')
-  let resolvedStyle = style || vars?._style || (['natural', 'formal'].includes(vars?.style) ? vars.style : null);
-
-  // Se o estilo não foi informado explicitamente, busca pelo grupo caso groupJid ou from esteja nas variáveis
-  if (!resolvedStyle && (vars?.groupJid || vars?.from)) {
-    try {
-      const configManager = require('../core/configManager');
-      resolvedStyle = configManager.getGroupStyle(vars.groupJid || vars.from);
-    } catch (_) {}
-  }
-
-  if (!resolvedStyle) resolvedStyle = 'natural';
-
-  let text = null;
-  if (resolvedStyle === 'formal') {
-    text = i18nFormal.dictionaries[targetLang]?.[key];
-  }
-
-  if (!text) {
-    const dict = dictionaries[targetLang] || dictionaries.pt;
-    text = dict[key] || dictionaries.pt[key] || key;
-  }
+  const dict = dictionaries[targetLang] || dictionaries.pt;
+  let text = dict[key] || dictionaries.pt[key] || key;
 
   // Suporte a Array de frases (Pool humanizado com seleção aleatória)
   if (Array.isArray(text)) {

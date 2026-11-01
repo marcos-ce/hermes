@@ -226,14 +226,7 @@ class PluginLoader {
       }
     }
 
-    // Recarrega também o dicionário i18n (e variante formal) sincronizando a referência em memória
-    const i18nFormalPath = path.resolve(process.cwd(), 'src', 'utils', 'i18nFormal.js');
-    if (fs.existsSync(i18nFormalPath)) {
-      try {
-        delete require.cache[require.resolve(i18nFormalPath)];
-      } catch (_) {}
-    }
-
+    // Recarrega também o dicionário i18n sincronizando a referência em memória
     const i18nPath = path.resolve(process.cwd(), 'src', 'utils', 'i18n.js');
     if (fs.existsSync(i18nPath)) {
       const currentI18n = require('../utils/i18n');

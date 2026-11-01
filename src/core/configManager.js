@@ -116,6 +116,11 @@ class ConfigManager {
     if (group.plugins?.calendar && Array.isArray(group.plugins.calendar.events)) {
       group.plugins.calendar.events = group.plugins.calendar.events.filter(e => e && !e.executed);
     }
+
+    // 3. Remove campo legado de estilo de template (descontinuado)
+    if ('style' in group) {
+      delete group.style;
+    }
   }
 
   /**
@@ -465,16 +470,12 @@ class ConfigManager {
     this.scheduleSave();
   }
 
-  getGroupStyle(groupJid) {
-    const group = this.groups.get(groupJid);
-    return group?.style || 'natural';
+  getGroupStyle() {
+    return 'natural';
   }
 
-  setGroupStyle(groupJid, style) {
-    const group = this.getOrCreateGroup(groupJid);
-    group.style = style === 'formal' ? 'formal' : 'natural';
-    this.scheduleSave();
-    return group;
+  setGroupStyle(groupJid) {
+    return this.getGroup(groupJid);
   }
 
   isGroupOnboarded(groupJid) {

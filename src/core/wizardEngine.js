@@ -325,51 +325,23 @@ class WizardEngine {
       en: `_Reply with number (1 to ${modules.length}) to configure or toggle._\n_Shortcuts: *P [new]* prefix • *L* language • *X* close_\n📖 _To see commands, use ${currentPrefix}menu_`
     }[lang] || `_Responda com o número (1 a ${modules.length}) para configurar._`;
 
-    const currentGroupStyle = configManager.getGroupStyle(from);
-    const styleDisplay = currentGroupStyle === 'formal' ? 'Formal' : 'Natural';
-
-    let menuText = '';
     const nameMap = localizedModuleNames[lang] || localizedModuleNames.pt;
 
-    if (currentGroupStyle === 'formal') {
-      menuText = `*[Painel de Controle - Hermes AutoMod]*\n\n`;
-      menuText += `Prefixo: \`${currentPrefix}\` | Idioma: \`${lang.toUpperCase()}\` | Estilo: \`Formal\`\n`;
-      if (from.endsWith('@g.us')) {
-        menuText += `Grupo: *${groupName}* (${membersCount} ${membersLabel})\n`;
-      }
-      menuText += '\n';
-
-      modules.forEach((mod, index) => {
-        const statusTag = mod.enabled ? '[ATIVADO]' : '[DESATIVADO]';
-        const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
-        menuText += `[${index + 1}] ${statusTag} *${cleanTitle}*\n`;
-        if (mod.desc) menuText += `    _${mod.desc}_\n`;
-      });
-
-      menuText += `\nEnvie o número (1 a ${modules.length}) para alternar ou configurar.\nAtalhos: [P] Prefixo • [L] Idioma • [E] Estilo • [X] Fechar\nComandos: ${currentPrefix}menu`;
-    } else {
-      menuText = `${headerTitle}\n\n`;
-      menuText += `📌 *Prefixo:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\` | 🎭 *Estilo:* \`${styleDisplay}\`\n`;
-      if (from.endsWith('@g.us')) {
-        menuText += `${groupLabel} *${groupName}* (${membersCount} ${membersLabel})\n`;
-      }
-      menuText += '\n';
-
-      modules.forEach((mod, index) => {
-        const statusIcon = mod.enabled ? '🟢' : '🔴';
-        const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
-        menuText += `[${index + 1}] ${statusIcon} *${cleanTitle}*\n`;
-        if (mod.desc) menuText += `    _${mod.desc}_\n`;
-      });
-
-      const footerHelpWithE = {
-        pt: `_Responda com o número (1 a ${modules.length}) para configurar ou ligar/desligar._\n_Atalhos: *P [novo]* prefixo • *L* idioma • *E* estilo • *X* fechar_\n📖 _Para ver a lista de comandos, use ${currentPrefix}menu_`,
-        es: `_Responda con el número (1 a ${modules.length}) para configurar o activar/desactivar._\n_Atajos: *P [nuevo]* prefijo • *L* idioma • *E* estilo • *X* cerrar_\n📖 _Para ver los comandos, use ${currentPrefix}menu_`,
-        en: `_Reply with number (1 to ${modules.length}) to configure or toggle._\n_Shortcuts: *P [new]* prefix • *L* language • *E* style • *X* close_\n📖 _To see commands, use ${currentPrefix}menu_`
-      }[lang] || footerHelp[lang];
-
-      menuText += `\n${footerHelpWithE}`;
+    let menuText = `${headerTitle}\n\n`;
+    menuText += `📌 *Prefixo:* \`${currentPrefix}\` | 🌐 *Idioma:* \`${lang.toUpperCase()}\`\n`;
+    if (from.endsWith('@g.us')) {
+      menuText += `${groupLabel} *${groupName}* (${membersCount} ${membersLabel})\n`;
     }
+    menuText += '\n';
+
+    modules.forEach((mod, index) => {
+      const statusIcon = mod.enabled ? '🟢' : '🔴';
+      const cleanTitle = mod.title || nameMap[mod.name] || mod.name;
+      menuText += `[${index + 1}] ${statusIcon} *${cleanTitle}*\n`;
+      if (mod.desc) menuText += `    _${mod.desc}_\n`;
+    });
+
+    menuText += `\n${footerHelp}`;
     const session = {
       type: 'config_menu',
       groupJid: from,
@@ -593,24 +565,6 @@ class WizardEngine {
       return true;
     }
 
-    // Troca de Estilo: [E] ou [E formal], [E natural]
-    if (upper === 'E' || upper.startsWith('E ') || upper === 'ESTILO' || upper.startsWith('ESTILO ')) {
-      const parts = text.split(/\s+/);
-      const chosen = (parts[1] || '').toLowerCase();
-      const current = configManager.getGroupStyle(from);
-      let targetStyle = current === 'formal' ? 'natural' : 'formal';
-      if (['formal', 'f', '2'].includes(chosen)) targetStyle = 'formal';
-      else if (['natural', 'n', '1', 'emojis', 'emoji'].includes(chosen)) targetStyle = 'natural';
-
-      configManager.setGroupStyle(from, targetStyle);
-      wizardCache.del(sessionKey);
-      const label = targetStyle === 'formal' 
-        ? '*[Sistema]* Estilo de mensagens alterado para: *Formal (Etiquetas)*' 
-        : '🌈 *Estilo de mensagens alterado para:* *Natural (Emojis)*';
-      await sendSafeMessage(sock, from, { text: label }, { quoted: msg });
-      return true;
-    }
-
     // Seleção de módulo por número (suporta "1", "1 on", "1 off")
     const parts = text.split(/\s+/);
     const selectedNum = parseInt(parts[0], 10);
@@ -713,8 +667,8 @@ class WizardEngine {
   }
 
   /**
-   * Inicia o Wizard de Onboarding Inicial (3 etapas: IA, Contexto e Estilo)
-   * Disparado na primeira ativação do grupo (!bot on / !ativar) ou via !estilo / !bot setup
+   * Inicia o Wizard de Onboarding Inicial (2 etapas: IA e Contexto)
+   * Disparado na primeira ativação do grupo (!bot on / !ativar) ou via !bot setup
    * @param {object} sock 
    * @param {object} msg 
    * @param {string} from 
@@ -723,7 +677,6 @@ class WizardEngine {
    */
   async startOnboarding(sock, msg, from, sender, expiryDisplay = '') {
     const lang = configManager.getGroupLang(from);
-    const style = configManager.getGroupStyle(from);
     const sessionKey = `${from}:${sender}`;
 
     const session = {
@@ -734,8 +687,7 @@ class WizardEngine {
       expiryDisplay,
       answers: {
         ai: true,
-        memory: true,
-        style: 'natural'
+        memory: true
       }
     };
 
@@ -743,9 +695,9 @@ class WizardEngine {
 
     let prompt = '';
     if (expiryDisplay) {
-      prompt += `${t(lang, 'onboarding.welcome', { expiry: expiryDisplay }, style)}\n\n`;
+      prompt += `${t(lang, 'onboarding.welcome', { expiry: expiryDisplay })}\n\n`;
     }
-    prompt += `${t(lang, 'onboarding.step1_header', {}, style)}\n${t(lang, 'onboarding.step1_question', {}, style)}`;
+    prompt += `${t(lang, 'onboarding.step1_header')}\n${t(lang, 'onboarding.step1_question')}`;
 
     const sent = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
     if (sent?.key) {
@@ -758,15 +710,12 @@ class WizardEngine {
 
   async _sendOnboardingStepPrompt(sock, msg, from, sender, session, lang) {
     const sessionKey = `${from}:${sender}`;
-    const style = session.answers?.style || configManager.getGroupStyle(from);
     let prompt = '';
 
     if (session.step === 1) {
-      prompt = `${t(lang, 'onboarding.step1_header', {}, style)}\n${t(lang, 'onboarding.step1_question', {}, style)}`;
+      prompt = `${t(lang, 'onboarding.step1_header')}\n${t(lang, 'onboarding.step1_question')}`;
     } else if (session.step === 2) {
-      prompt = `${t(lang, 'onboarding.step2_header', {}, style)}\n${t(lang, 'onboarding.step2_question', {}, style)}`;
-    } else if (session.step === 3) {
-      prompt = `${t(lang, 'onboarding.step3_header', {}, style)}\n${t(lang, 'onboarding.step3_question', {}, style)}`;
+      prompt = `${t(lang, 'onboarding.step2_header')}\n${t(lang, 'onboarding.step2_question')}`;
     }
 
     const sent = await sendSafeMessage(sock, from, { text: prompt }, { quoted: msg });
@@ -779,6 +728,36 @@ class WizardEngine {
     return true;
   }
 
+  async _finalizeOnboarding(sock, msg, from, sessionKey, session, lang) {
+    configManager.updatePluginConfig(from, 'hermes', {
+      enabled: session.answers.ai,
+      memoryEnabled: session.answers.memory,
+      configured: true
+    });
+    configManager.setGroupOnboarded(from, true);
+    wizardCache.del(sessionKey);
+
+    const aiStatus = session.answers.ai 
+      ? t(lang, 'common.enabled') 
+      : t(lang, 'common.disabled');
+    const memStatus = session.answers.memory 
+      ? t(lang, 'common.enabled') 
+      : t(lang, 'common.disabled');
+    const prefix = configManager.getGroupPrefix(from);
+
+    // Garante que as configurações foram salvas em disco no exato instante da conclusão
+    configManager.flushSync();
+
+    const finishedText = t(lang, 'onboarding.finished', {
+      ai: aiStatus,
+      memory: memStatus,
+      prefix
+    });
+
+    await sendSafeMessage(sock, from, { text: finishedText }, { quoted: msg });
+    return true;
+  }
+
   async _handleOnboardingInput(sock, msg, from, sender, text, session, lang) {
     const sessionKey = `${from}:${sender}`;
     const clean = text.trim().toLowerCase();
@@ -787,8 +766,7 @@ class WizardEngine {
     if (['x', 'cancelar', 'sair', 'fechar'].includes(clean)) {
       wizardCache.del(sessionKey);
       configManager.setGroupOnboarded(from, true);
-      const style = configManager.getGroupStyle(from);
-      await sendSafeMessage(sock, from, { text: t(lang, 'wizard.cancelled', {}, style) }, { quoted: msg });
+      await sendSafeMessage(sock, from, { text: t(lang, 'wizard.cancelled') }, { quoted: msg });
       return true;
     }
 
@@ -802,12 +780,9 @@ class WizardEngine {
       } else if (['2', 'nao', 'não', 'n', 'false'].includes(clean)) {
         session.answers.ai = false;
         session.answers.memory = false;
-        session.step = 3; // Pula direto para a escolha do estilo dos templates
-        wizardCache.set(sessionKey, session);
-        return await this._sendOnboardingStepPrompt(sock, msg, from, sender, session, lang);
+        return await this._finalizeOnboarding(sock, msg, from, sessionKey, session, lang);
       } else {
-        const style = configManager.getGroupStyle(from);
-        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.invalid_input', {}, style) }, { quoted: msg });
+        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.invalid_input') }, { quoted: msg });
         return true;
       }
     }
@@ -819,60 +794,11 @@ class WizardEngine {
       } else if (['2', 'nao', 'não', 'n', 'false'].includes(clean)) {
         session.answers.memory = false;
       } else {
-        const style = configManager.getGroupStyle(from);
-        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.invalid_input', {}, style) }, { quoted: msg });
+        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.invalid_input') }, { quoted: msg });
         return true;
       }
 
-      session.step = 3; // Segue para a escolha do estilo visual/templates
-      wizardCache.set(sessionKey, session);
-      return await this._sendOnboardingStepPrompt(sock, msg, from, sender, session, lang);
-    }
-
-    // PASSO 3: Estilo Natural vs Formal
-    if (session.step === 3) {
-      if (['2', 'formal', 'f'].includes(clean)) {
-        session.answers.style = 'formal';
-      } else if (['.', 'padrao', 'padrão', 'default', '1', 'natural', 'n'].includes(clean)) {
-        session.answers.style = 'natural';
-      } else {
-        const style = configManager.getGroupStyle(from);
-        await sendSafeMessage(sock, from, { text: t(lang, 'wizard.invalid_input', {}, style) }, { quoted: msg });
-        return true;
-      }
-
-      // GRAVAÇÃO ATÔMICA E FINALIZAÇÃO DO ONBOARDING
-      const chosenStyle = session.answers.style;
-      configManager.setGroupStyle(from, chosenStyle);
-      configManager.updatePluginConfig(from, 'hermes', {
-        enabled: session.answers.ai,
-        memoryEnabled: session.answers.memory,
-        configured: true
-      });
-      configManager.setGroupOnboarded(from, true);
-      wizardCache.del(sessionKey);
-
-      const aiStatus = session.answers.ai 
-        ? t(lang, 'common.enabled', {}, chosenStyle) 
-        : t(lang, 'common.disabled', {}, chosenStyle);
-      const memStatus = session.answers.memory 
-        ? t(lang, 'common.enabled', {}, chosenStyle) 
-        : t(lang, 'common.disabled', {}, chosenStyle);
-      const styleDisplay = chosenStyle === 'formal' ? 'Formal' : 'Natural';
-      const prefix = configManager.getGroupPrefix(from);
-
-      // Garante que as configurações foram salvas em disco no exato instante da conclusão
-      configManager.flushSync();
-
-      const finishedText = t(lang, 'onboarding.finished', {
-        ai: aiStatus,
-        memory: memStatus,
-        style: styleDisplay,
-        prefix
-      }, chosenStyle);
-
-      await sendSafeMessage(sock, from, { text: finishedText }, { quoted: msg });
-      return true;
+      return await this._finalizeOnboarding(sock, msg, from, sessionKey, session, lang);
     }
 
     return false;

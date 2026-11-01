@@ -4,8 +4,8 @@ const { getGroupMetadata } = require('../../utils/jidResolver');
 
 module.exports = {
   name: 'bot',
-  aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm', 'setup', 'onboarding', 'estilo', 'style'],
-  usage: 'bot on/off/add/list/pv/config/setup/estilo',
+  aliases: ['bot', 'ativar', 'activar', 'activate', 'licenca', 'licencia', 'pv', 'dm', 'setup', 'onboarding'],
+  usage: 'bot on/off/add/list/pv/config/setup',
   description: 'Gestão de licenças e ativação do bot no grupo',
   ownerOnly: false, // Checado dinamicamente conforme authMode no execute
   adminOnly: false,
@@ -173,7 +173,6 @@ module.exports = {
       // Aplica configurações padrão e marca como onboarded para ativação instantânea
       if (!configManager.isGroupOnboarded(from)) {
         configManager.setGroupOnboarded(from, true);
-        configManager.setGroupStyle(from, 'natural');
         configManager.updatePluginConfig(from, 'hermes', {
           enabled: true,
           memoryEnabled: true,
@@ -193,30 +192,6 @@ module.exports = {
     if (cmd === 'setup' || cmd === 'onboarding' || sub === 'config' || sub === 'setup' || sub === 'onboarding' || sub === 'wizard') {
       const wizardEngine = require('../../core/wizardEngine');
       return await wizardEngine.startOnboarding(sock, currentMsg, from, sender);
-    }
-
-    // ==========================================
-    // Alternar Estilo de Mensagens (!estilo [natural|formal] ou !bot estilo)
-    // ==========================================
-    if (cmd === 'estilo' || cmd === 'style' || sub === 'estilo' || sub === 'style') {
-      const targetStyle = (cmd === 'estilo' || cmd === 'style' ? (args[0] || '') : (args[1] || '')).toLowerCase();
-      const currentPrefix = prefix || '!';
-      if (['formal', 'f', '2'].includes(targetStyle)) {
-        configManager.setGroupStyle(from, 'formal');
-        configManager.flushSync();
-        return reply('*[Sistema]* Estilo de mensagens alterado para: *Formal (Etiquetas)*');
-      } else if (['natural', 'n', '1', 'emojis', 'emoji'].includes(targetStyle)) {
-        configManager.setGroupStyle(from, 'natural');
-        configManager.flushSync();
-        return reply('*Estilo de mensagens alterado para:* *Natural (Emojis)*');
-      } else {
-        const currentStyle = configManager.getGroupStyle(from);
-        if (currentStyle === 'formal') {
-          return reply(`*[Sistema - Estilo de Mensagens]*\nEstilo ativo: *Formal (Etiquetas)*\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
-        } else {
-          return reply(`*Estilo Atual:* Natural (Emojis)\n\nPara alterar, envie:\n• \`${currentPrefix}estilo natural\` (com emojis)\n• \`${currentPrefix}estilo formal\` (com etiquetas em negrito)`);
-        }
-      }
     }
 
     // ==========================================

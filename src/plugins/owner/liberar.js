@@ -140,7 +140,6 @@ module.exports = {
     // Aplica configurações padrão recomendadas e marca como ativado/onboarded
     configManager.setGroupEnabled(targetJid, true);
     configManager.setGroupOnboarded(targetJid, true);
-    configManager.setGroupStyle(targetJid, 'natural');
     configManager.updatePluginConfig(targetJid, 'hermes', {
       enabled: true,
       memoryEnabled: true,

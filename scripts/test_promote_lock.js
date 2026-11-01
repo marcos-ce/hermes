@@ -3,9 +3,17 @@ const { resolveActionTarget, getExplicitMentionTargets } = require('../src/servi
 const promoteMember = require('../src/services/tools/promote_member');
 const promotePlugin = require('../src/plugins/admin/promote');
 const toolRegistry = require('../src/services/toolRegistry');
-const { t } = require('../src/utils/i18n');
-const i18nFormal = require('../src/utils/i18nFormal');
+const { t, dictionaries } = require('../src/utils/i18n');
 const { groupCache } = require('../src/utils/cache');
+
+function assertMatchesI18n(actual, lang, key, msg) {
+  const entry = dictionaries[lang]?.[key];
+  if (Array.isArray(entry)) {
+    assert(entry.includes(actual), msg || `Valor "${actual}" não pertence ao pool de ${key}`);
+  } else {
+    assert.strictEqual(actual, entry, msg);
+  }
+}
 
 console.log('====================================================');
 console.log('🧪 BATERIA DE TESTES EXAUSTIVOS: TRAVA DE PROMOÇÃO');
@@ -65,21 +73,13 @@ async function runAll() {
   groupCache.set(fromGroup, meta);
 
   // ----------------------------------------------------
-  // GRUPO 1: TESTES DE INTERNACIONALIZAÇÃO (i18n & Formal)
+  // GRUPO 1: TESTES DE INTERNACIONALIZAÇÃO (i18n)
   // ----------------------------------------------------
   runTest('1.1 Dicionários padrão contêm chave promote.need_explicit_mention em pt, es, en', () => {
     for (const lang of ['pt', 'es', 'en']) {
       const text = t(lang, 'promote.need_explicit_mention');
       assert(typeof text === 'string' && text.length > 10, `Texto ausente para ${lang}`);
       assert(text.includes('@'), `Texto de ${lang} deve citar @`);
-    }
-  });
-
-  runTest('1.2 Dicionários formais contêm chave promote.need_explicit_mention em pt, es, en', () => {
-    for (const lang of ['pt', 'es', 'en']) {
-      const text = i18nFormal.dictionaries[lang]?.['promote.need_explicit_mention'];
-      assert(typeof text === 'string' && text.length > 10, `Texto formal ausente para ${lang}`);
-      assert(text.includes('*[Segurança]*') || text.includes('*[Seguridad]*') || text.includes('*[Security]*'), `Texto formal de ${lang} deve ter tag`);
     }
   });
 
@@ -214,7 +214,7 @@ async function runAll() {
       args: { target: '@5511922222222' }
     });
     assert.strictEqual(res.success, true);
-    assert(res.message.includes('agora é um *Administrador*'));
+    assert(res.message.toLowerCase().includes('administrador'));
     assert.strictEqual(mockSock.lastUpdate?.action, 'promote');
     assert.deepStrictEqual(mockSock.lastUpdate?.jids, ['5511922222222@s.whatsapp.net']);
   });
@@ -265,7 +265,7 @@ async function runAll() {
       args: { target: '@5511922222222' }
     });
     assert.strictEqual(res.success, false);
-    assert.strictEqual(res.error, t('pt', 'common.bot_not_admin'));
+    assertMatchesI18n(res.error, 'pt', 'common.bot_not_admin');
   });
 
   await runAsyncTest('3.4 promote_member rejeita se membro já for admin', async () => {
@@ -288,7 +288,7 @@ async function runAll() {
       args: { target: '@5511944444444' }
     });
     assert.strictEqual(res.success, false);
-    assert.strictEqual(res.error, t('pt', 'promote.already_admin'));
+    assertMatchesI18n(res.error, 'pt', 'promote.already_admin');
   });
 
   // ----------------------------------------------------
@@ -317,7 +317,7 @@ async function runAll() {
       t: (key, vars) => t('pt', key, vars),
       isGroup: true
     });
-    assert(output.includes('agora é um *Administrador*'), `Saída inesperada: ${output}`);
+    assert(output.toLowerCase().includes('administrador'), `Saída inesperada: ${output}`);
     assert.strictEqual(mockSock.lastUpdate?.action, 'promote');
     assert.deepStrictEqual(mockSock.lastUpdate?.jids, ['5511933333333@s.whatsapp.net']);
   });
@@ -397,7 +397,7 @@ async function runAll() {
       t: (key, vars) => t('pt', key, vars),
       isGroup: true
     });
-    assert(output.includes('agora é um *Administrador*'));
+    assert(output.toLowerCase().includes('administrador'));
     assert.strictEqual(mockSock.lastUpdate?.action, 'promote');
     assert.deepStrictEqual(mockSock.lastUpdate?.jids, ['5511922222222@s.whatsapp.net'], 'Deve promover Bob, não Alice');
   });
@@ -414,7 +414,7 @@ async function runAll() {
       t: (key, vars) => t('pt', key, vars),
       isGroup: false
     });
-    assert.strictEqual(output, t('pt', 'common.group_only'));
+    assertMatchesI18n(output, 'pt', 'common.group_only');
   });
 
   // ----------------------------------------------------
@@ -439,7 +439,7 @@ async function runAll() {
       args: { target: '@5511922222222' }
     });
     assert.strictEqual(res.success, false);
-    assert.strictEqual(res.error, t('pt', 'common.no_permission_admin'));
+    assertMatchesI18n(res.error, 'pt', 'common.no_permission_admin');
   });
 
   // ----------------------------------------------------
