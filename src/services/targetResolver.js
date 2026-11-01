@@ -1,4 +1,4 @@
-const { resolveTarget, resolveParticipant, cleanJid, getBotIdentity, getGroupMetadata, findParticipantJidsByName, setLidMapping, digitsOf, getBr } = require('../utils/jidResolver');
+const { resolveTarget, resolveParticipant, cleanJid, getBotIdentity, isBotIdentity, getGroupMetadata, findParticipantJidsByName, setLidMapping, digitsOf, getBr } = require('../utils/jidResolver');
 const memoryEngine = require('./memoryEngine');
 const { t } = require('../utils/i18n');
 
@@ -242,18 +242,7 @@ async function resolveNameMentionTargets(sock, from, tokens, isBot) {
  * @returns {(jidOrNum: string) => boolean}
  */
 function createBotChecker(sock) {
-  const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
-  return (jidOrNum) => {
-    if (!jidOrNum) return false;
-    const clean = cleanJid(jidOrNum);
-    const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    return (
-      clean === botJid ||
-      clean === botLid ||
-      (botNum && num === botNum) ||
-      (botLidNum && num === botLidNum)
-    );
-  };
+  return (jidOrNum) => isBotIdentity(sock, jidOrNum);
 }
 
 /**
@@ -377,10 +366,9 @@ function hasExplicitMentionSyntax(sock, msg) {
   const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
   if (mentions.some(m => m && !isBot(m))) return true;
 
-  const { botNum, botLidNum } = getBotIdentity(sock);
   const textTokens = extractAtTokens(getMessageText(realMsg)).filter(token => {
     const numeric = token.replace(/^\+/, '');
-    if (/^\d{8,20}$/.test(numeric)) return !isBot(numeric) && numeric !== botNum && numeric !== botLidNum;
+    if (/^\d{8,20}$/.test(numeric)) return !isBot(numeric);
     const normalized = normalizeName(token);
     return Boolean(normalized) && normalized !== 'hermes' && normalized !== 'bot';
   });

@@ -5,7 +5,7 @@ const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
 const { getExplicitMentionTargets } = require('../../services/targetResolver');
-const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant, getBotIdentity } = require('../../utils/jidResolver');
+const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant, getBotIdentity, isBotIdentity, getBr } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
@@ -102,7 +102,6 @@ function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
   }
 
   // 3. Extrai menções com @ para verificar se alguém além do bot foi marcado
-  const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
   const realMsg = msg?.message?.ephemeralMessage?.message ||
                   msg?.message?.viewOnceMessage?.message ||
                   msg?.message?.viewOnceMessageV2?.message ||
@@ -117,10 +116,7 @@ function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
   const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
   const targetMentions = rawMentions
     .map(m => cleanJid(m))
-    .filter(m => {
-      const num = m.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      return m !== botJid && m !== botLid && (!botNum || num !== botNum) && (!botLidNum || num !== botLidNum);
-    });
+    .filter(m => !isBotIdentity(sock, m));
 
   // Verifica menções por texto: @551199999999 (PN/LID) ou @Fulano (nome literal).
   const textAtTokens = (queryText.match(/(?:^|\s)@([^\s@]+)/g) || [])
@@ -128,7 +124,7 @@ function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
     .filter(Boolean)
     .filter(token => {
       const numeric = token.replace(/^\+/, '');
-      if (/^\d{8,20}$/.test(numeric)) return numeric !== botNum && numeric !== botLidNum;
+      if (/^\d{8,20}$/.test(numeric)) return !isBotIdentity(sock, numeric);
 
       const normalized = token.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       return normalized !== 'hermes' && normalized !== 'bot';
@@ -504,21 +500,12 @@ module.exports = {
     const quotedParticipant = cleanJid(contextInfo?.participant || '');
     const quotedNum = quotedParticipant.replace(/@.*$/, '').replace(/\D/g, '');
     const isReplyToBot = Boolean(
-      contextInfo?.stanzaId && (
-        quotedParticipant === botJid ||
-        quotedParticipant === botLid ||
-        (botNum && quotedNum === botNum) ||
-        (botLidNum && quotedNum === botLidNum)
-      )
+      contextInfo?.stanzaId && isBotIdentity(sock, quotedParticipant)
     );
 
     // B. Menção nos metadados do WhatsApp (quando o usuário clica no contato do bot na lista)
     const mentionedJids = contextInfo?.mentionedJid || [];
-    const isBotMentionedMeta = Array.isArray(mentionedJids) && mentionedJids.some(j => {
-      const clean = cleanJid(j);
-      const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      return clean === botJid || clean === botLid || (botNum && num === botNum);
-    });
+    const isBotMentionedMeta = Array.isArray(mentionedJids) && mentionedJids.some(j => isBotIdentity(sock, j));
 
     // C. Menção no texto por nome: "@hermes", "@bot", iniciando por "hermes" ou mencionando a palavra "hermes"
     const lowerText = (text || '').toLowerCase().trim();
@@ -643,6 +630,12 @@ module.exports = {
 
     if (botNum) {
       cleanQuery = cleanQuery.replace(new RegExp(`@${botNum}\\b`, 'g'), '');
+      const bBr = getBr(botNum);
+      if (bBr.ddd && bBr.last8) {
+        cleanQuery = cleanQuery
+          .replace(new RegExp(`@55${bBr.ddd}9?${bBr.last8}\\b`, 'g'), '')
+          .replace(new RegExp(`@${bBr.ddd}9?${bBr.last8}\\b`, 'g'), '');
+      }
     }
     if (botLidNum) {
       cleanQuery = cleanQuery.replace(new RegExp(`@${botLidNum}\\b`, 'g'), '');
@@ -777,16 +770,11 @@ module.exports = {
     }
 
 
-    const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
-
     // Alvos marcados na mensagem (excluindo o próprio bot) com resolução de nome
     const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
     const targetMentions = rawMentions
       .map(m => cleanJid(m))
-      .filter(m => {
-        const num = m.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-        return m !== botJid && m !== botLid && (!botNum || num !== botNum) && (!botLidNum || num !== botLidNum);
-      });
+      .filter(m => !isBotIdentity(sock, m));
 
     const formattedTargets = []; // escopo externo: cross-inference pode acessar
     if (targetMentions.length > 0) {
@@ -825,7 +813,7 @@ module.exports = {
     if (rawQuotedJid) {
       const qParticipant = cleanJid(rawQuotedJid);
       const qNum = qParticipant.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-      isQuotingBot = qParticipant === botJid || qParticipant === botLid || (botNum && qNum === botNum) || (botLidNum && qNum === botLidNum);
+      isQuotingBot = isBotIdentity(sock, qParticipant);
       
       if (!isQuotingBot) {
         const resolved = await resolveParticipant(sock, from, qParticipant);
@@ -881,7 +869,7 @@ module.exports = {
         for (const qm of quotedMentions) {
           const cleanM = cleanJid(qm);
           const numM = cleanM.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-          if (cleanM !== botJid && cleanM !== botLid && (!botNum || numM !== botNum) && (!botLidNum || numM !== botLidNum)) {
+          if (!isBotIdentity(sock, cleanM)) {
             const res = await resolveParticipant(sock, from, cleanM);
             const name = res?.name || memoryEngine.getParticipantName(from, cleanM) || memoryEngine.getParticipantName(from, res?.phoneJid) || '';
             const disp = res?.displayNum || numM;
@@ -893,7 +881,7 @@ module.exports = {
           const numMatches = snippet.match(/@(\d{8,20})\b/g) || [];
           for (const m of numMatches) {
             const rawNum = m.replace('@', '');
-            if (rawNum !== botNum && rawNum !== botLidNum) {
+            if (!isBotIdentity(sock, rawNum)) {
               const res = await resolveParticipant(sock, from, rawNum);
               const name = res?.name || memoryEngine.getParticipantName(from, res?.phoneJid || rawNum) || '';
               botQuotedTargets.push(name ? `${name} (@${res?.displayNum || rawNum})` : `@${rawNum}`);

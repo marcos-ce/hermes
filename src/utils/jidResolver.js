@@ -720,7 +720,31 @@ function isBotIdentity(sock, jidOrNum) {
   const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
   const clean = cleanJid(jidOrNum);
   const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-  return clean === botJid || clean === botLid || (botNum && num === botNum) || (botLidNum && num === botLidNum);
+
+  if (clean && (clean === botJid || clean === botLid)) return true;
+  if (botNum && num === botNum) return true;
+  if (botLidNum && num === botLidNum) return true;
+
+  // Fallback para BOT_NUMBER do .env se configurado
+  const envBotNum = (settings.botNumber || '').replace(/\D/g, '');
+  if (envBotNum && num === envBotNum) return true;
+
+  // Comparação resiliente do 9º dígito brasileiro (DDD + últimos 8 dígitos)
+  if (num) {
+    const numBr = getBr(num);
+    if (numBr.ddd && numBr.last8) {
+      if (botNum) {
+        const botBr = getBr(botNum);
+        if (botBr.ddd && botBr.ddd === numBr.ddd && botBr.last8 === numBr.last8) return true;
+      }
+      if (envBotNum) {
+        const envBr = getBr(envBotNum);
+        if (envBr.ddd && envBr.ddd === numBr.ddd && envBr.last8 === numBr.last8) return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
