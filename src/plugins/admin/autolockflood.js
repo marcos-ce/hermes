@@ -1,11 +1,12 @@
 'use strict';
 
-const configManager  = require('../../core/configManager');
-const wizardEngine   = require('../../core/wizardEngine');
-const { floodCache } = require('../../utils/cache');
+const configManager    = require('../../core/configManager');
+const wizardEngine     = require('../../core/wizardEngine');
+const { floodCache }   = require('../../utils/cache');
 const { sendSafeMessage } = require('../../utils/antiBan');
-const { t }          = require('../../utils/i18n');
-const logger         = require('../../utils/logger');
+const { checkAdminStatus } = require('../../utils/jidResolver');
+const { t }            = require('../../utils/i18n');
+const logger           = require('../../utils/logger');
 
 /**
  * autolockflood — Fecha o grupo automaticamente quando o volume de mensagens
@@ -159,7 +160,6 @@ module.exports = {
     // Opcionalmente ignora admins (verificação leve via cache de metadados)
     if (ignoreAdmins) {
       try {
-        const { checkAdminStatus } = require('../../utils/jidResolver');
         const adminCheck = await checkAdminStatus(sock, from, sender);
         if (adminCheck.isAdmin) return false;
       } catch (_) {}

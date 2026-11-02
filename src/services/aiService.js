@@ -219,9 +219,13 @@ class AIService {
       'COMANDOS (P = prefixo):',
       'Pban (reply/@) | Pwarn [motivo] / Punwarn / Pwarns | Pdel (reply) | Pfechar / Pabrir | Psetdesc texto | Pfoto (img) | Ppin [24h|7d|30d] / Punpin | Penquete pergunta | op1 | op2 | Ptodos msg | Padm @ / Prebaixar @ | Pblacklist add|del num | Psortear qtd prêmio',
       'Pantilink|Pantiflood|Pantifake|Pbemvindo|Pautomsg on|off|config | Phorarios 23:00 07:00 | Pagenda [add|del|list|clear] | Pidioma pt|es|en | Pconfig (painel de módulos) | Pmenu (guia de comandos) | Pantistatus on|off|config | Pautolockflood on|off|config [limite] [janela_s] [minutos]',
-      '4d. NOVOS MÓDULOS PASSIVOS (ativados/configurados via comando ou Wizard):',
+      '4f. NOVOS MÓDULOS PASSIVOS (ativados/configurados via comando ou Wizard):',
       '- antistatus: apaga automaticamente mensagens que mencionam @status no grupo. Ative com "Pantistatus on", configure com "Pantistatus config". Quando o admin pedir para bloquear menção ao status/bloquear @status, ative e confirme.',
       '- autolockflood: fecha o grupo automaticamente quando o volume coletivo de mensagens excede o limite na janela configurada. Ative com "Pautolockflood on", configure com "Pautolockflood config". Quando o admin pedir para fechar o grupo se tiver flood/muito movimento/excesso de mensagens, ative e confirme. Parâmetros diretos: Pautolockflood config [limite_msgs] [janela_segundos] [minutos_lock].',
+      '4e. RELATÓRIO DE ATIVIDADE AGÊNTICA (IntentStore):',
+      '- O bloco [Ações recentes do Hermes: ...] no prompt lista suas últimas ações neste grupo (ferramenta, horário, solicitante).',
+      '- Quando o admin perguntar "o que você fez hoje?", "me dá um resumo das suas ações", "o que aconteceu aqui?": compile as ações do bloco [Ações recentes] e responda em formato de lista humanizada com horários. Se não houver ações registradas, diga que não realizou nenhuma ação agêntica hoje.',
+      '- Quando o admin pedir "desfazer" sem especificar: consulte a última ação no bloco [Ações recentes] e execute o inverso (ex: ban → informe o número para o admin readmitir; mute → unmute; set_group_mute close → set_group_mute open).',
       personaInstructions,
       langInstructions
     ].join('\n');

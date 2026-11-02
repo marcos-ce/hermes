@@ -106,6 +106,19 @@ const dictionaries = {
     'antifake.detected': "Removi @{user} porque números com esse código de país (DDI) não são permitidos neste grupo.",
     'antifake.status': "*AntiFake:* {status}\n🌍 *DDIs permitidos:* {ddis}",
 
+    // ═══ ANTISTATUS ═══
+    'antistatus.warn': "⚠️ @{user} Mensagens com menção ao @status são apagadas automaticamente neste grupo.",
+    'antistatus.status': "🚫 *Anti-Status:* {status}\n• Aviso público: {warn}",
+
+    // ═══ AUTOLOCKFLOOD ═══
+    'autolockflood.locked_timed': "🔒 Grupo fechado automaticamente — {limit} mensagens em {window}s detectadas. Reabrindo em {minutes} minuto(s).",
+    'autolockflood.locked_manual': "🔒 Grupo fechado automaticamente — {limit} mensagens em {window}s detectadas. Um admin deverá reabrir manualmente.",
+    'autolockflood.reopened': "🔓 Grupo reaberto automaticamente. Mantenham o respeito! 🙏",
+
+    // ═══ PLUGIN GENÉRICO ═══
+    'plugin.enabled': "✅ *{plugin}* ativado com sucesso!",
+    'plugin.disabled': "❌ *{plugin}* desativado.",
+
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprovação:* {status}\nDDIs autorizados: {ddis}\nAção para estrangeiros: {foreignAction}\nNotificação no grupo: {notify}",
     'autoapprove.summary': "📋 *Solicitações de Entrada Pendentes*\n\nTotal na fila: {total}\n• Números do Brasil (DDI 55): {brCount}\n• Números Estrangeiros: {foreignCount}\n• Identificadores LIDs: {unknownCount}\n\nProteção Anti-Ban: ATIVA (Fila Segura com Intervalo Humano)\n\nComandos disponíveis:\n• `{prefix}aprovar agora` - Aprovar os {brCount} números brasileiros\n• `{prefix}aprovar todos` - Aprovar todas as {total} solicitações pendentes\n• `{prefix}aprovar <número>` - Aprovar um número específico\n• `{prefix}aprovar on` - Ativar aprovação automática em tempo real\n• `{prefix}aprovar on todos` - Aprovar automaticamente qualquer país\n• `{prefix}aprovar off` - Desativar aprovação automática\n• `{prefix}aprovar config` - Configurar DDIs e regras",
@@ -402,6 +415,19 @@ const dictionaries = {
     'antifake.detected': "@{user}, los números con este prefijo de país no están permitidos según las normas del grupo.",
     'antifake.status': "🎭 *AntiFake:* {status}\n🌍 *Prefijos permitidos:* {ddis}",
 
+    // ═══ ANTISTATUS ═══
+    'antistatus.warn': "⚠️ @{user} Los mensajes con mención @status se eliminan automáticamente en este grupo.",
+    'antistatus.status': "🚫 *Anti-Status:* {status}\n• Aviso público: {warn}",
+
+    // ═══ AUTOLOCKFLOOD ═══
+    'autolockflood.locked_timed': "🔒 Grupo cerrado automáticamente — {limit} mensajes en {window}s detectados. Reabriendo en {minutes} minuto(s).",
+    'autolockflood.locked_manual': "🔒 Grupo cerrado automáticamente — {limit} mensajes en {window}s detectados. Un administrador deberá reabrirlo manualmente.",
+    'autolockflood.reopened': "🔓 Grupo reabierto automáticamente. ¡Mantengan el respeto! 🙏",
+
+    // ═══ PLUGIN GENÉRICO ═══
+    'plugin.enabled': "✅ *{plugin}* activado con éxito.",
+    'plugin.disabled': "❌ *{plugin}* desactivado.",
+
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprobación:* {status}\nPrefijos permitidos: {ddis}\nAcción para extranjeros: {foreignAction}\nNotificación en el grupo: {notify}",
     'autoapprove.summary': "📋 *Solicitudes de Entrada Pendientes*\n\nTotal esperando aprobación: {total}\n• Números Nacionales (DDI 55): {brCount}\n• Números Extranjeros: {foreignCount}\n• Identificadores LIDs: {unknownCount}\n\nProtección Anti-Ban: ACTIVA (Cola Segura con Intervalo Humano)\n\nComandos disponibles:\n• `{prefix}aprovar agora` - Aprobar {brCount} números nacionales vía cola segura\n• `{prefix}aprovar todos` - Aprobar la totalidad ({total}) de participantes pendientes\n• `{prefix}aprovar <número>` - Aprobar participante específico\n• `{prefix}aprovar on` - Habilitar auto-aprobación en tiempo real\n• `{prefix}aprovar on todos` - Habilitar auto-aprobación irrestricta\n• `{prefix}aprovar off` - Deshabilitar auto-aprobación\n• `{prefix}aprovar config` - Configurar prefijos y acciones",
@@ -697,6 +723,19 @@ const dictionaries = {
     // ─── ANTIFAKE ───
     'antifake.detected': "@{user}, phone numbers with this country calling code are not permitted under group rules.",
     'antifake.status': "🎭 *AntiFake:* {status}\n🌍 *Allowed country codes:* {ddis}",
+
+    // ═══ ANTISTATUS ═══
+    'antistatus.warn': "⚠️ @{user} Messages mentioning @status are automatically deleted in this group.",
+    'antistatus.status': "🚫 *Anti-Status:* {status}\n• Public warning: {warn}",
+
+    // ═══ AUTOLOCKFLOOD ═══
+    'autolockflood.locked_timed': "🔒 Group locked automatically — {limit} messages in {window}s detected. Re-opening in {minutes} minute(s).",
+    'autolockflood.locked_manual': "🔒 Group locked automatically — {limit} messages in {window}s detected. An admin must re-open it manually.",
+    'autolockflood.reopened': "🔓 Group re-opened automatically. Let's keep it respectful! 🙏",
+
+    // ═══ PLUGIN GENÉRICO ═══
+    'plugin.enabled': "✅ *{plugin}* successfully enabled.",
+    'plugin.disabled': "❌ *{plugin}* disabled.",
 
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Approve:* {status}\nAllowed country codes: {ddis}\nForeign action: {foreignAction}\nGroup notification: {notify}",
