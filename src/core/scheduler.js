@@ -65,7 +65,14 @@ class Scheduler {
       group.warned1d = true; // marca antes de enviar: no máximo 1 aviso
       configManager.scheduleSave();
       queue.push({
-        run: () => sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_warn_1d', { url: renewalUrl() }) })
+        run: async () => {
+          let code = null;
+          try {
+            code = await this.sock.groupInviteCode(groupJid);
+          } catch (_) {}
+          const url = renewalUrl(code);
+          await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_warn_1d', { url }) });
+        }
       });
       return;
     }
@@ -78,8 +85,14 @@ class Scheduler {
           if (!g || g.leftAt || g.expiresAt === null || Date.now() <= g.expiresAt + LICENSE_GRACE_MS) return;
 
           g.leaveAttempts = (g.leaveAttempts || 0) + 1;
+          let code = null;
           try {
-            await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_leaving', { url: renewalUrl() }) });
+            code = await this.sock.groupInviteCode(groupJid);
+          } catch (_) {}
+          const url = renewalUrl(code);
+
+          try {
+            await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_leaving', { url }) });
           } catch (_) {}
 
           try {

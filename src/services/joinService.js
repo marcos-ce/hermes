@@ -19,11 +19,13 @@ function normalizeGroupJid(id) {
   return String(id).endsWith('@g.us') ? String(id) : `${id}@g.us`;
 }
 
-function renewalUrl() {
-  // Abre o modal do site já em modo "Renovar" (normaliza barras e remove parâmetros prévios)
+function renewalUrl(inviteCode = null) {
+  // Abre o modal do site já em modo "Renovar" (normaliza barras e pré-preenche o grupo se disponível)
   if (settings.siteUrl) {
     const base = settings.siteUrl.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
-    return `${base}/?renovar=1`;
+    const cleanCode = (inviteCode || '').replace(/.*chat\.whatsapp\.com\/(?:invite\/)?/, '').trim();
+    const param = cleanCode ? `&grupo=${cleanCode}` : '';
+    return `${base}/?renovar=1${param}`;
   }
   return settings.ownerNumber ? `https://wa.me/${settings.ownerNumber}` : '';
 }
