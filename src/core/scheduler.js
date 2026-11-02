@@ -4,6 +4,11 @@ const settings = require('../config/settings');
 const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
 const { t } = require('../utils/i18n');
 const logger = require('../utils/logger');
+const { groupCache } = require('../utils/cache');
+
+const LICENSE_WARN_MS = 24 * 60 * 60 * 1000; // aviso D-1
+const LICENSE_GRACE_MS = 24 * 60 * 60 * 1000; // carência após o vencimento
+const MAX_LEAVE_ATTEMPTS = 5;
 
 class Scheduler {
   constructor() {
@@ -42,6 +47,63 @@ class Scheduler {
     this.sock = sock;
   }
 
+  /**
+   * Ciclo de vida da licença (apenas grupos com autoLeave=true, ou todos se AUTO_LEAVE_ALL_EXPIRED=true):
+   *  - D-1: avisa uma única vez que a licença vence em < 24h (com link de renovação)
+   *  - Vencida + 24h de carência: envia despedida e sai do grupo (configs preservadas, enabled=false)
+   * Renovar (addDaysToGroup/setGroupExpiry) zera warned1d e leftAt, cancelando qualquer saída.
+   */
+  _licenseLifecycle(groupJid, group, queue) {
+    if (!group.autoLeave && !settings.autoLeaveAllExpired) return;
+    if (group.expiresAt === null || group.expiresAt === undefined || group.leftAt) return;
+
+    const lang = group.lang || 'pt';
+    const remaining = group.expiresAt - Date.now();
+    const { renewalUrl } = require('../services/joinService');
+
+    if (remaining > 0 && remaining <= LICENSE_WARN_MS && !group.warned1d && group.enabled) {
+      group.warned1d = true; // marca antes de enviar: no máximo 1 aviso
+      configManager.scheduleSave();
+      queue.push({
+        run: () => sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_warn_1d', { url: renewalUrl() }) })
+      });
+      return;
+    }
+
+    if (remaining <= -LICENSE_GRACE_MS) {
+      queue.push({
+        run: async () => {
+          // Revalida no momento da execução (o cliente pode ter renovado enquanto estava na fila)
+          const g = configManager.getGroup(groupJid);
+          if (!g || g.leftAt || g.expiresAt === null || Date.now() <= g.expiresAt + LICENSE_GRACE_MS) return;
+
+          g.leaveAttempts = (g.leaveAttempts || 0) + 1;
+          try {
+            await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_leaving', { url: renewalUrl() }) });
+          } catch (_) {}
+
+          try {
+            await this.sock.groupLeave(groupJid);
+          } catch (err) {
+            const msg = String(err?.message || err);
+            const gone = /not.?in|forbidden|item-not-found|not-authorized|403|404/i.test(msg);
+            if (!gone && g.leaveAttempts < MAX_LEAVE_ATTEMPTS) {
+              configManager.scheduleSave();
+              throw err; // tenta de novo no próximo tick
+            }
+            logger.warn({ err: msg, groupJid }, 'groupLeave falhou/indisponível; encerrando ciclo da licença');
+          }
+
+          g.leftAt = Date.now();
+          g.enabled = false; // Soft Disable: configurações preservadas
+          groupCache.del(groupJid);
+          configManager.flushSync();
+          logger.info({ groupJid }, 'Bot saiu do grupo após vencimento + carência de 24h');
+        }
+      });
+    }
+  }
+
   async _tick() {
     if (!this.sock || this.isTicking) return;
     this.isTicking = true;
@@ -76,6 +138,9 @@ class Scheduler {
         if (configManager.isGroupBanned(groupJid)) {
           continue; // Grupo banido: 100% ignorado pelo scheduler
         }
+
+        // Ciclo de vida da licença: aviso D-1 e saída automática após 24h de carência
+        this._licenseLifecycle(groupJid, group, executionQueue);
 
         if (!configManager.isGroupEnabled(groupJid)) {
           // Checagem de notificação de licença expirada

@@ -270,6 +270,7 @@ async function connectBot(options = {}) {
 
       // Atualiza o scheduler com o socket autenticado (somente após conexão confirmada)
       scheduler.updateSocket(sock);
+      require('../services/siteBridge').updateSocket(sock);
 
       // Registra identidade do bot no mapa LID <-> Telefone
       if (sock.user) {

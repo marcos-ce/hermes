@@ -450,13 +450,19 @@ class ConfigManager {
    * sem sobrescrever configurações já personalizadas pelo grupo.
    */
   ensureGroupStarterKit(groupJid, name = '', days = null) {
+    const isNewGroup = !this.groups.has(groupJid);
     const group = this.getOrCreateGroup(groupJid, name);
     group.enabled = true;
     group.onboarded = true;
     group.expiryNotified = false;
 
     if (typeof days === 'number' && days > 0) {
-      this.addDaysToGroup(groupJid, days);
+      if (isNewGroup) {
+        // Grupo novo nasce com 30 dias padrão: define a vigência EXATA informada (sem somar ao padrão)
+        this.setGroupExpiry(groupJid, Date.now() + days * 24 * 60 * 60 * 1000);
+      } else {
+        this.addDaysToGroup(groupJid, days);
+      }
     } else if (days === 0) {
       group.expiresAt = null; // Vitalício explícito
     } else if (!group.expiresAt || Date.now() > group.expiresAt) {
@@ -577,6 +583,8 @@ class ConfigManager {
     const group = this.getOrCreateGroup(groupJid);
     group.expiresAt = expiresAt;
     group.expiryNotified = false;
+    group.warned1d = false;
+    group.leftAt = null;
     this.scheduleSave();
   }
 
@@ -592,6 +600,8 @@ class ConfigManager {
     group.expiresAt = baseTime + msToAdd;
     group.enabled = true;
     group.expiryNotified = false;
+    group.warned1d = false; // reabilita o aviso de D-1 da próxima vigência
+    group.leftAt = null; // renovação cancela qualquer saída automática pendente
     this.scheduleSave();
     return group.expiresAt;
   }
