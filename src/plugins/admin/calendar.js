@@ -79,6 +79,52 @@ function parseTime(timeStr) {
  * @param {string} [params.lang]
  * @param {object} [params.config]
  */
+
+/**
+ * Executa autonomamente a ação agentica vencedora de uma enquete condicional.
+ * ISOLAMENTO: chamado apenas por executeCalendarAction (poll_result). Zero IA.
+ * @param {object} sock
+ * @param {string} groupJid
+ * @param {{ option: string, action: string, params?: object }} matchedAction
+ * @param {string} lang
+ */
+async function executeAgentPollAction(sock, groupJid, matchedAction, lang) {
+  const { action, params = {} } = matchedAction;
+  switch (action) {
+    case 'close_group':
+      await sock.groupSettingUpdate(groupJid, 'announcement');
+      break;
+    case 'open_group':
+      await sock.groupSettingUpdate(groupJid, 'not_announcement');
+      break;
+    case 'announce':
+      if (params.message) {
+        await sendSafeMessage(sock, groupJid, { text: String(params.message) });
+      }
+      break;
+    default:
+      logger.warn({ groupJid, action }, 'Ação agentica pós-enquete desconhecida ou não suportada em modo autônomo');
+  }
+}
+
+/**
+ * Retorna um label legível para a ação agentica no log/mensagem ao grupo.
+ * @param {string} action
+ * @returns {string}
+ */
+function formatActionLabel(action) {
+  const labels = {
+    close_group: 'Fechar o grupo',
+    open_group: 'Abrir o grupo',
+    announce: 'Comunicado enviado',
+    ban_member: 'Banimento aplicado',
+    warn_member: 'Advertência aplicada',
+    raffle: 'Sorteio realizado',
+    reminder: 'Lembrete agendado'
+  };
+  return labels[action] || action;
+}
+
 async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', config = {} }) {
   const actionType = event.action || event.actionType || 'reminder';
 
@@ -91,6 +137,31 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
       });
       return;
     }
+
+    // ── Execução agentica: ação condicional atrelada à enquete ───────────
+    const conditionalActions = pollTracker.getConditionalActions(pollResults.pollId);
+    let agentActionNote = '';
+    if (conditionalActions && Array.isArray(conditionalActions) && pollResults.winner && !pollResults.isTie) {
+      const winnerName = pollResults.winner.name.trim().toLowerCase();
+      const matchedAction = conditionalActions.find(ca => {
+        const optNorm = String(ca.option || '').trim().toLowerCase();
+        return optNorm === winnerName ||
+               winnerName.includes(optNorm) ||
+               optNorm.includes(winnerName);
+      });
+
+      if (matchedAction) {
+        logger.info({ groupJid, action: matchedAction.action, winner: pollResults.winner.name }, 'Hermes: executando ação agentica pós-enquete');
+        try {
+          await executeAgentPollAction(sock, groupJid, matchedAction, lang);
+          agentActionNote = `\n\n🤖 _Ação executada automaticamente: *${formatActionLabel(matchedAction.action)}* conforme o resultado da votação._`;
+        } catch (err) {
+          logger.error({ err, groupJid, action: matchedAction.action }, 'Erro ao executar ação agentica pós-enquete');
+          agentActionNote = `\n\n⚠️ _Tentei executar a ação automática (${matchedAction.action}), mas encontrei um erro. Verifique as permissões do bot._`;
+        }
+      }
+    }
+
     const winnerStr = pollResults.winner
       ? `🏆 *Vencedor Oficial:* "${pollResults.winner.name}" com ${pollResults.winner.votes} voto(s)`
       : (pollResults.isTie ? '⚖️ *Resultado:* Empate entre as opções mais votadas' : 'Nenhum voto computado ainda');
@@ -99,7 +170,8 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
       `📌 *"${pollResults.title}"*\n\n` +
       `${pollResults.summary.split(' | ').map(s => `  ▪️ ${s}`).join('\n')}\n\n` +
       `${winnerStr}\n` +
-      `_(Total de votos apurados: ${pollResults.totalVotes})_`;
+      `_(Total de votos apurados: ${pollResults.totalVotes})_` +
+      agentActionNote;
     await sendSafeMessage(sock, groupJid, { text: body });
     return;
   }

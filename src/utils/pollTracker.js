@@ -162,6 +162,32 @@ class PollTracker {
   }
 
   /**
+   * Associa um mapa de ações condicionais agenticas a uma enquete já salva.
+   * Chamado por create_group_poll quando o LLM passa conditionalActions.
+   * @param {string} pollId  ID da mensagem da enquete (sent.key.id)
+   * @param {Array<{option:string, action:string, params?:object}>} actions
+   */
+  setConditionalActions(pollId, actions) {
+    if (!pollId || !Array.isArray(actions) || actions.length === 0) return;
+    const stored = this.polls.get(pollId);
+    if (!stored) return;
+    stored.conditionalActions = actions;
+    this.scheduleSave();
+    logger.info({ pollId, count: actions.length }, 'Ações condicionais agenticas associadas à enquete');
+  }
+
+  /**
+   * Recupera o mapa de ações condicionais de uma enquete (ou null se não houver).
+   * @param {string} pollId
+   * @returns {Array<{option:string, action:string, params?:object}>|null}
+   */
+  getConditionalActions(pollId) {
+    if (!pollId) return null;
+    const stored = this.polls.get(pollId);
+    return stored?.conditionalActions || null;
+  }
+
+  /**
    * Salva a mensagem de criação de uma enquete (enviada pelo bot ou por membros do grupo)
    * @param {string} groupJid 
    * @param {object} pollMsg WAMessage da criação da enquete

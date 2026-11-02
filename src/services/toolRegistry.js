@@ -349,7 +349,8 @@ const TOOLS = [
         properties: {
           title: { type: 'string', description: 'Pergunta ou título da enquete.' },
           options: { type: 'array', items: { type: 'string' }, description: 'Opções de voto (mínimo 2, máximo 12).' },
-          multipleAnswers: { type: 'boolean', description: 'True para múltipla escolha, false para voto único.' }
+          multipleAnswers: { type: 'boolean', description: 'True para múltipla escolha, false para voto único.' },
+          conditionalActions: { type: 'object', description: 'Mapa agentico de ações condicionais: { "Opção vencedora": "ação" }. Ações suportadas: "close_group", "open_group", "announce". Use APENAS quando o admin pedir que o bot execute automaticamente a decisão da enquete (ex: "se ganhar fechar, fecha o grupo"). Omita para enquetes de opinião simples.' }
         },
         required: ['title', 'options']
       }
