@@ -4,7 +4,7 @@ const { t } = require('../../utils/i18n');
 module.exports = async function toggleGroupProtection({ from, lang, args }) {
   const rawMod = String(args.module || '').toLowerCase();
   const mod = rawMod === 'agenda' ? 'calendar' : rawMod;
-  const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove'];
+  const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood'];
   if (!validModules.includes(mod)) {
     return { success: false, error: `Módulo "${mod}" inválido.` };
   }
@@ -90,6 +90,29 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
 
   if (mod === 'calendar' && args.mentionAll !== undefined) {
     updates.mentionAll = Boolean(args.mentionAll);
+  }
+
+  // antistatus: toggle de aviso público após apagar menção @status
+  if (mod === 'antistatus') {
+    if (args.warn !== undefined) {
+      updates.warn = Boolean(args.warn);
+    }
+  }
+
+  // autolockflood: configura gatilho coletivo de flood → fechamento automático
+  if (mod === 'autolockflood') {
+    if (args.groupMsgLimit && Number(args.groupMsgLimit) >= 5) {
+      updates.groupMsgLimit = parseInt(args.groupMsgLimit, 10);
+    }
+    if (args.windowSeconds && Number(args.windowSeconds) >= 5) {
+      updates.windowSeconds = parseInt(args.windowSeconds, 10);
+    }
+    if (args.lockMinutes !== undefined && Number(args.lockMinutes) >= 0) {
+      updates.lockMinutes = parseInt(args.lockMinutes, 10);
+    }
+    if (args.ignoreAdmins !== undefined) {
+      updates.ignoreAdmins = Boolean(args.ignoreAdmins);
+    }
   }
 
   if (mod === 'autoapprove') {

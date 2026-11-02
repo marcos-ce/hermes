@@ -69,8 +69,8 @@ const TOOLS = [
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove'],
-            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar", "autoapprove".'
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood'],
+            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar", "autoapprove", "antistatus" (apaga @status), "autolockflood" (fecha grupo por excesso de msgs).'
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
           action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição para infrações: "delete" (apenas apagar), "warn" (advertir até atingir limite de warns e banir) ou "ban" (banir imediatamente no primeiro deslize).' },
@@ -84,7 +84,12 @@ const TOOLS = [
           intervalMinutes: { type: 'integer', description: 'Intervalo em minutos do comunicado.' },
           maxWarns: { type: 'integer', description: 'Contagem/limite de advertências antes do ban automático (ex: 2 para banir no 2º link/aviso, 3 para banir no 3º). Pode ser passado diretamente com module "antilink", "antiflood" ou "warn".' },
           customBanMessage: { type: 'string', description: 'Mensagem personalizada de ban ({user}).' },
-          personality: { type: 'string', enum: ['descontraido', 'formal'], description: 'Tom do Hermes IA: "descontraido" ou "formal".' }
+          personality: { type: 'string', enum: ['descontraido', 'formal'], description: 'Tom do Hermes IA: "descontraido" ou "formal".' },
+          warnOnStatus: { type: 'boolean', description: 'antistatus: true para avisar publicamente após apagar a menção @status; false para silêncio.' },
+          groupMsgLimit: { type: 'integer', description: 'autolockflood: quantas mensagens coletivas do grupo na janela ativam o fechamento automático (padrão: 20).' },
+          windowSeconds: { type: 'integer', description: 'autolockflood: janela de tempo em segundos para contagem coletiva (padrão: 10).' },
+          lockMinutes: { type: 'integer', description: 'autolockflood: minutos que o grupo fica fechado após o gatilho (0 = sem reabertura automática, padrão: 5).' },
+          ignoreAdmins: { type: 'boolean', description: 'autolockflood: true para não contar mensagens de admins no gatilho (padrão: true).' }
         },
         required: ['module']
       }
