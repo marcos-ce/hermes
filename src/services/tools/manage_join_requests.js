@@ -9,20 +9,7 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
   const autoapprovePlugin = require('../../plugins/admin/autoapprove');
 
   if (args.action === 'enable_auto') {
-    const isAll = args.mode === 'all' || args.allow_all === true;
     configManager.setPluginEnabled(from, 'autoapprove', true);
-    if (isAll) {
-      configManager.updatePluginConfig(from, 'autoapprove', {
-        enabled: true,
-        configured: true,
-        allowedDdis: ['*']
-      });
-      return {
-        success: true,
-        message: '✅ *Auto-Aprovação Anti-Ban ATIVADA para QUALQUER membro!*\nNovos participantes de qualquer país serão aceitos automaticamente com fila de segurança.'
-      };
-    }
-
     configManager.updatePluginConfig(from, 'autoapprove', {
       enabled: true,
       configured: true,
@@ -30,7 +17,7 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
     });
     return {
       success: true,
-      message: '✅ *Auto-Aprovação Anti-Ban ATIVADA para BRASILEIROS!*\nNovos participantes com número brasileiro (DDI 55) serão aceitos automaticamente com fila de segurança.'
+      message: '✅ *Auto-Aprovação Anti-Ban ATIVADA em Modo Natural (DDI 55 - Brasil)!*\nNovos participantes com número brasileiro serão aceitos automaticamente na fila segura (intervalo humano de 1 a 2 minutos entre cada aprovação).'
     };
   }
 
@@ -43,29 +30,7 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
     };
   }
 
-  if (args.action === 'approve_all') {
-    let replyMsg = '';
-    const captureReply = async (text) => {
-      replyMsg = text;
-    };
-    await autoapprovePlugin.execute({
-      sock,
-      msg,
-      from,
-      sender,
-      args: ['todos'],
-      reply: captureReply,
-      t: (k, vars) => t(lang, k, vars),
-      isGroup: true,
-      prefix: configManager.getGroupPrefix(from)
-    });
-    return {
-      success: true,
-      message: replyMsg || '🚀 *Iniciando aprovação segura anti-ban de todos os participantes...*'
-    };
-  }
-
-  if (args.action === 'approve_all_br') {
+  if (args.action === 'approve_all' || args.action === 'approve_all_br') {
     let replyMsg = '';
     const captureReply = async (text) => {
       replyMsg = text;
@@ -83,7 +48,7 @@ module.exports = async function manageJoinRequests({ sock, msg, from, sender, is
     });
     return {
       success: true,
-      message: replyMsg || '🚀 *Iniciando aprovação segura anti-ban de participantes brasileiros...*'
+      message: replyMsg || '🚀 *Iniciando aprovação em fila natural segura (1 a 2 minutos entre cada membro)...*'
     };
   }
 

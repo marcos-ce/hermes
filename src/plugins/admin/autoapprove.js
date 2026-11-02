@@ -66,14 +66,15 @@ function evaluateParticipantUpdateResult(result) {
 
 /**
  * ============================================================================
- * MOTOR ANTI-BAN RÍGIDO: Fila Sequencial, Sliding Window & Circuit Breaker
+ * MOTOR ANTI-BAN RÍGIDO: Fila Sequencial com Intervalo Humano Natural
  * ============================================================================
  * Garante que a aprovação de membros nunca acione bloqueios do WhatsApp:
  * 1. Fila FIFO com concorrência estrita 1 (zero requisições em paralelo)
- * 2. Jitter humano aleatório (2500ms a 4500ms) entre aprovações
- * 3. Rate limiting por janela deslizante (máx 10/min e máx 50/hora por grupo)
- * 4. Circuit Breaker automático se houver pico repentino de solicitações
- * 5. Prevenção de erros 403 com checagem preemptiva de admin
+ * 2. Delay humano orgânico de 1 a 2 minutos (60.000ms a 120.000ms) entre aprovações
+ * 3. Rate limiting rigoroso por janela deslizante (máx 2/min e máx 25/hora por grupo)
+ * 4. Pacing inteligente com espera de segurança
+ * 5. Circuit Breaker automático se houver pico repentino de solicitações
+ * 6. Prevenção de erros 403 com checagem preemptiva de admin
  */
 class AntiBanApprovalQueue {
   constructor() {
@@ -192,7 +193,9 @@ class AntiBanApprovalQueue {
   }
 
   /**
-   * Verifica se atingiu a cota máxima segura por minuto ou por hora
+   * Verifica se atingiu a cota máxima segura por minuto ou por hora.
+   * Com o ritmo humano de 1 a 2 minutos por membro, cotas conservadoras
+   * protegem a conta contra picos de tráfego robótico.
    * @param {string} groupJid
    * @returns {{ allowed: boolean, reason?: string, count?: number }}
    */
@@ -200,15 +203,15 @@ class AntiBanApprovalQueue {
     const now = Date.now();
     const history = this.recentApprovals.get(groupJid) || [];
 
-    // Contagem no último minuto (60s)
+    // Contagem no último minuto (60s) - no ritmo de 1 a 2 min, máx 2 por minuto
     const lastMinuteCount = history.filter(ts => now - ts < 60 * 1000).length;
-    if (lastMinuteCount >= 10) {
+    if (lastMinuteCount >= 2) {
       return { allowed: false, reason: 'minute_limit', count: lastMinuteCount };
     }
 
-    // Contagem na última hora (60m)
+    // Contagem na última hora (60m) - ritmo seguro humano de no máx 25 por hora
     const lastHourCount = history.filter(ts => now - ts < 60 * 60 * 1000).length;
-    if (lastHourCount >= 50) {
+    if (lastHourCount >= 25) {
       return { allowed: false, reason: 'hour_limit', count: lastHourCount };
     }
 
@@ -251,10 +254,8 @@ class AntiBanApprovalQueue {
     const rateCheck = this.checkRateLimit(groupJid);
     if (!rateCheck.allowed) {
       if (source === 'batch') {
-        // Em lote administrativo: faz pacing de segurança aguardando a janela abrir, sem descartar itens
-        const history = this.recentApprovals.get(groupJid) || [];
-        const oldestInMinute = history.length > 0 ? history[0] : Date.now();
-        const waitMs = Math.min(Math.max(60000 - (Date.now() - oldestInMinute) + 1000, 3000), 15000);
+        // Em lote administrativo: faz pacing de segurança de 1 a 2 minutos aguardando a janela abrir, sem descartar itens
+        const waitMs = Math.floor(Math.random() * (120000 - 60000 + 1)) + 60000;
         logger.info({ groupJid, waitMs }, 'AntiBan: Pacing de segurança na aprovação em lote para respeitar limite da janela');
         await sleep(waitMs);
 
@@ -321,8 +322,8 @@ class AntiBanApprovalQueue {
       return;
     }
 
-    // 4. Jitter Delay Humano Rigoroso (2500ms a 4500ms)
-    await randomDelay(2500, 4500);
+    // 4. Jitter Delay Humano Natural Rigoroso (1 a 2 minutos - 60s a 120s entre cada participante)
+    await randomDelay(60000, 120000);
 
     // Revalidação após o jitter: o módulo pode ter sido desligado durante a espera.
     if (item._cancelled) {
@@ -349,10 +350,10 @@ class AntiBanApprovalQueue {
 
       logger.error({ err, groupJid, participantJid, action }, 'Falha na requisição de aprovação de participante');
 
-      // Se houver 2 erros consecutivos de rede/API, pausa por 45 segundos para despressurizar o socket
+      // Se houver 2 erros consecutivos de rede/API, pausa por 60 segundos para despressurizar o socket
       if (this.consecutiveErrors >= 2) {
-        logger.warn('AntiBan: Detectados erros consecutivos na API de grupos. Pausando fila por 45 segundos.');
-        await sleep(45000);
+        logger.warn('AntiBan: Detectados erros consecutivos na API de grupos. Pausando fila por 60 segundos.');
+        await sleep(60000);
         this.consecutiveErrors = 0;
       }
 
@@ -370,8 +371,8 @@ class AntiBanApprovalQueue {
       );
 
       if (this.consecutiveErrors >= 2) {
-        logger.warn('AntiBan: Detectados erros consecutivos na API de grupos. Pausando fila por 45 segundos.');
-        await sleep(45000);
+        logger.warn('AntiBan: Detectados erros consecutivos na API de grupos. Pausando fila por 60 segundos.');
+        await sleep(60000);
         this.consecutiveErrors = 0;
       }
 
@@ -575,7 +576,7 @@ module.exports = {
   name: 'autoapprove',
   cmdNumber: 24,
   aliases: ['autoapprove', 'autoaprovar', 'aceitar', 'aprovar', 'pedidos', 'solicitacoes', 'joinrequests', 'autoaceitar'],
-  description: 'Aprovação automática de novos membros (brasileiros ou qualquer país) com filtro anti-ban rígido',
+  description: 'Aprovação em fila natural humana (1 a 2 min por membro) com filtro rigoroso anti-ban',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: true,
@@ -588,18 +589,18 @@ module.exports = {
       en: 'Anti-Ban Auto-Approve'
     },
     description: {
-      pt: 'Aprova automaticamente a entrada de novos membros (brasileiros, países selecionados ou qualquer membro)',
-      es: 'Aprueba automáticamente la entrada de nuevos miembros (brasileños, países seleccionados o cualquier miembro)',
-      en: 'Automatically approves entry of new members (Brazilians, selected country codes, or any member)'
+      pt: 'Aprova a entrada de novos participantes em fila natural humana (1 a 2 min) com foco em segurança e proteção anti-ban',
+      es: 'Aprueba la entrada de nuevos participantes en cola natural humana (1 a 2 min) con foco en seguridad anti-ban',
+      en: 'Approves entry of new participants in a natural human queue (1 to 2 min) focused on anti-ban safety'
     },
     fields: [
       {
         name: 'allowedDdis',
         type: 'string_list',
         question: {
-          pt: 'Digite os DDIs permitidos separados por espaço (Ex: 55 ou 55 351), digite * para aceitar qualquer membro/país, ou . para manter apenas Brasil (55):',
-          es: 'Escribe los prefijos (DDIs) autorizados separados por espacio (Ej: 55 o 55 351), escribe * para aceptar cualquier miembro/país, o . para mantener solo Brasil (55):',
-          en: 'Enter allowed country codes (DDIs) separated by space (e.g. 55 or 55 351), enter * to accept any member/country, or . to keep Brazil only (55):'
+          pt: 'Digite os DDIs permitidos separados por espaço (padrão recomendado: 55 para Brasil), ou . para manter apenas Brasil (55):',
+          es: 'Escribe los prefijos (DDIs) autorizados separados por espacio (recomendado: 55 para Brasil), o . para mantener solo Brasil (55):',
+          en: 'Enter allowed country codes (DDIs) separated by space (recommended: 55 for Brazil), or . to keep Brazil only (55):'
         },
         default: ['55']
       },
@@ -758,7 +759,7 @@ module.exports = {
       });
     }
 
-    // 2. Ativação direta para QUALQUER membro: !aprovar qualquer, !aprovar on todos, !aprovar on all, !aprovar todos on
+    // 2. Proteção contra ativação indiscriminada: comandos 'todos' ou 'qualquer' direcionam para o modo natural seguro
     const isActivatingAll = (
       (sub === 'qualquer' && !arg1) ||
       (['todos', 'all', 'qualquer'].includes(sub) && ['on', 'ativar', 'activar'].includes(arg1)) ||
@@ -770,11 +771,11 @@ module.exports = {
       configManager.updatePluginConfig(from, 'autoapprove', {
         enabled: true,
         configured: true,
-        allowedDdis: ['*']
+        allowedDdis: ['55']
       });
 
       let text = `${translate('common.saved')}\n\n`;
-      text += translate('autoapprove.activated_all');
+      text += `🛡️ *Auto-Aprovação Ativada em Modo Natural Seguro (DDI 55 - Brasil)*\n\nPor proteção rigorosa Anti-Ban, a aprovação automática indiscriminada de todos os países está desativada por padrão.\n\n⏱️ A aprovação opera exclusivamente em *fila natural humana (1 a 2 minutos por membro)*.\nPara personalizar DDIs autorizados de forma consciente, use \`${p}aprovar config\`.`;
 
       const meta = adminStatus.metadata;
       if (meta && meta.joinApprovalMode === false) {
@@ -872,8 +873,8 @@ module.exports = {
       return reply(text);
     }
 
-    // 6. Aprovação Imediata em Lote Seguro: /aprovar agora / /aprovar todos / /aprovar all
-    if (sub === 'agora' || sub === 'all' || sub === 'todos' || sub === 'processar') {
+    // 6. Aprovação em Fila Natural Segura: /aprovar agora / /aprovar processar / /aprovar fila / /aprovar todos / /aprovar all
+    if (sub === 'agora' || sub === 'all' || sub === 'todos' || sub === 'processar' || sub === 'fila') {
       let pendingList = [];
       try {
         pendingList = await sock.groupRequestParticipantsList(from);
@@ -886,11 +887,10 @@ module.exports = {
         return reply(translate('autoapprove.no_pending'));
       }
 
-      // Se comando foi especificamente 'todos' / 'all' ou tem argumento 'todos', aprova qualquer país
-      const wantsAll = (sub === 'todos' || sub === 'all' || ['todos', 'all', 'qualquer', '*'].includes(arg1));
+      // Regra Anti-Ban: SEMPRE modo natural seguro. Respeita os DDIs configurados no grupo (padrão Brasil 55),
+      // sem forçar wildcard indiscriminado para aprovar todos os países às cegas.
       const groupDdis = normalizeAllowedDdis(cfg.allowedDdis);
-      const allowedDdis = wantsAll ? ['*'] : groupDdis;
-      const isApprovingAll = isWildcardList(allowedDdis);
+      const isApprovingAll = isWildcardList(groupDdis);
 
       const targetsToApprove = new Set();
       let skippedCount = 0;
@@ -900,13 +900,13 @@ module.exports = {
         const info = extractParticipantInfo(item);
 
         // LID sem telefone resolvido não é estrangeiro: é identidade desconhecida.
-        // No lote estrito ele fica pendente; no lote wildcard é aprovado normalmente.
+        // Fica pendente para análise manual no modo natural.
         if (!info.resolved && !isApprovingAll) {
           unknownCount++;
           continue;
         }
 
-        if (isNumberAllowed(info.digits, allowedDdis)) {
+        if (isNumberAllowed(info.digits, groupDdis)) {
           const targetJid = info.cleanTargetJid || item.jid;
           if (targetJid) targetsToApprove.add(cleanJid(targetJid));
         } else {
@@ -923,13 +923,10 @@ module.exports = {
         }));
       }
 
-      const startingMsg = isApprovingAll
-        ? translate('autoapprove.batch_starting_all', { count: targets.length })
-        : translate('autoapprove.batch_starting', { count: targets.length });
-
+      const startingMsg = translate('autoapprove.batch_starting', { count: targets.length });
       await reply(startingMsg);
 
-      // Enfileira cada um na fila anti-ban com delay humano e retorno assíncrono seguro
+      // Enfileira cada um na fila anti-ban com delay humano natural (1 a 2 min) e retorno assíncrono seguro
       let approvedCount = 0;
       let failedCount = 0;
       let cancelledCount = 0;
@@ -952,19 +949,12 @@ module.exports = {
             failed: failedCount,
             cancelled: cancelledCount
           })
-          : (isApprovingAll
-            ? translate('autoapprove.batch_finished_all', {
-              approved: approvedCount,
-              total,
-              failed: failedCount,
-              cancelled: cancelledCount
-            })
-            : translate('autoapprove.batch_finished', {
-              approved: approvedCount,
-              total,
-              failed: failedCount,
-              cancelled: cancelledCount
-            }));
+          : translate('autoapprove.batch_finished', {
+            approved: approvedCount,
+            total,
+            failed: failedCount,
+            cancelled: cancelledCount
+          });
 
         await sendSafeMessage(sock, from, { text: finishedMsg }).catch(() => {});
       };
