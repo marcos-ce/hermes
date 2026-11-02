@@ -199,7 +199,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'hidetag_announcement',
-      description: 'Envia comunicado marcando todos os membros de forma oculta.',
+      description: 'Envia comunicado oficial marcando todos os membros de forma oculta (hidetag). Acione quando o admin pedir: avisa o grupo, avisar o pessoal sobre X, manda um comunicado, dá um aviso, recado para todos, avisar sobre a academia/evento, /todos, /hidetag, /aviso.',
       parameters: {
         type: 'object',
         properties: {
