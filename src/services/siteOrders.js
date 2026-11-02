@@ -65,6 +65,27 @@ class SiteOrders {
       .map((o) => o.paymentId);
   }
 
+  /**
+   * Encontra nome e telefone de pedidos anteriores pelo telefone ou códigos de convite.
+   * Usado para resgatar o nome real do cliente em renovações rápidas.
+   */
+  findPreviousCustomer({ phone, codes = [] }) {
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    const cleanCodes = new Set(codes.filter(Boolean));
+
+    // Ordena do mais recente para o mais antigo
+    const all = [...this.orders.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    for (const o of all) {
+      const matchPhone = cleanPhone && o.phone && String(o.phone).replace(/\D/g, '') === cleanPhone;
+      const matchCode = (o.groups || []).some((g) => cleanCodes.has(g.code));
+      if ((matchPhone || matchCode) && o.name && o.name !== 'Cliente') {
+        return { name: o.name, phone: o.phone || cleanPhone };
+      }
+    }
+    return null;
+  }
+
   _persist() {
     try {
       const obj = Object.fromEntries(this.orders.entries());

@@ -19,13 +19,16 @@ function normalizeGroupJid(id) {
   return String(id).endsWith('@g.us') ? String(id) : `${id}@g.us`;
 }
 
-function renewalUrl(inviteCode = null) {
+function renewalUrl(inviteCode = null, extra = {}) {
   // Abre o modal do site já em modo "Renovar" (normaliza barras e pré-preenche o grupo se disponível)
   if (settings.siteUrl) {
     const base = settings.siteUrl.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
     const cleanCode = (inviteCode || '').replace(/.*chat\.whatsapp\.com\/(?:invite\/)?/, '').trim();
-    const param = cleanCode ? `&grupo=${cleanCode}` : '';
-    return `${base}/?renovar=1${param}`;
+    let query = '?renovar=1';
+    if (cleanCode) query += `&grupo=${cleanCode}`;
+    if (extra.name && extra.name !== 'Cliente') query += `&nome=${encodeURIComponent(extra.name)}`;
+    if (extra.phone) query += `&tel=${encodeURIComponent(extra.phone)}`;
+    return `${base}/${query}`;
   }
   return settings.ownerNumber ? `https://wa.me/${settings.ownerNumber}` : '';
 }
@@ -90,8 +93,12 @@ async function joinAndLicense(sock, { inviteCode, days, plan, ownerName, ownerPh
 
   group.autoLeave = true; // habilita a saída automática (carência) somente para grupos vendidos
   group.plan = plan;
-  group.ownerName = ownerName || group.ownerName || '';
-  group.ownerPhone = ownerPhone || group.ownerPhone || '';
+
+  // Preserva o nome real do cliente anterior se a renovação veio sem nome ou como "Cliente"
+  const validOwnerName = (ownerName && ownerName !== 'Cliente') ? ownerName : (group.ownerName || '');
+  const validOwnerPhone = ownerPhone || group.ownerPhone || '';
+  group.ownerName = validOwnerName;
+  group.ownerPhone = validOwnerPhone;
   group.lastPaymentId = String(paymentId);
   configManager.flushSync();
 
@@ -111,7 +118,15 @@ async function joinAndLicense(sock, { inviteCode, days, plan, ownerName, ownerPh
     logger.warn({ err: err.message }, 'joinService: falha ao enviar mensagem de boas-vindas');
   }
 
-  return { ok: true, jid, name, renewal: wasLicensed, expiresAt: group.expiresAt };
+  return {
+    ok: true,
+    jid,
+    name,
+    renewal: wasLicensed,
+    expiresAt: group.expiresAt,
+    ownerName: validOwnerName,
+    ownerPhone: validOwnerPhone
+  };
 }
 
 module.exports = { joinAndLicense, extractInviteCode, renewalUrl };

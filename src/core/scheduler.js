@@ -70,7 +70,7 @@ class Scheduler {
           try {
             code = await this.sock.groupInviteCode(groupJid);
           } catch (_) {}
-          const url = renewalUrl(code);
+          const url = renewalUrl(code, { name: group.ownerName, phone: group.ownerPhone });
           await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_warn_1d', { url }) });
         }
       });
@@ -89,7 +89,7 @@ class Scheduler {
           try {
             code = await this.sock.groupInviteCode(groupJid);
           } catch (_) {}
-          const url = renewalUrl(code);
+          const url = renewalUrl(code, { name: g.ownerName, phone: g.ownerPhone });
 
           try {
             await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_leaving', { url }) });

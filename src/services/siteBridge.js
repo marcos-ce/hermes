@@ -345,13 +345,29 @@ class SiteBridge {
 
       const md = payment.metadata || {};
       const codes = [...new Set([extractInviteCode(md.invite_link), extractInviteCode(md.invite_link_2)].filter(Boolean))];
-      const name = String(md.name || 'Cliente').replace(/[\u0000-\u001F<>]/g, '').slice(0, 80);
+      let name = String(md.name || 'Cliente').replace(/[\u0000-\u001F<>]/g, '').slice(0, 80);
       const phone = String(md.phone || '').replace(/\D/g, '').slice(0, 15);
+
+      // Se o nome recebido for genérico ('Cliente') ou vazio, busca no histórico de pedidos anteriores
+      if (!name || name === 'Cliente') {
+        const prev = siteOrders.findPreviousCustomer({ phone, codes });
+        if (prev?.name) {
+          name = prev.name;
+        }
+      }
+
       meta = { name, phone };
 
       if (codes.length === 0) {
         siteOrders.upsert(id, { status: 'partial', plan: planInfo.plan, days: planInfo.days, ...meta, groups: [], reason: 'no_valid_invite' });
-        await this._notifyOwner(`⚠️ Pedido ${id} pago, mas sem link de convite válido.\nCliente: ${name} wa.me/${phone}`);
+        await this._notifyOwner(
+          `⚠️ Pagamento Pix Aprovado no Mercado Pago, mas sem link de convite válido!\n\n` +
+          `• Cliente: ${name}\n` +
+          `• WhatsApp: https://wa.me/${phone} (${phone})\n` +
+          `• Plano: ${planInfo.plan} (R$ ${payment?.transaction_amount || 0})\n` +
+          `• ID Mercado Pago: ${id}\n\n` +
+          `Entre em contato com o cliente ou libere manualmente via !liberar <link> <dias>.`
+        );
         return;
       }
       order = siteOrders.upsert(id, {
@@ -397,6 +413,10 @@ class SiteBridge {
       g.jid = result.jid;
       g.reason = result.reason;
       g.groupName = result.name;
+      // Se joinAndLicense descobriu um ownerName já salvo no grupo, atualiza o meta.name
+      if (result.ownerName && result.ownerName !== 'Cliente' && (!meta.name || meta.name === 'Cliente')) {
+        meta.name = result.ownerName;
+      }
       siteOrders.upsert(id, { groups: order.groups });
     }
 
@@ -404,17 +424,36 @@ class SiteBridge {
     for (const g of order.groups) if (g.status === 'attempting') g.status = 'manual';
 
     const allDone = order.groups.every((g) => g.status === 'done');
-    siteOrders.upsert(id, { status: allDone ? 'done' : 'partial', groups: order.groups });
+    siteOrders.upsert(id, { status: allDone ? 'done' : 'partial', groups: order.groups, name: meta.name });
 
-    const lines = order.groups.map((g) =>
-      g.status === 'done'
-        ? `✅ ${g.renewal ? '🔁 Renovado: ' : ''}${g.groupName || g.jid} (+${planInfo.days} dias)`
-        : `❌ chat.whatsapp.com/${g.code} → ${g.reason || 'revisar'}`
-    );
-    await this._notifyOwner(
-      `${allDone ? '🟢' : '🟠'} Pedido ${id} (${planInfo.plan})\nCliente: ${meta.name} wa.me/${meta.phone}\n${lines.join('\n')}` +
-        (allDone ? '' : '\n\nTrate os itens ❌ manualmente (ex.: !liberar <link> <dias>).')
-    );
+    const isRenewal = order.groups.some((g) => g.renewal);
+    const title = isRenewal
+      ? '✅ Renovação Aprovada & Licença Estendida — Hermes.wpp'
+      : '✅ Novo Pix Aprovado & Bot Ativado — Hermes.wpp';
+
+    const groupDetails = order.groups.map((g, idx) => {
+      const gLabel = order.groups.length > 1 ? `Grupo ${idx + 1}` : 'Grupo';
+      if (g.status === 'done') {
+        const actionText = g.renewal ? '🔁 Licença renovada' : '🟢 Bot entrou e ativou';
+        return `• ${gLabel}: "${g.groupName || 'Grupo'}"\n  Status: ${actionText} (+${planInfo.days} dias adicionados)`;
+      } else {
+        return `• ${gLabel}: https://chat.whatsapp.com/${g.code}\n  Status: ❌ Falha (${g.reason || 'revisar'})`;
+      }
+    }).join('\n');
+
+    const paymentAmount = payment?.transaction_amount || (planInfo.plan === 'teste' ? 10 : 32);
+    const planLabel = planInfo.plan === 'teste' ? 'Teste de 7 Dias' : 'Mensal';
+
+    const msg =
+      `${title}\n\n` +
+      `• Cliente: ${meta.name}\n` +
+      `• Plano: ${planLabel} (R$ ${paymentAmount})\n` +
+      `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+      `${groupDetails}\n` +
+      `• ID Mercado Pago: ${id}` +
+      (allDone ? '' : '\n\n⚠️ Atenção: Falha em grupo(s). Trate manualmente com !liberar <link> <dias>.');
+
+    await this._notifyOwner(msg);
   }
 
   /**
