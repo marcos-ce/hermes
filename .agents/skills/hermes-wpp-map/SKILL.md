@@ -1,13 +1,13 @@
 ---
 name: hermes-wpp-map
 description: >-
-  Mapa arquitetural e técnico canônico do WhatsApp Admin Bot (hermes.wpp): estrutura completa de diretórios, pipeline de mensagens, 31 plugins, motor de persistência atômica, blindagem anti-ban, i18n, máquina de wizard e arquitetura do agente de IA DeepSeek com 24 ferramentas e prefix cache estático.
+  Mapa arquitetural e técnico canônico do WhatsApp Admin Bot (hermes.wpp): estrutura completa de diretórios, pipeline de mensagens, 34 plugins, motor de persistência atômica, blindagem anti-ban, i18n, máquina de wizard e arquitetura do agente de IA DeepSeek com 26 ferramentas e prefix cache estático.
 ---
 
 # 🗺️ Mapa Arquitetural do Projeto: WhatsApp Admin Bot (hermes.wpp)
 
 > **Documento Canônico de Arquitetura e Engenharia de Software**  
-> Este arquivo serve como mapa definitivo da base de código do bot WhatsApp para desenvolvedores e agentes de IA, descrevendo cada subsistema, fluxo de dados, contratos de interfaces, os 31 plugins, o motor de 24 ferramentas de IA e as regras de isolamento.
+> Este arquivo serve como mapa definitivo da base de código do bot WhatsApp para desenvolvedores e agentes de IA, descrevendo cada subsistema, fluxo de dados, contratos de interfaces, os 34 plugins, o motor de 26 ferramentas de IA e as regras de isolamento.
 
 ---
 
@@ -34,7 +34,8 @@ hermes.wpp/
 │   ├── groups.json                       # Whitelist de grupos, licenças SaaS, idioma, configs e cultura
 │   ├── groups.json.bak                   # Backup automático anti-corrupção
 │   ├── memory.db                         # SQLite ultraleve para buffer de contexto e busca por ref [mID]
-│   └── polls.json                        # Persistência atômica de enquetes ativas e apuração de votos
+│   ├── polls.json                        # Persistência atômica de enquetes ativas e apuração de votos
+│   └── intents.db                         # SQLite de ações agênticas (IntentStore: undo, relatório, anti-duplicata)
 ├── src/
 │   ├── auth/                             # Sessão de autenticação do Baileys (no .gitignore)
 │   ├── config/
@@ -44,13 +45,13 @@ hermes.wpp/
 │   │   ├── configManager.js              # Motor em RAM + Escrita Atômica (.tmp -> .json) + Merge Seguro
 │   │   ├── wizardEngine.js               # Máquina de estados exclusiva por Admin (${from}:${sender})
 │   │   ├── scheduler.js                  # Agendador de tarefas leves (horários, automsg, vencimentos)
-│   │   ├── pluginLoader.js               # Carregador dinâmico de comandos (31), aliases (242) e schemas
+│   │   ├── pluginLoader.js               # Carregador dinâmico de comandos (34), aliases (242) e schemas
 │   │   └── setupWizard.js                # Wizard interativo de terminal CLI (1º boot)
 │   ├── handlers/
 │   │   ├── messageHandler.js             # Pipeline principal: early-return, licença, wizard e comandos
 │   │   └── groupHandler.js               # Eventos group-participants.update (welcome, antifake, blacklist)
-│   ├── plugins/                          # 31 Módulos Plug-and-Play desacoplados
-│   │   ├── admin/                        # 25 Plugins de Gestão e Moderação
+│   ├── plugins/                          # 34 Módulos Plug-and-Play desacoplados
+│   │   ├── admin/                        # 27 Plugins de Gestão e Moderação
 │   │   │   ├── config.js                 # Painel Interativo Geral (!config / !painel / !settings)
 │   │   │   ├── lang.js                   # Troca de idioma rápida (!idioma / !lang / !language)
 │   │   │   ├── antilink.js               # Filtro de links com whitelist de domínios
@@ -75,21 +76,25 @@ hermes.wpp/
 │   │   │   ├── poll.js                   # Criação e apuração de enquetes interativas
 │   │   │   ├── setdesc.js                # Alteração da descrição e regras do grupo
 │   │   │   ├── setpic.js                 # Alteração da imagem de perfil do grupo
-│   │   │   └── hermesAgent.js            # [Agente IA] Plugin do Agente com 24 Tools, Prefix Cache e Undo
+│   │   '   ├── antistatus.js              # Bloqueio automático de menções @status no grupo
+│   │   '   ├── autolockflood.js           # Fechamento automático por flood coletivo de mensagens
+│   │   │   └── hermesAgent.js            # [Agente IA] Plugin do Agente com 26 Tools, Prefix Cache e Undo
 │   │   ├── general/                      # 2 Plugins Gerais
 │   │   │   ├── menu.js                   # Menu interativo de comandos por número e categoria
 │   │   │   └── ping.js                   # Status, latência em ms, RAM e validade da licença
-│   │   └── owner/                        # 4 Plugins Exclusivos do Dono
+│   │   └── owner/                        # 5 Plugins Exclusivos do Dono
 │   │       ├── groupAuth.js              # Gestão SaaS (!bot on, !bot add, !bot off, !pv)
 │   │       ├── reload.js                 # Hot-reload de plugins e traduções em tempo real
 │   │       ├── autoAdm.js                # Auto-promoção do Dono a Admin no grupo
-│   │       └── banGroup.js               # Bloqueio e desbloqueio remoto de grupos abusivos
+│   │       ├── banGroup.js               # Bloqueio e desbloqueio remoto de grupos abusivos
+│   │       ├── liberar.js                # Entrada de membros via link de convite direto
 │   ├── services/                         # [Camada de IA - Estritamente Confinada e Desacoplada]
 │   │   ├── aiService.js                  # Cliente DeepSeek HTTP oficial com System Prompt 100% estático
 │   │   ├── humanizer.js                  # Centralização de humanização textual (WhatsApp PT-BR real)
 │   │   ├── memoryEngine.js               # SQLite WAL com mídias ([Foto], [Vídeo]), buffer e refs [mID]
 │   │   ├── timeParser.js                 # Parser de horários relativos e absolutos (amanhã, às 20h, dq a 15m)
-│   │   └── toolRegistry.js               # Mapeamento e despacho determinístico das 24 Ferramentas
+│   │   ├── toolRegistry.js               # Mapeamento e despacho determinístico das 26 Ferramentas
+│   │   └── intentStore.js                 # SQLite de ações agênticas (IntentStore: histórico, undo, anti-duplicata)
 │   └── utils/
 │       ├── antiBan.js                    # Presença furtiva, jitter delay, "digitando..." e cooldown
 │       ├── cache.js                      # Instâncias de cache (groupCache, wizardCache, floodCache)
@@ -176,7 +181,7 @@ flowchart TD
 
 ---
 
-## 🛠️ 5. Catálogo Completo das 24 Ferramentas (Tool Calling)
+## 🛠️ 5. Catálogo Completo das 26 Ferramentas (Tool Calling)
 
 | # | Ferramenta (Tool Call) | Plugin / Serviço | Ação Executada | Validação |
 | :-: | :--- | :--- | :--- | :--- |

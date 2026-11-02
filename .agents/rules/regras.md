@@ -1,13 +1,13 @@
 ---
 name: regras-hermes-agent
-description: Regras de arquitetura, confinamento em plugin, catálogo das 24 ferramentas e protocolos do Hermes AI Agent com DeepSeek.
+description: Regras de arquitetura, confinamento em plugin, catálogo das 26 ferramentas e protocolos do Hermes AI Agent com DeepSeek.
 always_on: true
 ---
 
 # 📜 Regras de Arquitetura e Governança: Hermes AI Agent
 
 > **Documento Oficial de Regras, Diretrizes e Catálogo de Ferramentas**  
-> Ested documento consolida todas as regras invioláveis de engenharia, governança de código, especificações de Prefix Caching e o catálogo completo das 24 ferramentas da integração do **Hermes Agent** (com a API oficial da **DeepSeek**) no bot WhatsApp (`hermes.wpp`).
+> Ested documento consolida todas as regras invioláveis de engenharia, governança de código, especificações de Prefix Caching e o catálogo completo das 26 ferramentas da integração do **Hermes Agent** (com a API oficial da **DeepSeek**) no bot WhatsApp (`hermes.wpp`).
 
 ---
 
@@ -48,14 +48,14 @@ Para maximizar a eficiência de custos e latência da API da DeepSeek:
 1. **System Prompt 100% Estático:** O método `buildSystemPrompt()` em `aiService.js` retorna apenas as instruções imutáveis de sistema e persona.
 2. **Injeção Dinâmica no Prompt do Usuário:** Dados variáveis específicos de cada grupo (como nome do grupo e prefixo atual) são injetados exclusivamente dentro de `userPromptParts` em `hermesAgent.js`.
 3. **Garantia de Cache Hit Global:** O bloco inicial serializado:
-   $$\text{System Prompt (Estático)} + \text{24 Schemas de Ferramentas} \approx 7.200\text{ tokens}$$
+   $$\text{System Prompt (Estático)} + \text{26 Schemas de Ferramentas} \approx 7.400\text{ tokens}$$
    permanece 100% idêntico entre chamadas de grupos distintos, garantindo **até 90% de desconto de cache hit** na API oficial da DeepSeek.
 
 ---
 
-## 🛠️ 3. Catálogo Completo das 24 Ferramentas (Tool Calling)
+## 🛠️ 3. Catálogo Completo das 26 Ferramentas (Tool Calling)
 
-Todas as 24 ferramentas declaradas em `src/services/toolRegistry.js` possuem validação determinística de permissão de administrador no Node.js:
+Todas as 26 ferramentas declaradas em `src/services/toolRegistry.js` possuem validação determinística de permissão de administrador no Node.js:
 
 | # | Ferramenta | Parâmetros Principais | Ação Executada | Validação |
 | :-: | :--- | :--- | :--- | :--- |
@@ -83,6 +83,9 @@ Todas as 24 ferramentas declaradas em `src/services/toolRegistry.js` possuem val
 | 22 | `learn_group_fact` | `category`, `key`, `value` | Registra fato, regra tácita ou apelido cultural | Admin |
 | 23 | `forget_group_fact` | `key` | Esquece fato ou regra cultural previamente salva | Admin |
 | 24 | `manage_blacklist` | `action`, `number` | Gerencia lista negra de participantes | Admin |
+| 25 | `set_group_settings` | `lang`, `prefix`, `action` | Configura idioma, prefixo, painel ou limpa memória do grupo | Admin |
+| 26 | `manage_join_requests` | `action`, `filter` | Gerencia fila de aprovação de entrada no grupo | Admin |
+| 27 | `set_automsg_media` | `action` | Anexa ou remove imagem do anúncio periódico automsg | Admin |
 
 ---
 
