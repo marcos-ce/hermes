@@ -63,7 +63,6 @@ hermes.wpp/
 │   │   │   ├── automsg.js                # Mensagens periódicas inteligentes (só envia se ativo)
 │   │   │   ├── ban.js                    # Remoção imediata de participante
 │   │   │   ├── mute.js                   # Fechar e abrir grupo imediatamente
-│   │   │   ├── hidetag.js                # Comunicado oficial no grupo (sem menção em massa Anti-Ban)
 │   │   │   ├── promote.js                # Promover membro a administrador
 │   │   │   ├── demote.js                 # Rebaixar administrador a membro comum
 │   │   │   ├── clear.js                  # Apagar mensagem respondida (!del)
@@ -193,8 +192,7 @@ flowchart TD
 | 6 | `unwarn_member` | `warn.js` | Remove 1 advertência de um participante | Admin |
 | 7 | `list_group_warns` | `warn.js` | Lista os membros advertidos e motivos | Admin |
 | 8 | `delete_message` | `clear.js` | Apaga mensagem do chat (por citação ou ref `mID`) | Admin |
-| 9 | `hidetag_announcement` | `hidetag.js` | Envia comunicado oficial em destaque (sem menção em massa Anti-Ban) | Admin |
-| 10 | `promote_member` | `promote.js` | Promove participante a administrador | Admin |
+| 9 | `promote_member` | `promote.js` | Promove participante a administrador | Admin |
 | 11 | `demote_member` | `demote.js` | Rebaixa administrador a membro comum | Admin |
 | 12 | `mute_member` | `mutemember.js` | Silencia participante individualmente no chat (até 24h) | Admin |
 | 13 | `unmute_member` | `mutemember.js` | Remove silenciamento de participante | Admin |

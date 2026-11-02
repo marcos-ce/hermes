@@ -212,35 +212,6 @@ function checkCooldown(sender, cooldownMs = 2000) {
   return false; // Permitido
 }
 
-const hidetagCooldowns = new Map();
-const HIDETAG_COOLDOWN_MS = 120 * 1000; // 2 minutos entre comunicados no mesmo grupo
-
-/**
- * Verifica se o grupo está em cooldown para comunicados gerais (!hidetag)
- * Garante uso com extrema parcimônia (apenas comunicados cruciais).
- * @param {string} groupJid 
- * @returns {{ allowed: boolean, remainingSec: number }}
- */
-function checkHidetagCooldown(groupJid) {
-  if (!groupJid) return { allowed: true, remainingSec: 0 };
-  const now = Date.now();
-  const last = hidetagCooldowns.get(groupJid) || 0;
-  const elapsed = now - last;
-  if (elapsed < HIDETAG_COOLDOWN_MS) {
-    const remainingSec = Math.ceil((HIDETAG_COOLDOWN_MS - elapsed) / 1000);
-    return { allowed: false, remainingSec };
-  }
-  return { allowed: true, remainingSec: 0 };
-}
-
-/**
- * Registra disparo de comunicado geral no grupo
- * @param {string} groupJid 
- */
-function touchHidetagCooldown(groupJid) {
-  if (groupJid) hidetagCooldowns.set(groupJid, Date.now());
-}
-
 module.exports = {
   sleep,
   randomInt,
@@ -248,7 +219,5 @@ module.exports = {
   sendSafeMessage,
   safeDelete,
   safeKick,
-  checkCooldown,
-  checkHidetagCooldown,
-  touchHidetagCooldown
+  checkCooldown
 };

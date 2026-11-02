@@ -14,8 +14,7 @@ const COMMAND_NUMBER_MAP = {
   '7': 'warn',
   '8': 'welcome',
 
-  // 9 a 18: Comandos Utilitários e Moderação do Grupo
-  '9': 'hidetag',
+  // 10 a 18: Comandos Utilitários e Moderação do Grupo
   '10': 'promote',
   '11': 'demote',
   '12': 'mute',

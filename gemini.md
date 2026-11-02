@@ -48,7 +48,6 @@ whatsapp-admin-bot/
 │   │   │   ├── automsg.js     # Mensagens/Anúncios periódicos inteligentes (só envia se houver movimento)
 │   │   │   ├── ban.js         # Remoção imediata + config de mensagem/delete
 │   │   │   ├── mute.js        # Fechar e abrir grupo imediatamente
-│   │   │   ├── hidetag.js     # Marcação oculta de todos os membros
 │   │   │   ├── promote.js     # Promover membro a Admin
 │   │   │   ├── demote.js      # Rebaixar Admin a membro
 │   │   │   ├── clear.js       # Apagar mensagem específica do chat via Reply (!del / !apagar)
@@ -406,12 +405,6 @@ mute.js (!mute)
 Aliases: ['mute', 'unmute', 'fechar', 'abrir', 'cerrar', 'lock', 'unlock', 'grupo']
 
 Ação: Se chamado como !fechar, !cerrar, !lock ou !mute on, fecha na hora. Se chamado como !abrir, !unlock ou !mute off, abre na hora. Se chamado apenas !mute, pergunta [1] Fechar / [2] Abrir.
-
-hidetag.js (!hidetag)
-
-Aliases: ['hidetag', 'totag', 'aviso', 'todos', 'marcar', 'notificar', 'all']
-
-Ação: Reenvia o texto digitado (ou da mensagem respondida) mencionando todos os membros do grupo de forma oculta.
 
 promote.js (!promote)
 

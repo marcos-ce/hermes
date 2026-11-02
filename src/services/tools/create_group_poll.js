@@ -17,7 +17,6 @@ const { t } = require('../../utils/i18n');
  *   ban_member   → bane target (params.target obrigatório)
  *   warn_member  → adverte target
  *   raffle       → sorteia no grupo
- *   announce     → hidetag_announcement com params.message
  *   reminder     → agenda lembrete (params.text, params.time)
  */
 function normalizeConditionalActions(raw) {

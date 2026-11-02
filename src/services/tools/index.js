@@ -15,7 +15,6 @@ const toolHandlers = new Map([
   ['unmute_member', require('./unmute_member')],
   ['manage_blacklist', require('./manage_blacklist')],
   ['delete_message', require('./delete_message')],
-  ['hidetag_announcement', require('./hidetag_announcement')],
   ['promote_member', require('./promote_member')],
   ['demote_member', require('./demote_member')],
   ['manage_calendar', require('./manage_calendar')],

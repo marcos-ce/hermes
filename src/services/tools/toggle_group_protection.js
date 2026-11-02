@@ -88,10 +88,6 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     updates.personality = args.personality;
   }
 
-  if (mod === 'calendar' && args.mentionAll !== undefined) {
-    updates.mentionAll = Boolean(args.mentionAll);
-  }
-
   // antistatus: toggle de aviso público após apagar menção @status
   if (mod === 'antistatus') {
     if (args.warn !== undefined) {

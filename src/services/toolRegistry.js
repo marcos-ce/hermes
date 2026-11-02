@@ -203,20 +203,6 @@ const TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'hidetag_announcement',
-      description: 'Envia comunicado oficial crucial em destaque no grupo. ATENÇÃO ANTI-BAN: Use com EXTREMA PARCIMÔNIA, exclusivamente para avisos cruciais, regras vitais ou comunicados urgentes para todo o grupo (/todos, /hidetag, comunicado oficial geral). NUNCA acione para recados normais, piadas ou conversas do dia a dia.',
-      parameters: {
-        type: 'object',
-        properties: {
-          message: { type: 'string', description: 'Texto do comunicado a ser transmitido.' }
-        },
-        required: ['message']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
       name: 'promote_member',
       description: 'Promove membro comum a Administrador. TRAVA DE SEGURANÇA: Só acione se o membro estiver EXPRESSAMENTE MARCADO COM @ na mensagem do admin ([Alvo marcado com @: ...]). NUNCA acione para reply sem @ ou nomes avulsos. Acione para: dar adm, promover, virar adm, botar de adm, /promover, /adm.',
       parameters: {
@@ -355,7 +341,7 @@ const TOOLS = [
           title: { type: 'string', description: 'Pergunta ou título da enquete.' },
           options: { type: 'array', items: { type: 'string' }, description: 'Opções de voto (mínimo 2, máximo 12).' },
           multipleAnswers: { type: 'boolean', description: 'True para múltipla escolha, false para voto único.' },
-          conditionalActions: { type: 'object', description: 'Mapa agentico de ações condicionais: { "Opção vencedora": "ação" }. Ações suportadas: "close_group", "open_group", "announce". Use APENAS quando o admin pedir que o bot execute automaticamente a decisão da enquete (ex: "se ganhar fechar, fecha o grupo"). Omita para enquetes de opinião simples.' }
+          conditionalActions: { type: 'object', description: 'Mapa agentico de ações condicionais: { "Opção vencedora": "ação" }. Ações suportadas: "close_group", "open_group". Use APENAS quando o admin pedir que o bot execute automaticamente a decisão da enquete (ex: "se ganhar fechar, fecha o grupo"). Omita para enquetes de opinião simples.' }
         },
         required: ['title', 'options']
       }

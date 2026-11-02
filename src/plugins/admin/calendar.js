@@ -271,18 +271,6 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
     creator: creatorMention
   });
   let mentions = [];
-  if (Boolean(config.mentionAll)) {
-    const meta = await getGroupMetadata(sock, groupJid);
-    if (meta && Array.isArray(meta.participants)) {
-      const allMembers = new Set();
-      meta.participants.forEach(p => {
-        if (p.id) allMembers.add(p.id);
-        if (p.jid) allMembers.add(p.jid);
-        if (p.lid) allMembers.add(p.lid);
-      });
-      mentions = Array.from(allMembers);
-    }
-  }
   if (creatorJid && !mentions.includes(creatorJid)) mentions.push(creatorJid);
   if (event.creatorPhoneJid && !mentions.includes(event.creatorPhoneJid)) mentions.push(event.creatorPhoneJid);
   await sendSafeMessage(sock, groupJid, { text: body, mentions });
@@ -374,18 +362,7 @@ module.exports = {
       es: 'Gestiona avisos automáticos programados para fechas y horas específicas',
       en: 'Manages automated announcements scheduled for specific dates and times'
     },
-    fields: [
-      {
-        name: 'mentionAll',
-        type: 'boolean',
-        question: {
-          pt: 'Marcar todos os membros (@todos) quando o evento for anunciado no grupo?',
-          es: '¿Mencionar a todos los miembros (@todos) cuando se anuncie el evento?',
-          en: 'Mention all group members (@everyone) when the event is announced?'
-        },
-        default: false
-      }
-    ]
+    fields: []
   },
 
   /**
