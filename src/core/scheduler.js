@@ -2,6 +2,7 @@ const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
 const settings = require('../config/settings');
 const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
+const { getGroupAdmins } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const logger = require('../utils/logger');
 const { groupCache } = require('../utils/cache');
@@ -71,7 +72,12 @@ class Scheduler {
             code = await this.sock.groupInviteCode(groupJid);
           } catch (_) {}
           const url = renewalUrl(code, { name: group.ownerName, phone: group.ownerPhone });
-          await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_warn_1d', { url }) });
+          const { adminJids, mentionText } = await getGroupAdmins(this.sock, groupJid);
+          let text = t(lang, 'saas.license_warn_1d', { url, admins: mentionText });
+          if (!mentionText) {
+            text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
+          }
+          await sendSafeMessage(this.sock, groupJid, { text, mentions: adminJids });
         }
       });
       return;
@@ -90,9 +96,14 @@ class Scheduler {
             code = await this.sock.groupInviteCode(groupJid);
           } catch (_) {}
           const url = renewalUrl(code, { name: g.ownerName, phone: g.ownerPhone });
+          const { adminJids, mentionText } = await getGroupAdmins(this.sock, groupJid);
+          let text = t(lang, 'saas.license_leaving', { url, admins: mentionText });
+          if (!mentionText) {
+            text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
+          }
 
           try {
-            await sendSafeMessage(this.sock, groupJid, { text: t(lang, 'saas.license_leaving', { url }) });
+            await sendSafeMessage(this.sock, groupJid, { text, mentions: adminJids });
           } catch (_) {}
 
           try {
@@ -209,7 +220,19 @@ class Scheduler {
               item.onSuccess();
             }
           } else if (item.type === 'license_expired') {
-            await sendSafeMessage(this.sock, item.groupJid, { text: t(item.lang, 'saas.license_expired') });
+            let code = null;
+            try {
+              code = await this.sock.groupInviteCode(item.groupJid);
+            } catch (_) {}
+            const g = configManager.getGroup(item.groupJid);
+            const { renewalUrl } = require('../services/joinService');
+            const url = renewalUrl(code, { name: g?.ownerName, phone: g?.ownerPhone });
+            const { adminJids, mentionText } = await getGroupAdmins(this.sock, item.groupJid);
+            let text = t(item.lang, 'saas.license_expired', { url, admins: mentionText });
+            if (!mentionText) {
+              text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
+            }
+            await sendSafeMessage(this.sock, item.groupJid, { text, mentions: adminJids });
             configManager.markExpiryNotified(item.groupJid, true);
           }
         } catch (err) {

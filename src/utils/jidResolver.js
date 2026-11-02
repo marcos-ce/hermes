@@ -760,6 +760,60 @@ function checkGroupUpdateResult(result) {
   return { ok: failures.length === 0, failures };
 }
 
+/**
+ * Retorna os administradores de um grupo para menção, excluindo rigorosamente o próprio bot.
+ * @param {object} sock Instância do Baileys
+ * @param {string} groupJid JID do grupo
+ * @returns {Promise<{ adminJids: string[], mentionText: string }>}
+ */
+async function getGroupAdmins(sock, groupJid) {
+  if (!groupJid || !groupJid.endsWith('@g.us') || !sock) {
+    return { adminJids: [], mentionText: '' };
+  }
+
+  const metadata = await getGroupMetadata(sock, groupJid);
+  if (!metadata || !Array.isArray(metadata.participants)) {
+    return { adminJids: [], mentionText: '' };
+  }
+
+  const adminJidsSet = new Set();
+  const mentionTokens = [];
+
+  for (const p of metadata.participants) {
+    registerParticipantLid(p);
+
+    if (p.admin !== 'admin' && p.admin !== 'superadmin') continue;
+
+    // Exclui o próprio bot com verificação completa de identidade (JID, LID, número)
+    if (isBotIdentity(sock, p.id) || isBotIdentity(sock, p.jid) || isBotIdentity(sock, p.lid)) {
+      continue;
+    }
+
+    const pId = cleanJid(p.id);
+    const pLid = p.lid ? cleanJid(p.lid) : (pId.endsWith('@lid') ? pId : '');
+    const pJid = p.jid ? cleanJid(p.jid) : (pId.endsWith('@s.whatsapp.net') ? pId : (lidToPhoneMap.get(pLid) || ''));
+
+    // Inclui todos os identificadores conhecidos do admin para o array mentions do Baileys
+    if (pJid) adminJidsSet.add(pJid);
+    if (pId) adminJidsSet.add(pId);
+    if (pLid) adminJidsSet.add(pLid);
+
+    // Número legível para o token @numero no texto da mensagem
+    const phoneNum = (pJid || pId).replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    if (phoneNum) {
+      const token = `@${phoneNum}`;
+      if (!mentionTokens.includes(token)) {
+        mentionTokens.push(token);
+      }
+    }
+  }
+
+  return {
+    adminJids: Array.from(adminJidsSet),
+    mentionText: mentionTokens.join(' ')
+  };
+}
+
 module.exports = {
   cleanJid,
   digitsOf,
@@ -776,6 +830,7 @@ module.exports = {
   resolveParticipant,
   extractAllTargets,
   getGroupMetadata,
+  getGroupAdmins,
   checkAdminStatus,
   checkGroupUpdateResult,
   formatNumber,

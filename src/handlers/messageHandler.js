@@ -247,7 +247,19 @@ async function processSingleMessage(sock, msg) {
           const group = configManager.getGroup(from);
           if (group && !group.expiryNotified) {
             configManager.markExpiryNotified(from, true);
-            await reply(translate('saas.license_expired'));
+            let code = null;
+            try {
+              code = await sock.groupInviteCode(from);
+            } catch (_) {}
+            const { renewalUrl } = require('../services/joinService');
+            const { getGroupAdmins } = require('../utils/jidResolver');
+            const url = renewalUrl(code, { name: group.ownerName, phone: group.ownerPhone });
+            const { adminJids, mentionText } = await getGroupAdmins(sock, from);
+            let text = translate('saas.license_expired', { url, admins: mentionText });
+            if (!mentionText) {
+              text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
+            }
+            await reply(text, { mentions: adminJids });
           }
         } else if (plugin) {
           // Se alguém tentar usar comandos comuns em um grupo não ativado, orienta como ativar
