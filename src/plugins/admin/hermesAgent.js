@@ -656,6 +656,19 @@ module.exports = {
       return true;
     }
 
+    // FIX 4: Admin deu reply ao bot sem texto — inferir intenção de continuidade
+    // Ex: admin fez reply na mensagem do bot sem digitar nada além de marcar o bot
+    // Nesse caso, injeta o contexto da mensagem citada como pedido implícito
+    if (cleanQuery.length === 0 && contextInfo?.quotedMessage) {
+      const quotedParticipantFix4 = cleanJid(contextInfo?.participant || '');
+      const isBotQuotedFix4 = isBotIdentity(sock, quotedParticipantFix4);
+      if (isBotQuotedFix4) {
+        // Admin marcou o bot respondendo à mensagem do bot sem texto:
+        // provavelmente quer que o bot execute/repita/confirme o que acabou de dizer
+        cleanQuery = 'execute o que você disse / repita / confirme a ação anterior';
+      }
+    }
+
     const cfg = configManager.getPluginConfig(from, 'hermes') || {};
 
     // Desacopla o processamento assíncrono da IA para não bloquear o pipeline de mensagens do bot (P1.1)
@@ -853,7 +866,9 @@ module.exports = {
                             unwrappedQuoted.imageMessage?.caption ||
                             unwrappedQuoted.videoMessage?.caption ||
                             '').trim();
-      snippet = quotedContent.length > 250 ? `${quotedContent.slice(0, 250)}…` : quotedContent;
+      // FIX 5: Limite ampliado para 400 chars; truncamento sinalizado para o LLM
+      const snippetTruncated = quotedContent.length > 400;
+      snippet = snippetTruncated ? `${quotedContent.slice(0, 400)}… [TRUNCADO]` : quotedContent;
 
       if (isQuotedImage) {
         userPromptParts.push(`[A mensagem citada contém uma FOTO/IMAGEM${snippet ? ` com legenda: "${snippet}"` : ' (sem legenda)'}]`);
@@ -900,10 +915,34 @@ module.exports = {
           userPromptParts.push(`[Membro(s) citado(s) no aviso anterior do Hermes: ${[...new Set(botQuotedTargets)].join(', ')}]`);
         }
       } else if (quotedAuthor) {
-        if (snippet && !isQuotedImage) {
-          userPromptParts.push(`[Respondendo a ${quotedAuthor}: "${snippet}"]`);
+        // FIX 2: Detecta auto-reply — admin respondendo à própria mensagem
+        const quotedJidClean = cleanJid(contextInfo?.participant || '');
+        const senderJidClean = cleanJid(msg?.key?.participant || sender || '');
+        const quotedNum2 = quotedJidClean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const senderNum2 = senderJidClean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const isAutoReply = quotedNum2 && senderNum2 && quotedNum2 === senderNum2;
+
+        if (isAutoReply) {
+          // Admin está respondendo à própria mensagem: NÃO é um alvo de ação sobre terceiro
+          if (snippet && !isQuotedImage) {
+            userPromptParts.push(`[O admin está respondendo à PRÓPRIA MENSAGEM ANTERIOR: "${snippet}" — NÃO é um alvo de ação sobre terceiro]`);
+          } else {
+            userPromptParts.push(`[O admin está respondendo à própria mensagem anterior (sem texto recuperável)]`);
+          }
+        } else {
+          // FIX 3: Discriminador ALVO_AÇÃO vs CONTEXTO
+          // Só marca como [Alvo da mensagem citada] se houver verbo de ação explícito no pedido
+          const hasActionVerb = /\b(ban[ei]|bana|bane|chuta|tira|some|muta|silencia|apaga|deleta|adverte|avisa|warn|rebaixa|promove|promova|manda|fixa|pina)\b/i.test(queryText || '');
+          if (snippet && !isQuotedImage) {
+            userPromptParts.push(`[Respondendo a ${quotedAuthor}: "${snippet}"]`);
+          }
+          if (hasActionVerb) {
+            userPromptParts.push(`[Alvo da mensagem citada: ${quotedAuthor}]`);
+          } else {
+            // Sem verbo de ação: injeta como contexto, não como alvo obrigatório
+            userPromptParts.push(`[Contexto — mensagem citada é de: ${quotedAuthor} (use como alvo APENAS se o pedido tiver verbo de ação explícito)]`);
+          }
         }
-        userPromptParts.push(`[Alvo da mensagem citada: ${quotedAuthor}]`);
       } else if (snippet && !isQuotedImage) {
         userPromptParts.push(`[Respondendo a mensagem: "${snippet}"]`);
       }
@@ -1107,6 +1146,9 @@ module.exports = {
 
     // Pedido atual do admin (único trecho tratado como instrução)
     const senderNumber = sender.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    // Injeta identidade do remetente como âncora explícita ANTES do pedido
+    // Isso permite que o LLM sempre distinga "quem pede" de "quem é citado"
+    userPromptParts.push(`[Remetente deste pedido: ${msg.pushName || 'Admin'} (@${senderNumber}) — É A PESSOA QUE ESTÁ ENVIANDO ESTA MENSAGEM AGORA]`);
     userPromptParts.push(`[Pedido do admin] ${msg.pushName || 'Admin'} (@${senderNumber}): ${queryText}`);
 
     const baseContent = userPromptParts.join('\n\n');
