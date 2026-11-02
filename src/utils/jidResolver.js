@@ -701,12 +701,50 @@ function formatNumber(jid) {
  * @param {object} sock Instância do Baileys
  * @returns {{ botJid: string, botLid: string, botNum: string, botLidNum: string }}
  */
+/**
+ * Escapa caracteres especiais para uso seguro em RegExp.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegex(str) {
+  if (!str) return '';
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Extrai a identidade completa do bot (JID, LID, números limpos e nome) em uma única chamada.
+ * Consulta tanto sock.user quanto sock.authState.creds.me e mapeamentos bidirecionais.
+ * @param {object} sock Instância do Baileys
+ * @returns {{ botJid: string, botLid: string, botNum: string, botLidNum: string, botName: string }}
+ */
 function getBotIdentity(sock) {
-  const botJid = cleanJid(sock?.user?.id || '');
-  const botLid = cleanJid(sock?.user?.lid || '');
+  const rawId = sock?.user?.id || sock?.authState?.creds?.me?.id || '';
+  const rawLid = sock?.user?.lid || sock?.authState?.creds?.me?.lid || '';
+  const botName = sock?.user?.name || sock?.authState?.creds?.me?.name || '';
+
+  let botJid = cleanJid(rawId);
+  let botLid = cleanJid(rawLid);
+
+  // Fallback de JID a partir do BOT_NUMBER do .env se não estiver no socket
+  if (!botJid && settings.botNumber) {
+    const envNum = String(settings.botNumber).replace(/\D/g, '');
+    if (envNum) botJid = `${envNum}@s.whatsapp.net`;
+  }
+
+  // Tenta resolver botLid a partir do phoneToLidMap se ainda desconhecido
+  if (!botLid && botJid && phoneToLidMap.has(botJid)) {
+    botLid = phoneToLidMap.get(botJid);
+  }
+
+  // Tenta resolver botJid a partir do lidToPhoneMap se ainda desconhecido
+  if (!botJid && botLid && lidToPhoneMap.has(botLid)) {
+    botJid = lidToPhoneMap.get(botLid);
+  }
+
   const botNum = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
   const botLidNum = botLid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-  return { botJid, botLid, botNum, botLidNum };
+
+  return { botJid, botLid, botNum, botLidNum, botName };
 }
 
 /**
@@ -718,18 +756,32 @@ function getBotIdentity(sock) {
 function isBotIdentity(sock, jidOrNum) {
   if (!jidOrNum) return false;
   const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
-  const clean = cleanJid(jidOrNum);
+  const clean = cleanJid(String(jidOrNum).trim());
   const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
+  // 1. Igualdade exata de JID limpo
   if (clean && (clean === botJid || clean === botLid)) return true;
+
+  // 2. Resolução via mapas bidirecionais LID <-> Phone
+  if (clean.endsWith('@lid')) {
+    if (botLid && clean === botLid) return true;
+    const mappedPhone = lidToPhoneMap.get(clean);
+    if (mappedPhone && (mappedPhone === botJid || (botNum && mappedPhone.includes(botNum)))) return true;
+  } else if (clean.endsWith('@s.whatsapp.net')) {
+    if (botJid && clean === botJid) return true;
+    const mappedLid = phoneToLidMap.get(clean);
+    if (mappedLid && (mappedLid === botLid || (botLidNum && mappedLid.includes(botLidNum)))) return true;
+  }
+
+  // 3. Igualdade numérica direta (número de telefone ou LID numérico)
   if (botNum && num === botNum) return true;
   if (botLidNum && num === botLidNum) return true;
 
-  // Fallback para BOT_NUMBER do .env se configurado
+  // 4. Fallback para BOT_NUMBER do .env se configurado
   const envBotNum = (settings.botNumber || '').replace(/\D/g, '');
   if (envBotNum && num === envBotNum) return true;
 
-  // Comparação resiliente do 9º dígito brasileiro (DDD + últimos 8 dígitos)
+  // 5. Comparação resiliente do 9º dígito brasileiro (DDD + últimos 8 dígitos)
   if (num) {
     const numBr = getBr(num);
     if (numBr.ddd && numBr.last8) {
@@ -745,6 +797,165 @@ function isBotIdentity(sock, jidOrNum) {
   }
 
   return false;
+}
+
+/**
+ * Detecta de forma abrangente e infalível se o bot foi mencionado na mensagem, cobrindo:
+ * 1. Menção nativa nos metadados do WhatsApp (contextInfo.mentionedJid com JID ou LID)
+ * 2. Contato não salvo na agenda do cliente (texto @55... gerado pelo WhatsApp ou digitado)
+ * 3. Contato salvo com qualquer nome personalizado na agenda do cliente (ex: "@Administrativo", "@Hermes Bot", "@Suporte")
+ * 4. Menções textuais literais (@hermes, @bot, etc.)
+ * 5. Resposta direta (quote/reply) ao bot
+ *
+ * @param {object} sock Instância do Baileys
+ * @param {object} msg Mensagem original do Baileys
+ * @param {string} [text] Texto extraído da mensagem
+ * @returns {{
+ *   isMentioned: boolean,
+ *   isMentionedInMeta: boolean,
+ *   isReplyToBot: boolean,
+ *   isExplicitTextTag: boolean,
+ *   mentionPrefix: string | null,
+ *   cleanText: string,
+ *   mentionedJids: string[]
+ * }}
+ */
+function detectBotMention(sock, msg, text = '') {
+  const realMsg = msg?.message?.ephemeralMessage?.message ||
+                  msg?.message?.viewOnceMessage?.message ||
+                  msg?.message?.viewOnceMessageV2?.message ||
+                  msg?.message?.documentWithCaptionMessage?.message ||
+                  msg?.message;
+
+  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
+                      realMsg?.imageMessage?.contextInfo ||
+                      realMsg?.videoMessage?.contextInfo ||
+                      realMsg?.documentMessage?.contextInfo ||
+                      msg?.message?.extendedTextMessage?.contextInfo;
+
+  // 1. Identifica se foi resposta (quote) ao próprio bot
+  const quotedParticipant = cleanJid(contextInfo?.participant || contextInfo?.quotedMessage?.participant || '');
+  const isReplyToBot = Boolean(contextInfo?.stanzaId && isBotIdentity(sock, quotedParticipant));
+
+  // 2. Extrai metadados de menção do WhatsApp
+  const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
+  const mentionedJids = rawMentions.map(cleanJid).filter(Boolean);
+  const isMentionedInMeta = mentionedJids.some(j => isBotIdentity(sock, j));
+
+  // 3. Obtém identidade completa do bot
+  const { botJid, botLid, botNum, botLidNum, botName } = getBotIdentity(sock);
+  const envBotNum = (settings.botNumber || '').replace(/\D/g, '');
+  const rawText = String(text || '').trim();
+
+  // 4. Monta lista de regexes para menções textuais conhecidas ao bot
+  const botNumberVariants = new Set();
+  if (botNum) botNumberVariants.add(botNum);
+  if (envBotNum) botNumberVariants.add(envBotNum);
+  if (botLidNum) botNumberVariants.add(botLidNum);
+
+  for (const num of [...botNumberVariants]) {
+    const br = getBr(num);
+    if (br.ddd && br.last8) {
+      botNumberVariants.add(`55${br.ddd}9${br.last8}`);
+      botNumberVariants.add(`55${br.ddd}${br.last8}`);
+      botNumberVariants.add(`${br.ddd}9${br.last8}`);
+      botNumberVariants.add(`${br.ddd}${br.last8}`);
+    }
+  }
+
+  const explicitTextRegexes = [/@hermes\b/i, /@bot\b/i];
+  if (botName && botName.length >= 2) {
+    explicitTextRegexes.push(new RegExp(`@${escapeRegex(botName)}\\b`, 'i'));
+  }
+  for (const num of botNumberVariants) {
+    if (num && num.length >= 8) {
+      explicitTextRegexes.push(new RegExp(`@${num}\\b`, 'i'));
+    }
+  }
+
+  let isExplicitTextTag = explicitTextRegexes.some(rx => rx.test(rawText));
+
+  let cleanText = rawText;
+  let mentionPrefix = null;
+  const otherMentions = mentionedJids.filter(j => !isBotIdentity(sock, j));
+
+  // Prioridade 1: Se o bot foi mencionado nos metadados do WhatsApp (autocomplete)
+  // e o texto começa com @, a menção inicial pertence ao bot!
+  if (rawText.startsWith('@')) {
+    if (isMentionedInMeta) {
+      if (otherMentions.length === 0) {
+        // Se após a menção há um comando com prefixo conhecido (ex: "@Administrativo !config", "@Hermes Bot /menu")
+        const cmdMatch = cleanText.match(/^(@[^\n!/#.$]+?)(?=\s*[!/#.$]|\s*$)/);
+        if (cmdMatch) {
+          mentionPrefix = cmdMatch[0] + (cleanText.slice(cmdMatch[0].length).match(/^\s+/)?.[0] || '');
+          cleanText = cleanText.slice(mentionPrefix.length);
+        } else {
+          // Para texto sem símbolo de comando: captura o @ e o nome/número da menção do WhatsApp
+          const spaceMatch = cleanText.match(/^(@\S+(?:\s+\S+)?)\s+/);
+          if (spaceMatch) {
+            mentionPrefix = spaceMatch[0];
+            cleanText = cleanText.slice(mentionPrefix.length);
+          } else {
+            const singleMatch = cleanText.match(/^(@\S+)\s*/);
+            if (singleMatch) {
+              mentionPrefix = singleMatch[0];
+              cleanText = cleanText.slice(mentionPrefix.length);
+            }
+          }
+        }
+      } else {
+        // Há outros membros mencionados: verifica se o primeiro token @ não é de outro membro
+        const firstTokenMatch = cleanText.match(/^@([^\s!/#.$]+)/);
+        if (firstTokenMatch) {
+          const firstToken = firstTokenMatch[1];
+          const isOther = otherMentions.some(om => om.includes(firstToken));
+          if (!isOther) {
+            mentionPrefix = firstTokenMatch[0] + (cleanText.slice(firstTokenMatch[0].length).match(/^\s+/)?.[0] || '');
+            cleanText = cleanText.slice(mentionPrefix.length);
+          }
+        }
+      }
+    }
+
+    // Se ainda não capturou mentionPrefix (ex: digitado manualmente sem autocomplete),
+    // checa contra os regexes explícitos de @hermes, @bot, @5545...
+    if (!mentionPrefix) {
+      for (const rx of explicitTextRegexes) {
+        const startMatch = cleanText.match(new RegExp(`^${rx.source}\\s*`, 'i'));
+        if (startMatch) {
+          mentionPrefix = startMatch[0];
+          cleanText = cleanText.slice(mentionPrefix.length);
+          isExplicitTextTag = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // Remove menções conhecidas ao bot que estejam no meio ou final do texto
+  for (const rx of explicitTextRegexes) {
+    cleanText = cleanText.replace(new RegExp(`(?:^|\\s)${rx.source}`, 'gi'), ' ');
+  }
+
+  // Se o bot foi mencionado via autocomplete nos metadados e NÃO há outros membros mencionados,
+  // remove qualquer menção residual @Nome no meio da frase (ex: "Olá @Administrativo você pode me ajudar?")
+  if (isMentionedInMeta && otherMentions.length === 0) {
+    cleanText = cleanText.replace(/(?:^|\s)@[^\s@]+/g, ' ');
+  }
+
+  cleanText = cleanText.replace(/\s+/g, ' ').trim();
+
+  const isMentioned = Boolean(isMentionedInMeta || isExplicitTextTag || mentionPrefix);
+
+  return {
+    isMentioned,
+    isMentionedInMeta,
+    isReplyToBot,
+    isExplicitTextTag,
+    mentionPrefix,
+    cleanText,
+    mentionedJids
+  };
 }
 
 /**
@@ -836,6 +1047,8 @@ module.exports = {
   formatNumber,
   getBotIdentity,
   isBotIdentity,
+  detectBotMention,
+  escapeRegex,
   getBr,
   setLidMapping,
   registerParticipantLid,

@@ -5,7 +5,7 @@ const aiService = require('../../services/aiService');
 const memoryEngine = require('../../services/memoryEngine');
 const toolRegistry = require('../../services/toolRegistry');
 const { getExplicitMentionTargets } = require('../../services/targetResolver');
-const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant, getBotIdentity, isBotIdentity, getBr } = require('../../utils/jidResolver');
+const { cleanJid, getGroupMetadata, checkAdminStatus, resolveParticipant, getBotIdentity, isBotIdentity, getBr, detectBotMention } = require('../../utils/jidResolver');
 const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
@@ -128,7 +128,10 @@ function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
       if (/^\d{8,20}$/.test(numeric)) return !isBotIdentity(sock, numeric);
 
       const normalized = token.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      return normalized !== 'hermes' && normalized !== 'bot';
+      const { botName } = getBotIdentity(sock);
+      const normBotName = botName ? botName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+      if (normBotName && normalized === normBotName) return false;
+      return normalized !== 'hermes' && normalized !== 'bot' && !isBotIdentity(sock, token);
     });
 
   const hasExplicitMention = targetMentions.length > 0 || textAtTokens.length > 0;
@@ -504,13 +507,13 @@ module.exports = {
       contextInfo?.stanzaId && isBotIdentity(sock, quotedParticipant)
     );
 
-    // B. Menção nos metadados do WhatsApp (quando o usuário clica no contato do bot na lista)
-    const mentionedJids = contextInfo?.mentionedJid || [];
-    const isBotMentionedMeta = Array.isArray(mentionedJids) && mentionedJids.some(j => isBotIdentity(sock, j));
+    // B. Detecção abrangente de menção ao bot (LID, número não salvo @55..., nome personalizado na agenda, etc.)
+    const botMention = detectBotMention(sock, msg, text);
+    const isBotMentionedMeta = botMention.isMentionedInMeta;
+    const hasNameTag = botMention.isExplicitTextTag;
 
     // C. Menção no texto por nome: "@hermes", "@bot", iniciando por "hermes" ou mencionando a palavra "hermes"
     const lowerText = (text || '').toLowerCase().trim();
-    const hasNameTag = lowerText.includes('@hermes') || lowerText.includes('@bot');
     const startsWithName = /^hermes[\s,.:!?-]/i.test(lowerText) || lowerText === 'hermes';
     const mentionsHermes = /\bhermes\b/i.test(lowerText);
 
@@ -535,7 +538,7 @@ module.exports = {
       }
     }
 
-    const isAddressed = isReplyToBot || isBotMentionedMeta || hasNameTag || startsWithName || mentionsHermes || isContinuation;
+    const isAddressed = isReplyToBot || botMention.isMentioned || startsWithName || mentionsHermes || isContinuation;
 
     // Se o bot não foi expressamente chamado, grava a conversa no buffer local e mantém silêncio absoluto
     if (!isAddressed) {
@@ -621,7 +624,7 @@ module.exports = {
     }
 
     // 6. Limpa apenas os prefixos de chamada ao próprio bot (preservando menções a outros membros!)
-    let cleanQuery = text;
+    let cleanQuery = (botMention && typeof botMention.cleanText === 'string') ? botMention.cleanText : text;
 
     // Remove o prefixo de comando do início quando presente (ex: "!hermes ...", "/hermes ...")
     if (cleanQuery.startsWith(groupPrefix)) {

@@ -1,6 +1,6 @@
 const { wizardCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
-const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr, getBotIdentity } = require('../utils/jidResolver');
+const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr, getBotIdentity, detectBotMention } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const settings = require('../config/settings');
 const configManager = require('../core/configManager');
@@ -71,63 +71,14 @@ async function processSingleMessage(sock, msg) {
   const text = extractText(msg.message).trim();
 
   // ========================================================
-  // Detecção de Menção ao Bot como Prefixo Simultâneo
+  // Detecção Abrangente de Menção ao Bot (Meta, Nome Personalizado, Número ou Texto)
   // ========================================================
-  const { botJid, botLid, botNum, botLidNum } = getBotIdentity(sock);
-  const envBotNum = (settings.botNumber || '').replace(/\D/g, '');
-  const botBr = getBr(botNum || envBotNum);
+  const botMention = detectBotMention(sock, msg, text);
+  const isBotMentionedInContext = botMention.isMentioned;
 
-  const realMsg = msg?.message?.ephemeralMessage?.message ||
-                  msg?.message?.viewOnceMessage?.message ||
-                  msg?.message?.viewOnceMessageV2?.message ||
-                  msg?.message?.documentWithCaptionMessage?.message ||
-                  msg?.message;
-
-  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
-                      realMsg?.imageMessage?.contextInfo ||
-                      realMsg?.videoMessage?.contextInfo ||
-                      realMsg?.documentMessage?.contextInfo;
-
-  const mentionedJids = contextInfo?.mentionedJid || [];
-  const isBotMentionedInContext = Array.isArray(mentionedJids) && mentionedJids.some(j => {
-    const clean = cleanJid(j);
-    const num = clean.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
-    const numBr = getBr(num);
-    return clean === botJid || 
-           clean === botLid || 
-           (botNum && num === botNum) || 
-           (botLidNum && num === botLidNum) || 
-           (envBotNum && num === envBotNum) ||
-           (botBr.ddd && numBr.ddd && botBr.ddd === numBr.ddd && botBr.last8 === numBr.last8);
-  });
-
-  let isMentionPrefix = false;
-  let mentionPrefixLength = 0;
-  let mentionPrefixStr = '';
-
-  if (text.startsWith('@')) {
-    const mentionMatch = text.match(/^@([a-zA-Z0-9_:.-]+)\s*/);
-    if (mentionMatch) {
-      const targetStr = mentionMatch[1].toLowerCase();
-      const targetDigits = targetStr.replace(/:\d+$/, '').replace(/\D/g, '');
-      const targetBr = getBr(targetDigits);
-
-      const isBotTarget =
-        targetStr === 'bot' ||
-        targetStr === 'hermes' ||
-        (botNum && targetDigits === botNum) ||
-        (botLidNum && targetDigits === botLidNum) ||
-        (envBotNum && targetDigits === envBotNum) ||
-        (botBr.ddd && targetBr.ddd && botBr.ddd === targetBr.ddd && botBr.last8 === targetBr.last8) ||
-        (isBotMentionedInContext);
-
-      if (isBotTarget) {
-        isMentionPrefix = true;
-        mentionPrefixLength = mentionMatch[0].length;
-        mentionPrefixStr = mentionMatch[0];
-      }
-    }
-  }
+  let isMentionPrefix = Boolean(botMention.mentionPrefix);
+  let mentionPrefixLength = botMention.mentionPrefix ? botMention.mentionPrefix.length : 0;
+  let mentionPrefixStr = botMention.mentionPrefix || '';
 
   // ========================================================
   // 1. Trava Anti-Ban de Privado (DM)
@@ -171,7 +122,7 @@ async function processSingleMessage(sock, msg) {
 
   if (isMentionPrefix) {
     effectivePrefix = mentionPrefixStr;
-    rawBody = text.slice(mentionPrefixLength).trim();
+    rawBody = (botMention && typeof botMention.cleanText === 'string') ? botMention.cleanText : text.slice(mentionPrefixLength).trim();
     if (rawBody.startsWith(groupPrefix) || rawBody.startsWith('/') || rawBody.startsWith('!')) {
       rawBody = rawBody.slice(1).trim();
     }
