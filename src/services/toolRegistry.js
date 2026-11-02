@@ -204,7 +204,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'hidetag_announcement',
-      description: 'Envia comunicado oficial em destaque no grupo (formato limpo sem marcação em massa por segurança Anti-Ban). Acione quando o admin pedir: avisa o grupo, avisar o pessoal sobre X, manda um comunicado, dá um aviso, recado para todos, avisar sobre a academia/evento, /todos, /hidetag, /aviso.',
+      description: 'Envia comunicado oficial crucial em destaque no grupo. ATENÇÃO ANTI-BAN: Use com EXTREMA PARCIMÔNIA, exclusivamente para avisos cruciais, regras vitais ou comunicados urgentes para todo o grupo (/todos, /hidetag, comunicado oficial geral). NUNCA acione para recados normais, piadas ou conversas do dia a dia.',
       parameters: {
         type: 'object',
         properties: {

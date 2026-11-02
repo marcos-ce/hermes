@@ -44,6 +44,23 @@ async function randomDelay(min = 300, max = 700) {
 async function sendSafeMessage(sock, jid, content, options = {}) {
   if (!sock || !jid) return null;
 
+  // 🛡️ BLINDAGEM ANTI-BAN RIGOROSA: NUNCA enviar mensagens no privado (DM) de membros comuns
+  // Mensagens privadas não solicitadas para membros (ex: aviso de regras, warns, punições)
+  // geram denúncias de spam e bloqueios imediatos da Meta.
+  // O bot só envia mensagens no privado para o Dono (isOwner)
+  // ou para usuários comuns se o privado estiver expressamente ativado (!pv on) E for resposta direta a uma mensagem (quoted).
+  const isGroup = jid.endsWith('@g.us');
+  if (!isGroup) {
+    const isOwnerTarget = settings.isOwner(jid, sock);
+    if (!isOwnerTarget) {
+      const configManager = require('../core/configManager');
+      if (!configManager.isPrivateEnabled() || !options.quoted) {
+        logger.warn({ jid }, '[antiBan] Mensagem privada cancelada: proibido enviar DMs para membros comuns.');
+        return null;
+      }
+    }
+  }
+
   const payload = typeof content === 'string' ? { text: content } : { ...content };
   const rawText = payload.text || payload.caption || '';
 
@@ -195,6 +212,35 @@ function checkCooldown(sender, cooldownMs = 2000) {
   return false; // Permitido
 }
 
+const hidetagCooldowns = new Map();
+const HIDETAG_COOLDOWN_MS = 120 * 1000; // 2 minutos entre comunicados no mesmo grupo
+
+/**
+ * Verifica se o grupo está em cooldown para comunicados gerais (!hidetag)
+ * Garante uso com extrema parcimônia (apenas comunicados cruciais).
+ * @param {string} groupJid 
+ * @returns {{ allowed: boolean, remainingSec: number }}
+ */
+function checkHidetagCooldown(groupJid) {
+  if (!groupJid) return { allowed: true, remainingSec: 0 };
+  const now = Date.now();
+  const last = hidetagCooldowns.get(groupJid) || 0;
+  const elapsed = now - last;
+  if (elapsed < HIDETAG_COOLDOWN_MS) {
+    const remainingSec = Math.ceil((HIDETAG_COOLDOWN_MS - elapsed) / 1000);
+    return { allowed: false, remainingSec };
+  }
+  return { allowed: true, remainingSec: 0 };
+}
+
+/**
+ * Registra disparo de comunicado geral no grupo
+ * @param {string} groupJid 
+ */
+function touchHidetagCooldown(groupJid) {
+  if (groupJid) hidetagCooldowns.set(groupJid, Date.now());
+}
+
 module.exports = {
   sleep,
   randomInt,
@@ -202,5 +248,7 @@ module.exports = {
   sendSafeMessage,
   safeDelete,
   safeKick,
-  checkCooldown
+  checkCooldown,
+  checkHidetagCooldown,
+  touchHidetagCooldown
 };

@@ -452,20 +452,9 @@ async function connectBot(options = {}) {
           configManager.flushSync();
         }
 
-        if (shouldSendWelcome) {
-          const groupPrefix = configManager.getGroupPrefix(g.id) || '!';
-          const groupLang = configManager.getGroupLang(g.id) || 'pt';
-          const presentationText = t(groupLang, 'saas.group_presentation', { prefix: groupPrefix });
-
-          setTimeout(async () => {
-            try {
-              await sock.groupMetadata(g.id).catch(() => {});
-              await sendSafeMessage(sock, g.id, { text: presentationText });
-            } catch (err) {
-              logger.error({ err, groupJid: g.id }, 'Erro ao enviar apresentação automática no novo grupo');
-            }
-          }, 3000);
-        }
+        // BLINDAGEM ANTI-BAN: Silêncio total ao entrar no grupo.
+        // O bot não dispara mensagens automáticas imediatamente ao ingressar, eliminando o principal gatilho de spam da Meta.
+        // Ele permanece discreto aguardando organicamente o primeiro comando (!config, !menu) ou menção de um administrador.
       } catch (err) {
         logger.error({ err, groupJid: g?.id }, 'Erro ao processar groups.upsert');
       }
