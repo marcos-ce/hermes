@@ -42,8 +42,23 @@ class SiteBridge {
    */
   init(sock) {
     this.sock = sock;
-    if (!settings.siteBridgeEnabled) return;
+    siteOrders.load();
 
+    // 1. Recuperação após crash/restart: reprocessa pedidos que ficaram no meio
+    for (const id of siteOrders.pendingIds()) this._enqueue(id);
+
+    // 2. Modo Polling do Mercado Pago (Ideal para Discloud e ambientes sem porta pública exposta)
+    if (settings.mpAccessToken && settings.mpPollingEnabled) {
+      this._startPolling();
+    }
+
+    // 3. Modo Servidor Webhook HTTP (Opcional, caso tenha porta pública configurada)
+    if (settings.siteBridgeEnabled) {
+      this._startServer();
+    }
+  }
+
+  _startServer() {
     const secret = settings.botInternalSecret || '';
     if (secret.length < 24) {
       logger.error('siteBridge NÃO iniciado: BOT_INTERNAL_SECRET ausente ou com menos de 24 caracteres.');
@@ -58,7 +73,6 @@ class SiteBridge {
     }
 
     this.secretDigest = sha256(secret);
-    siteOrders.load();
 
     this.server = http.createServer((req, res) => this._handle(req, res));
     this.server.headersTimeout = 10000;
@@ -69,9 +83,69 @@ class SiteBridge {
       logger.info(`siteBridge ouvindo em ${settings.siteBridgeHost}:${settings.siteBridgePort}`);
     });
     this.server.unref();
+  }
 
-    // Recuperação após crash/restart: reprocessa pedidos que ficaram no meio
-    for (const id of siteOrders.pendingIds()) this._enqueue(id);
+  /**
+   * Inicia busca ativa (polling) periódica por novos pagamentos Pix aprovados no Mercado Pago.
+   * Não exige abertura de portas, túneis ou IPs públicos: funciona nativamente na Discloud.
+   */
+  _startPolling() {
+    const intervalSec = Math.max(settings.mpPollingIntervalSeconds || 30, 10);
+    logger.info(`siteBridge: Polling ativo do Mercado Pago iniciado (busca a cada ${intervalSec}s).`);
+
+    // Primeira checagem após 5s para dar tempo da conexão do WhatsApp estabilizar
+    setTimeout(() => this._pollMercadoPago(), 5000);
+
+    this.pollInterval = setInterval(() => {
+      this._pollMercadoPago();
+    }, intervalSec * 1000);
+    this.pollInterval.unref();
+  }
+
+  async _pollMercadoPago() {
+    if (!settings.mpAccessToken || this.isPolling) return;
+    this.isPolling = true;
+
+    try {
+      const url = 'https://api.mercadopago.com/v1/payments/search?sort=date_approved&criteria=desc&status=approved&limit=15';
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${settings.mpAccessToken}` },
+        signal: AbortSignal.timeout(12000)
+      });
+
+      if (!res.ok) {
+        logger.warn({ status: res.status }, 'siteBridge: falha ao consultar pagamentos recentes no Mercado Pago');
+        return;
+      }
+
+      const data = await res.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+      const now = Date.now();
+      const maxAgeMs = 24 * 60 * 60 * 1000; // só processa pagamentos das últimas 24h
+
+      for (const p of results) {
+        if (!p?.id || p.status !== 'approved' || p.payment_method_id !== 'pix') continue;
+        const approvedMs = p.date_approved ? new Date(p.date_approved).getTime() : 0;
+        if (approvedMs > 0 && now - approvedMs > maxAgeMs) continue;
+
+        const md = p.metadata || {};
+        // Só processa pagamentos do Hermes que tenham link de convite de grupo
+        if (!md.invite_link && !md.invite_link_2) continue;
+
+        const id = String(p.id);
+        const existing = siteOrders.get(id);
+        if (existing && ['done', 'partial', 'rejected'].includes(existing.status)) continue;
+
+        if (!existing) {
+          siteOrders.upsert(id, { status: 'queued', groups: null });
+        }
+        this._enqueue(id);
+      }
+    } catch (err) {
+      logger.warn({ err: err?.message || err }, 'siteBridge: erro no ciclo de polling do Mercado Pago');
+    } finally {
+      this.isPolling = false;
+    }
   }
 
   // ---------------- HTTP ----------------
