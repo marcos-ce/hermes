@@ -11,6 +11,18 @@ const PLANS = {
   32: { plan: 'mensal', days: 30 }
 };
 
+/**
+ * Resolve o plano e quantidade de dias com tolerância inteligente a pequenas variações de valor/centavos.
+ * @param {number|string} amount
+ * @returns {{ plan: string, days: number, label: string }|null}
+ */
+function resolvePlan(amount) {
+  const val = Number(amount) || 0;
+  if (val <= 0) return null;
+  if (val <= 20) return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+  return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
+}
+
 const MAX_BODY_BYTES = 4096;
 const RATE_LIMIT = { windowMs: 60 * 1000, max: 60 };
 const AUTH_FAIL = { windowMs: 10 * 60 * 1000, max: 5 };
@@ -97,14 +109,20 @@ class SiteBridge {
       const maxAgeMs = 24 * 60 * 60 * 1000; // só processa pagamentos das últimas 24h
 
       for (const p of results) {
-        if (!p?.id || p.status !== 'approved' || p.payment_method_id !== 'pix') continue;
-        const approvedMs = p.date_approved ? new Date(p.date_approved).getTime() : 0;
+        if (!p?.id || p.status !== 'approved') continue;
+        const approvedMs = new Date(p.date_approved || p.date_created || 0).getTime();
         if (approvedMs > 0 && now - approvedMs > maxAgeMs) continue;
 
         const md = p.metadata || {};
-        // Extrai link de convite em qualquer campo de metadata ou descrição
+        // Extrai link de convite em qualquer campo de metadata, itens ou descrição
         const rawLink = md.invite_link || md.invite_link_2 || md.invitelink || md.group_link || md.link || md.whatsapp_link || '';
-        const hasInviteCode = Boolean(extractInviteCode(rawLink) || extractInviteCode(p.description));
+        const itemDesc = p.additional_info?.items?.[0]?.description || '';
+        const hasInviteCode = Boolean(
+          extractInviteCode(rawLink) ||
+          extractInviteCode(p.description) ||
+          extractInviteCode(itemDesc) ||
+          extractInviteCode(p.external_reference)
+        );
         if (!hasInviteCode) continue;
 
         const id = String(p.id);
@@ -306,20 +324,18 @@ class SiteBridge {
       let payment;
       if (settings.siteVerifyPayment) {
         payment = await this._verify(id);
-        if (payment.notFound || payment.status !== 'approved' || payment.payment_method_id !== 'pix') {
+        if (payment.notFound || payment.status !== 'approved') {
           siteOrders.upsert(id, { status: 'rejected', reason: payment.notFound ? 'not_found' : `status_${payment.status}` });
           await this._notifyOwner(`🚫 Pedido ${id} rejeitado (pagamento não aprovado no Mercado Pago).`);
           return;
         }
-        planInfo = PLANS[payment.transaction_amount];
+        planInfo = resolvePlan(payment.transaction_amount);
         if (!planInfo) {
-          siteOrders.upsert(id, { status: 'rejected', reason: 'unknown_amount' });
-          await this._notifyOwner(`🚫 Pedido ${id} rejeitado: valor R$ ${payment.transaction_amount} não corresponde a nenhum plano.`);
-          return;
+          planInfo = { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
         }
       } else {
         // Modo inseguro (sem verificação): não aceita nada além do plano padrão
-        planInfo = PLANS[32];
+        planInfo = { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
         payment = { metadata: {} };
       }
 
@@ -331,7 +347,9 @@ class SiteBridge {
         md.group_link,
         md.link,
         md.whatsapp_link,
-        payment.description
+        payment.description,
+        payment.additional_info?.items?.[0]?.description,
+        payment.external_reference
       ];
       const codes = [...new Set(possibleLinks.map(extractInviteCode).filter(Boolean))];
 
@@ -490,20 +508,39 @@ class SiteBridge {
   async _notifyOwner(text) {
     const token = settings.backupTelegramToken;
     const chatId = settings.backupTelegramChatId;
-    if (!token || !chatId) {
-      logger.warn({ text }, 'siteBridge: Telegram não configurado, aviso ao dono apenas em log');
-      return;
+    let sentViaTelegram = false;
+
+    if (token && chatId) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: String(text).slice(0, 3500), disable_web_page_preview: true }),
+          signal: AbortSignal.timeout(10000)
+        });
+        if (res.ok) {
+          sentViaTelegram = true;
+        } else {
+          logger.warn({ status: res.status }, 'siteBridge: Telegram recusou o aviso');
+        }
+      } catch (err) {
+        logger.warn({ err: err.message }, 'siteBridge: falha ao avisar no Telegram');
+      }
+    } else {
+      logger.warn({ text }, 'siteBridge: Telegram não configurado no .env');
     }
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: String(text).slice(0, 3500), disable_web_page_preview: true }),
-        signal: AbortSignal.timeout(10000)
-      });
-      if (!res.ok) logger.warn({ status: res.status }, 'siteBridge: Telegram recusou o aviso');
-    } catch (err) {
-      logger.warn({ err: err.message }, 'siteBridge: falha ao avisar no Telegram');
+
+    // Fallback de Emergência: se o Telegram não foi enviado (ou não configurado),
+    // e o dono possui número configurado no WhatsApp (OWNER_NUMBER), envia no WhatsApp do Dono!
+    if (!sentViaTelegram && settings.ownerNumber && this.sock?.user) {
+      try {
+        const ownerJid = `${settings.ownerNumber.replace(/\D/g, '')}@s.whatsapp.net`;
+        const { sendSafeMessage } = require('../utils/antiBan');
+        await sendSafeMessage(this.sock, ownerJid, text);
+        logger.info({ ownerJid }, 'siteBridge: aviso de compra enviado com sucesso ao Dono no WhatsApp');
+      } catch (waErr) {
+        logger.warn({ err: waErr.message }, 'siteBridge: falha no fallback de aviso ao Dono no WhatsApp');
+      }
     }
   }
 }

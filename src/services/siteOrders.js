@@ -166,6 +166,36 @@ class SiteOrders {
       }
     }
 
+    // Fallback inteligente: se não houve match exato por JID/código, mas há um pedido pendente
+    // recente (últimas 2 horas) aguardando ativação, associa ao grupo recém-entrado
+    const now = Date.now();
+    for (const order of this.orders.values()) {
+      if (!order.groups || order.status === 'done') continue;
+      for (const g of order.groups) {
+        if (g.status === 'waiting_owner_join' && (now - (g.registeredAt || 0) < 2 * 60 * 60 * 1000)) {
+          g.status = 'done';
+          g.activatedAt = now;
+          if (cleanJid) g.jid = cleanJid;
+
+          const allDone = order.groups.every(og => og.status === 'done');
+          if (allDone) {
+            order.status = 'done';
+          }
+          order.updatedAt = now;
+          this._persist();
+
+          return {
+            paymentId: order.paymentId,
+            days: g.days || order.days || 30,
+            plan: g.plan || order.plan || 'mensal',
+            ownerName: order.name,
+            ownerPhone: order.phone,
+            groupName: g.groupName
+          };
+        }
+      }
+    }
+
     return null;
   }
 
