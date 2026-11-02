@@ -68,6 +68,25 @@ async function healBrokenSession(msg) {
 let currentSock = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
+const pendingPresentationTimers = new Map(); // groupJid -> timer
+
+/**
+ * Cancela o timer da mensagem de apresentação oficial de um grupo recém-adicionado
+ * (por exemplo, quando o administrador já começou a interagir no grupo antes de 1 minuto).
+ * @param {string} groupJid 
+ * @returns {boolean}
+ */
+function cancelPendingPresentation(groupJid) {
+  if (!groupJid) return false;
+  const timer = pendingPresentationTimers.get(groupJid);
+  if (timer) {
+    clearTimeout(timer);
+    pendingPresentationTimers.delete(groupJid);
+    logger.info({ groupJid }, '[Anti-Ban] Apresentação automática cancelada: administrador já interagiu no grupo.');
+    return true;
+  }
+  return false;
+}
 // Mini-store de mensagens recentes para re-decriptografia pós-reconexão (substitui makeInMemoryStore)
 // Guarda as últimas 1500 mensagens em RAM com eviction FIFO. Sem TTL = sem vazamento de memória.
 const msgStore = new Map();
@@ -452,25 +471,50 @@ async function connectBot(options = {}) {
           configManager.flushSync();
         }
 
-        // Apresentação oficial humanizada em grupos novos com delay de 1 minuto (60s)
+        // Apresentação oficial humanizada em grupos novos com delay inteligente (~1 minuto) e digitação simulada
         if (shouldSendWelcome) {
           const groupPrefix = configManager.getGroupPrefix(g.id) || '!';
           const groupLang = configManager.getGroupLang(g.id) || 'pt';
           const presentationText = t(groupLang, 'saas.group_presentation', { prefix: groupPrefix });
 
-          // ANTI-BAN HUMANIZADO: Aguarda exatamente 1 minuto (60 segundos) após entrar no grupo
-          // antes de enviar a apresentação oficial. Isso simula um humano que entrou, aguardou e só
-          // então enviou a mensagem, eliminando a flag de bot instantâneo da Meta.
-          setTimeout(async () => {
+          // ANTI-BAN HUMANIZADO REFINADO:
+          // 1. Jitter aleatório entre 45s e 75s (média ~60s) para quebrar detecção de padrão temporal
+          // 2. Simulação de "Digitando..." ativa nos últimos 4 a 6 segundos antes do envio
+          // 3. Cancelamento automático caso o administrador envie qualquer comando antes do timer disparar
+          const organicDelayMs = Math.floor(Math.random() * (75000 - 45000 + 1)) + 45000;
+          const typingDurationMs = Math.floor(Math.random() * (6000 - 3500 + 1)) + 3500;
+          const waitBeforeTypingMs = Math.max(organicDelayMs - typingDurationMs, 20000);
+
+          const timer = setTimeout(async () => {
             try {
+              pendingPresentationTimers.delete(g.id);
               if (configManager.isGroupBanned(g.id) || !configManager.isGroupEnabled(g.id)) return;
+
+              // Simula presença "Digitando..." no grupo durante alguns segundos
+              try {
+                await sock.sendPresenceUpdate('composing', g.id);
+              } catch (_) {}
+
+              await new Promise((r) => setTimeout(r, typingDurationMs));
+
+              try {
+                await sock.sendPresenceUpdate('paused', g.id);
+              } catch (_) {}
+
               await sock.groupMetadata(g.id).catch(() => {});
               await sendSafeMessage(sock, g.id, { text: presentationText });
-              logger.info({ groupJid: g.id }, '[Anti-Ban] Apresentação oficial enviada com sucesso após delay de 1 minuto.');
+              await sock.sendPresenceUpdate('unavailable', g.id).catch(() => {});
+
+              logger.info(
+                { groupJid: g.id, delayMs: organicDelayMs, typingMs: typingDurationMs },
+                '[Anti-Ban] Apresentação oficial enviada com sucesso após delay e digitação simulada.'
+              );
             } catch (err) {
-              logger.error({ err, groupJid: g.id }, 'Erro ao enviar apresentação no novo grupo após delay de 1 minuto');
+              logger.error({ err, groupJid: g.id }, 'Erro ao enviar apresentação no novo grupo após delay humanizado');
             }
-          }, 60 * 1000); // 1 minuto (60.000 ms)
+          }, waitBeforeTypingMs);
+
+          pendingPresentationTimers.set(g.id, timer);
         }
       } catch (err) {
         logger.error({ err, groupJid: g?.id }, 'Erro ao processar groups.upsert');
@@ -498,5 +542,6 @@ function getSocket() {
 module.exports = {
   connectBot,
   getSocket,
-  storeMsgForRetry
+  storeMsgForRetry,
+  cancelPendingPresentation
 };

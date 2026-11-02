@@ -287,6 +287,8 @@ async function processSingleMessage(sock, msg) {
 
   // Se o usuário apenas mencionou o bot sem comando ("@bot" / "@hermes") e nenhum hook tratou
   if (isMentionPrefix && !rawBody && isGroup) {
+    const { cancelPendingPresentation } = require('../core/connection');
+    cancelPendingPresentation(from);
     const adminStatus = await checkAdminStatus(sock, from, sender);
     if (adminStatus.isAdmin || isSenderOwner) {
       await reply(translate('common.mention_greeting', { prefix: groupPrefix }));
@@ -297,6 +299,12 @@ async function processSingleMessage(sock, msg) {
   // Se não foi identificado comando válido com prefixo ou menção, encerra o pipeline
   if (effectivePrefix === null || !rawBody || !plugin) {
     return;
+  }
+
+  // Se um comando foi executado no grupo, cancela a apresentação automática pendente (evita mensagem redundante)
+  if (isGroup) {
+    const { cancelPendingPresentation } = require('../core/connection');
+    cancelPendingPresentation(from);
   }
 
   // Rate-Limit Anti-Spam por usuário (cooldown de 2 segundos)
