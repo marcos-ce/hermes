@@ -27,16 +27,26 @@ module.exports = async function deleteMessage({ sock, msg, from, sender, isBotAd
     deleteId = contextInfo.stanzaId;
     deleteParticipant = contextInfo.participant;
 
-    // Blindagem de Segurança: se a mensagem citada for do próprio bot (Hermes),
-    // SÓ apaga se o admin tiver intenção explícita de apagar no texto (ex: "apaga", "deleta", "limpa").
+    const rawText = (msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || '').toLowerCase().trim();
+    const hasExplicitDelete = /\b(apaga|apague|apaguem|apagar|deleta|delete|deletem|deletar|limpa|limpe|limpem|limpar|some|suma|sumam|sumir|tira|tire|tirem|tirar|del|exclui|exclua|excluam|excluir|remove|remova|removam|remover|borra|borre|borrar)\b/i.test(rawText);
+
     const isQuotingBot = deleteParticipant && (
       cleanJid(deleteParticipant) === botJid ||
       cleanJid(deleteParticipant) === botLid
     );
-    const rawText = (msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || '').toLowerCase().trim();
-    const hasExplicitDelete = /\b(apaga|apagar|deleta|deletar|limpa|limpar|some|tira|del|exclui|excluir)\b/i.test(rawText);
 
-    if (isQuotingBot && !hasExplicitDelete) {
+    // Se o admin citou o bot mas disse expressamente "minha mensagem" / "o que eu mandei":
+    const asksForOwnMessage = /\b(minha|meu)\s+mensag|o\s+que\s+(eu\s+)?(mandei|falei|escrevi|disse)\b/i.test(rawText);
+    if (isQuotingBot && asksForOwnMessage) {
+      const lastUserMsg = memoryEngine.getLastUserMessage(from, sender);
+      if (lastUserMsg?.msgId) {
+        deleteId = lastUserMsg.msgId;
+        deleteParticipant = lastUserMsg.participant || sender;
+      }
+    }
+
+    // Blindagem de Segurança: só bloqueia quote ao bot se NÃO houver NENHUMA intenção de exclusão
+    if (isQuotingBot && !hasExplicitDelete && !asksForOwnMessage) {
       logger.warn({ from, sender, rawText }, 'delete_message bloqueada: quote ao bot sem intenção explícita de exclusão');
       return {
         success: false,

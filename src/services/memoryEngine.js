@@ -214,6 +214,53 @@ class MemoryEngine {
   }
 
   /**
+   * Obtém a última mensagem enviada por um remetente específico no grupo que possua msgId (stanzaId).
+   * @param {string} groupJid
+   * @param {string} senderJid
+   * @returns {{ id: number, msgId: string, participant: string, text: string }|null}
+   */
+  getLastUserMessage(groupJid, senderJid) {
+    if (!groupJid || !senderJid) return null;
+    const cleanSender = String(senderJid).trim();
+
+    if (!this.db) {
+      const list = this.fallbackStore.get(groupJid) || [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const item = list[i];
+        if (item && item.msgId && (item.sender === cleanSender || item.participant === cleanSender)) {
+          return {
+            id: item.id,
+            msgId: item.msgId,
+            participant: item.participant || item.sender,
+            text: item.text
+          };
+        }
+      }
+      return null;
+    }
+
+    try {
+      const row = this.db.prepare(`
+        SELECT id, sender_jid, text, msg_id, participant
+        FROM messages
+        WHERE group_jid = ? AND (sender_jid = ? OR participant = ?) AND msg_id IS NOT NULL
+        ORDER BY id DESC
+        LIMIT 1
+      `).get(groupJid, cleanSender, cleanSender);
+
+      if (!row || !row.msg_id) return null;
+      return {
+        id: row.id,
+        msgId: row.msg_id,
+        participant: row.participant || row.sender_jid,
+        text: row.text
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
    * Converte o histórico recente em formato de diálogo legível para o prompt do modelo,
    * incluindo nome e @numero para que a IA correlacione quem disse o quê e possa agir por nome.
    * @param {string} groupJid 

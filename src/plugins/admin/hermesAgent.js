@@ -1106,7 +1106,8 @@ module.exports = {
     userPromptParts.push(`[Data e Hora Atual no Servidor: ${currentDateTimeStr} (${tz})]`);
 
     // Pedido atual do admin (único trecho tratado como instrução)
-    userPromptParts.push(`[Pedido do admin] ${msg.pushName || 'Admin'}: ${queryText}`);
+    const senderNumber = sender.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+    userPromptParts.push(`[Pedido do admin] ${msg.pushName || 'Admin'} (@${senderNumber}): ${queryText}`);
 
     const baseContent = userPromptParts.join('\n\n');
     const messages = [{ role: 'user', content: baseContent }];

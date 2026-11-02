@@ -386,7 +386,19 @@ function hasExplicitMentionSyntax(sock, msg) {
  */
 async function resolveTargetSmart(sock, msg, from, targetArg = '') {
   const isBot = createBotChecker(sock);
-  const { contextInfo } = extractContextInfo(msg);
+  const { realMsg, contextInfo } = extractContextInfo(msg);
+
+  const senderJid = cleanJid(msg?.key?.participant || msg?.key?.remoteJid || '');
+  const rawMsgText = getMessageText(realMsg).toLowerCase();
+  const rawTarget = String(targetArg || '').toLowerCase().trim();
+
+  // -1. Intenção reflexiva explícita (1ª pessoa): "me rebaixa", "para me rebaixar", "me promova", "me mute", target: "me" / "eu"
+  const isSelf = /\b(me|mim|eu|a\s+mim\s+mesmo|minha\s+conta|meu\s+cargo)\b/i.test(rawTarget) ||
+                 (/\b(me\s+(rebaixa|rebaixe|promova|promove|muta|mute|bane|bana|adverte|advirta)|para\s+me\s+(rebaixar|promover|mutar|banir|advertir))\b/i.test(rawMsgText));
+
+  if (isSelf && senderJid && !isBot(senderJid)) {
+    return await resolveParticipant(sock, from, senderJid);
+  }
 
   // 0. Ref explícito do histórico ("m123"): resolvido por lookup determinístico no SQLite
   if (typeof targetArg === 'string' && /^m\d{1,9}$/i.test(targetArg.trim())) {
