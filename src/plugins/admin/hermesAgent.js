@@ -25,7 +25,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|tranc|m[oó]dulo|link|links|antilink|antiflood|flood|spam|trava|antifake|ddi|warn|advert|aviso|ban|banir|banimento|kick|expuls|mut|silenci|desmut|puni|prote[cç][aã]o|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|boas-?vindas|aprova|licen[cç]a|assinatura|validade|vencimento|vence|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|como|usar|uso|funciona|ajuda|help|menu|comando|comandos|fun[cç][oõ]es|explica|tutorial|adm|admin|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|tranc|m[oó]dulo|link|links|antilink|antiflood|flood|spam|trava|antifake|ddi|warn|advert|avis[ao]r?|lembr[ae]|lembrete|agend[ae]r?|ban|banir|banimento|kick|expuls|mut|silenci|desmut|puni|prote[cç][aã]o|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|boas-?vindas|aprova|licen[cç]a|assinatura|validade|vencimento|vence|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|como|usar|uso|funciona|ajuda|help|menu|comando|comandos|fun[cç][oõ]es|explica|tutorial|adm|admin|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -518,11 +518,11 @@ module.exports = {
     let isContinuation = false;
     const activeClarif = wizardCache.get(`clarif:${from}:${sender}`);
     if (activeClarif) { // TTL 60s garantido pelo node-cache
-      const isShortResponse = lowerText.length <= 40 &&
-        /^(\b(esse|ele|ela|esse aqui|essa|essa daqui|sim|pode|confirmo|este|esta|bora|vai|isso|isso mesmo|o proprio)\b|@|\d+)/i.test(lowerText);
+      const isShortResponse = lowerText.length <= 50 &&
+        /^(\b(esse|ele|ela|esse aqui|essa|essa daqui|sim|pode|confirmo|este|esta|bora|vai|isso|isso mesmo|o proprio|agend[ae]|para\s+as|[aà]s|hoje|amanh[aã]|daqui)\b|@|\d+)/i.test(lowerText);
       const hasQuotedTarget = Boolean(contextInfo?.quotedMessage && !isReplyToBot);
 
-      if (isShortResponse || hasQuotedTarget) {
+      if (isReplyToBot || isShortResponse || hasQuotedTarget) {
         isContinuation = true;
       }
     } else if (wizardCache.get(`post_action:${from}:${sender}`)) {
@@ -1048,14 +1048,14 @@ module.exports = {
         ? `${Math.max(0, Math.ceil((groupData.expiresAt - Date.now()) / 86400000))}d`
         : 'vitalícia';
       userPromptParts.push(
-        `[Estado] botAdmin=${isBotAdminNow ? 'sim' : 'não (precisa ser promovido a admin do grupo para moderar)'} | licença=${licenseDays} | idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
+        `[Estado] botAdmin=${isBotAdminNow ? 'sim' : 'não (sem cargo de admin no grupo ainda)'} | licença=${licenseDays} | idioma=${lang} | horários=${schedSummary} | ativos=${activeMods.join(',') || 'nenhum'} | ` +
         `antilink=${antilinkAction},liberados=${antilinkDoms} | warnLimite=${warnCfg.maxWarns || 3} | ` +
         `antiflood=${antifloodCfg.maxMessages || 6}msg/5s,${antifloodCfg.maxChars || 2500}chars,${antifloodCfg.action || 'warn'} | ` +
         `antifake=${antifakeDdis} | agenda=${calSummary} | enquete=${pollSummary} | warns=${warnsEntries.join(' ') || 'nenhum'} | blacklist=${(groupData.blacklist || []).length}` +
         (groupDesc && /descr|regra|bio/i.test(queryText || '') ? ` | descrição="${groupDesc.slice(0, 300)}"` : '')
       );
     } else if (!isBotAdminNow) {
-      userPromptParts.push('[Aviso: Você AINDA NÃO é administrador do grupo. Se o admin pedir moderação ou perguntar se está tudo pronto, lembre-o de te promover a admin]');
+      userPromptParts.push('[Status de permissão: o bot ainda está sem cargo no grupo; só mencione isso se o admin pedir uma ação que exija permissão de grupo como banir, apagar link ou fechar grupo]');
     }
 
     // Ideia 4: Injeção da Pilha de Desfazer (Undo Stack) apenas sob demanda (economiza tokens)
@@ -1097,8 +1097,8 @@ module.exports = {
 
     // Ideia 5: Continuação ativa — TTL 60s garantido pelo node-cache (zero leak)
     const clarifKey = `clarif:${from}:${sender}`;
-    if (wizardCache.get(clarifKey)) {
-      userPromptParts.push(`[Continuação de conversa: o admin está respondendo à pergunta anterior que você fez]`);
+    if (wizardCache.get(clarifKey) || (isQuotingBot && snippet && /\?|\b(me\s+diz|me\s+diga|me\s+fala|me\s+informe|informe\s+o|qual\s+hor[aá]rio|qual\s+o\s+texto|quer\s+que\s+eu)\b/i.test(snippet))) {
+      userPromptParts.push(`[Continuação de conversa: o admin está respondendo diretamente à pergunta/solicitação anterior que você fez. Conecte imediatamente a resposta ao assunto pendente e execute a ferramenta se o horário ou alvo foi informado!]`);
       wizardCache.del(clarifKey);
     }
 
@@ -1281,11 +1281,14 @@ module.exports = {
 
         // Ideia 5: Se o Hermes terminou a resposta fazendo uma pergunta de clarificação,
         // ativa a janela de continuidade de 60 segundos para este admin
-        if (/\?(\s*)$/.test(finalReply)) {
+        if (/\?|\b(me\s+diz|me\s+diga|me\s+fala|me\s+informe|informe\s+o|qual\s+hor[aá]rio|qual\s+o\s+texto|quer\s+que\s+eu)\b/i.test(finalReply)) {
           wizardCache.set(`clarif:${from}:${sender}`, { question: finalReply }, 60);
         }
       } else if (degraded) {
         await reply(tr(lang, 'hermes.degraded'));
+      } else {
+        logger.warn({ from, sender, queryText }, 'Hermes retornou resposta vazia sem tool calls; enviando fallback de clarificação');
+        await reply(tr(lang, 'hermes.unclear'));
       }
     } catch (err) {
       logger.error({ err }, 'Erro inesperado na interação do Hermes IA');
