@@ -52,7 +52,12 @@ class SiteOrders {
 
   pendingIds() {
     return [...this.orders.values()]
-      .filter((o) => o.status === 'queued' || o.status === 'processing' || (o.status === 'partial' && o.error) || o.status === 'error' || o.retry)
+      .filter((o) => {
+        if (o.status === 'done' || o.status === 'rejected') return false;
+        if (o.status === 'waiting_owner_join' && o.notified && !o.retry) return false;
+        if (o.notified && !o.retry) return false;
+        return o.status === 'queued' || o.retry || (o.status === 'error' && !o.notified);
+      })
       .map((o) => o.paymentId);
   }
 

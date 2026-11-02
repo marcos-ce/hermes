@@ -148,8 +148,8 @@ class SiteBridge {
   }
 
   /**
-   * Garante que o pedido 187419436876 esteja configurado com 30 dias (Plano Mensal)
-   * e pronto para ser reprocessado sem erros.
+   * Garante que o pedido 187419436876 esteja configurado com 30 dias (Plano Mensal),
+   * registrado com segurança sem repetições nem loops de mensagens.
    */
   _ensureOrder187419436876() {
     const id = '187419436876';
@@ -157,20 +157,18 @@ class SiteBridge {
     if (existing) {
       existing.plan = 'mensal';
       existing.days = 30;
+      existing.status = 'waiting_owner_join';
+      existing.notified = true; // Impede qualquer disparo repetido
+      existing.retry = false;
       delete existing.error;
       delete existing.reason;
       if (Array.isArray(existing.groups)) {
         for (const g of existing.groups) {
           g.plan = 'mensal';
           g.days = 30;
-          if (g.status === 'partial' || g.status === 'error' || g.status === 'pending') {
-            g.status = 'waiting_owner_join';
-          }
+          g.status = 'waiting_owner_join';
+          g.notified = true;
         }
-      }
-      if (existing.status !== 'done') {
-        existing.status = 'queued';
-        existing.retry = true;
       }
       siteOrders.upsert(id, existing);
     }
@@ -234,9 +232,12 @@ class SiteBridge {
 
         const id = String(p.id);
         const existing = siteOrders.get(id);
-        const isErroneous = existing?.error || existing?.status === 'error';
-        if (existing && ['done', 'rejected'].includes(existing.status) && !existing.retry) continue;
-        if (existing && existing.status === 'partial' && existing.reason === 'no_valid_invite' && !existing.retry && !isErroneous) continue;
+
+        // Se o pedido já foi registrado e notificado, ou já está concluído/aguardando entrada: NUNCA re-enfileirar!
+        if (existing) {
+          if (existing.notified && !existing.retry) continue;
+          if (['done', 'waiting_owner_join', 'partial', 'rejected'].includes(existing.status) && !existing.retry) continue;
+        }
 
         if (!existing) {
           siteOrders.upsert(id, { status: 'queued', groups: null });
@@ -358,9 +359,14 @@ class SiteBridge {
   // ---------------- Fila sequencial ----------------
 
   _enqueue(paymentId) {
-    if (this.queued.has(paymentId)) return;
-    this.queued.add(paymentId);
-    this.queue.push(paymentId);
+    const id = String(paymentId);
+    if (this.queued.has(id)) return;
+    const existing = siteOrders.get(id);
+    if (existing && (existing.notified || ['done', 'waiting_owner_join', 'rejected'].includes(existing.status)) && !existing.retry) {
+      return;
+    }
+    this.queued.add(id);
+    this.queue.push(id);
     this._drain();
   }
 
@@ -422,7 +428,7 @@ class SiteBridge {
   async _process(id, options = {}) {
     let order = siteOrders.get(id);
     const force = Boolean(options.force || order?.retry);
-    if (order && ['done', 'rejected'].includes(order.status) && !force) return;
+    if (order && (order.notified || ['done', 'waiting_owner_join', 'rejected'].includes(order.status)) && !force) return;
     if (order && order.status === 'partial' && order.reason === 'no_valid_invite' && !force && !order.error) return;
 
     let planInfo = null;
@@ -594,17 +600,18 @@ class SiteBridge {
           `• Plano: *${planLabel}* — R$ ${paymentAmount}\n` +
           `• Grupo: "${groupName}"\n` +
           `• Link do Grupo: https://chat.whatsapp.com/${g.code}\n` +
-          `• ID Pagamento: ${id}\n\n` +
-          `👉 *AÇÃO NECESSÁRIA (100% Blindado Anti-Ban):*\n` +
-          `1. Clique no link do grupo acima pelo seu celular e entre.\n` +
-          `2. O Hermes reconhecerá sua entrada e ativará automaticamente os *${planInfo.days} dias*!\n` +
-          `*(Zero comandos necessários no grupo, tudo automático ao entrar)*`;
+          `• ID Pagamento: ${id}`;
 
         await this._notifyOwner(newOrderMsg);
       }
     }
 
+    const allDone = order.groups.every(g => g.status === 'done');
+    const finalStatus = allDone ? 'done' : 'waiting_owner_join';
+
     siteOrders.upsert(id, {
+      status: finalStatus,
+      notified: true,
       groups: order.groups,
       name: meta.name,
       phone: meta.phone,
