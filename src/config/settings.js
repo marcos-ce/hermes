@@ -42,6 +42,8 @@ class Settings {
     this.siteBridgeHost = process.env.SITE_BRIDGE_HOST || '127.0.0.1';
     this.botInternalSecret = process.env.BOT_INTERNAL_SECRET || '';
     this.mpAccessToken = process.env.MP_ACCESS_TOKEN || '';
+    this.mpPollingEnabled = process.env.MP_POLLING_ENABLED !== 'false';
+    this.mpPollingIntervalSeconds = parseInt(process.env.MP_POLLING_INTERVAL_SECONDS, 10) || 30;
     this.siteVerifyPayment = process.env.SITE_VERIFY_PAYMENT !== 'false';
     this.siteUrl = process.env.SITE_URL || '';
     this.autoLeaveAllExpired = process.env.AUTO_LEAVE_ALL_EXPIRED === 'true';

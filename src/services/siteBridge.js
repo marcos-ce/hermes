@@ -46,9 +46,80 @@ class SiteBridge {
     // 1. Recuperação após crash/restart: reprocessa pedidos pendentes em fila
     for (const id of siteOrders.pendingIds()) this._enqueue(id);
 
-    // 2. Modo Servidor Webhook HTTP (Opcional, caso tenha porta pública configurada)
+    // 2. Modo Polling do Mercado Pago (Ideal para Discloud e ambientes sem porta pública exposta)
+    if (settings.mpAccessToken && settings.mpPollingEnabled) {
+      this._startPolling();
+    }
+
+    // 3. Modo Servidor Webhook HTTP (Opcional, caso tenha porta pública configurada)
     if (settings.siteBridgeEnabled) {
       this._startServer();
+    }
+  }
+
+  /**
+   * Inicia busca ativa (polling) periódica por novos pagamentos Pix aprovados no Mercado Pago.
+   * Não exige abertura de portas, túneis ou IPs públicos: funciona nativamente na Discloud.
+   * Consulta HTTPS pura à API do Mercado Pago — 100% isolado do WhatsApp (zero risco Anti-Ban).
+   */
+  _startPolling() {
+    const intervalSec = Math.max(settings.mpPollingIntervalSeconds || 30, 10);
+    logger.info(`siteBridge: Polling ativo do Mercado Pago iniciado (busca a cada ${intervalSec}s).`);
+
+    // Primeira checagem após 5s para dar tempo da conexão do WhatsApp estabilizar
+    setTimeout(() => this._pollMercadoPago(), 5000);
+
+    this.pollInterval = setInterval(() => {
+      this._pollMercadoPago();
+    }, intervalSec * 1000);
+    this.pollInterval.unref();
+  }
+
+  async _pollMercadoPago() {
+    if (!settings.mpAccessToken || this.isPolling) return;
+    this.isPolling = true;
+
+    try {
+      const url = 'https://api.mercadopago.com/v1/payments/search?sort=date_approved&criteria=desc&status=approved&limit=15';
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${settings.mpAccessToken}` },
+        signal: AbortSignal.timeout(12000)
+      });
+
+      if (!res.ok) {
+        logger.warn({ status: res.status }, 'siteBridge: falha ao consultar pagamentos recentes no Mercado Pago');
+        return;
+      }
+
+      const data = await res.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+      const now = Date.now();
+      const maxAgeMs = 24 * 60 * 60 * 1000; // só processa pagamentos das últimas 24h
+
+      for (const p of results) {
+        if (!p?.id || p.status !== 'approved' || p.payment_method_id !== 'pix') continue;
+        const approvedMs = p.date_approved ? new Date(p.date_approved).getTime() : 0;
+        if (approvedMs > 0 && now - approvedMs > maxAgeMs) continue;
+
+        const md = p.metadata || {};
+        // Extrai link de convite em qualquer campo de metadata ou descrição
+        const rawLink = md.invite_link || md.invite_link_2 || md.invitelink || md.group_link || md.link || md.whatsapp_link || '';
+        const hasInviteCode = Boolean(extractInviteCode(rawLink) || extractInviteCode(p.description));
+        if (!hasInviteCode) continue;
+
+        const id = String(p.id);
+        const existing = siteOrders.get(id);
+        if (existing && ['done', 'partial', 'rejected'].includes(existing.status)) continue;
+
+        if (!existing) {
+          siteOrders.upsert(id, { status: 'queued', groups: null });
+        }
+        this._enqueue(id);
+      }
+    } catch (err) {
+      logger.warn({ err: err?.message || err }, 'siteBridge: erro no ciclo de polling do Mercado Pago');
+    } finally {
+      this.isPolling = false;
     }
   }
 
@@ -253,9 +324,23 @@ class SiteBridge {
       }
 
       const md = payment.metadata || {};
-      const codes = [...new Set([extractInviteCode(md.invite_link), extractInviteCode(md.invite_link_2)].filter(Boolean))];
-      let name = String(md.name || 'Cliente').replace(/[\u0000-\u001F<>]/g, '').slice(0, 80);
-      const phone = String(md.phone || '').replace(/\D/g, '').slice(0, 15);
+      const possibleLinks = [
+        md.invite_link,
+        md.invite_link_2,
+        md.invitelink,
+        md.group_link,
+        md.link,
+        md.whatsapp_link,
+        payment.description
+      ];
+      const codes = [...new Set(possibleLinks.map(extractInviteCode).filter(Boolean))];
+
+      let name = String(md.name || md.customer_name || md.client_name || payment.payer?.first_name || 'Cliente')
+        .replace(/[\u0000-\u001F<>]/g, '')
+        .slice(0, 80);
+      const phone = String(md.phone || md.customer_phone || md.whatsapp || md.celular || payment.payer?.phone?.number || '')
+        .replace(/\D/g, '')
+        .slice(0, 15);
 
       // Se o nome recebido for genérico ('Cliente') ou vazio, busca no histórico de pedidos anteriores
       if (!name || name === 'Cliente') {
