@@ -124,11 +124,11 @@ async function connectBot(options = {}) {
     authState = await useMultiFileAuthState(authDir);
   }
   const { state, saveCreds } = authState;
-  let version = [2, 3000, 1015901307];
+  let version = [2, 3000, 1043857760];
   let isLatest = false;
   try {
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout de 5s ao buscar versão')), 5000)
+      setTimeout(() => reject(new Error('Timeout de 8s ao buscar versão')), 8000)
     );
     const verRes = await Promise.race([fetchLatestBaileysVersion(), timeoutPromise]);
     if (verRes?.version) {
@@ -163,7 +163,7 @@ async function connectBot(options = {}) {
       return undefined;
     },
     shouldIgnoreJid: (jid) => typeof jid === 'string' && (jid.endsWith('@newsletter') || jid.endsWith('@broadcast')),
-    browser: Browsers.windows('Desktop')
+    browser: Browsers.windows('Chrome')
   });
 
   currentSock = sock;
@@ -452,9 +452,26 @@ async function connectBot(options = {}) {
           configManager.flushSync();
         }
 
-        // BLINDAGEM ANTI-BAN: Silêncio total ao entrar no grupo.
-        // O bot não dispara mensagens automáticas imediatamente ao ingressar, eliminando o principal gatilho de spam da Meta.
-        // Ele permanece discreto aguardando organicamente o primeiro comando (!config, !menu) ou menção de um administrador.
+        // Apresentação oficial humanizada em grupos novos com delay de 1 minuto (60s)
+        if (shouldSendWelcome) {
+          const groupPrefix = configManager.getGroupPrefix(g.id) || '!';
+          const groupLang = configManager.getGroupLang(g.id) || 'pt';
+          const presentationText = t(groupLang, 'saas.group_presentation', { prefix: groupPrefix });
+
+          // ANTI-BAN HUMANIZADO: Aguarda exatamente 1 minuto (60 segundos) após entrar no grupo
+          // antes de enviar a apresentação oficial. Isso simula um humano que entrou, aguardou e só
+          // então enviou a mensagem, eliminando a flag de bot instantâneo da Meta.
+          setTimeout(async () => {
+            try {
+              if (configManager.isGroupBanned(g.id) || !configManager.isGroupEnabled(g.id)) return;
+              await sock.groupMetadata(g.id).catch(() => {});
+              await sendSafeMessage(sock, g.id, { text: presentationText });
+              logger.info({ groupJid: g.id }, '[Anti-Ban] Apresentação oficial enviada com sucesso após delay de 1 minuto.');
+            } catch (err) {
+              logger.error({ err, groupJid: g.id }, 'Erro ao enviar apresentação no novo grupo após delay de 1 minuto');
+            }
+          }, 60 * 1000); // 1 minuto (60.000 ms)
+        }
       } catch (err) {
         logger.error({ err, groupJid: g?.id }, 'Erro ao processar groups.upsert');
       }
