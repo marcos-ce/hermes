@@ -52,8 +52,18 @@ class SiteOrders {
 
   pendingIds() {
     return [...this.orders.values()]
-      .filter((o) => o.status === 'queued' || o.status === 'processing')
+      .filter((o) => o.status === 'queued' || o.status === 'processing' || (o.status === 'partial' && o.error) || o.status === 'error' || o.retry)
       .map((o) => o.paymentId);
+  }
+
+  /**
+   * Retorna os pedidos mais recentes ordenados por data
+   * @param {number} [limit=25]
+   */
+  getAll(limit = 25) {
+    return [...this.orders.values()]
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+      .slice(0, limit);
   }
 
   /**

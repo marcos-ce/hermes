@@ -12,15 +12,90 @@ const PLANS = {
 };
 
 /**
- * Resolve o plano e quantidade de dias com tolerância inteligente a pequenas variações de valor/centavos.
- * @param {number|string} amount
- * @returns {{ plan: string, days: number, label: string }|null}
+ * Resolve o plano e quantidade de dias com prioridade inteligente:
+ * 1. Pedido específico 187419436876: intervenção do dono (Plano Mensal - 30 dias)
+ * 2. Dias explícitos em metadata (days, dias, duration)
+ * 3. Plano explícito em metadata (plan, plano, plan_name, type)
+ * 4. Título ou descrição no Mercado Pago (description, items[0].title, items[0].description)
+ * 5. Valor pago (amount / transaction_amount / total_paid_amount)
+ * 6. Fallback seguro: Sempre Mensal (30 dias) - nunca rebaixa cliente pagante para 7 dias
+ *
+ * @param {object} param0
+ * @returns {{ plan: string, days: number, label: string }}
  */
-function resolvePlan(amount) {
-  const val = Number(amount) || 0;
-  if (val <= 0) return null;
-  if (val <= 20) return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+function resolvePlanInfo({ payment, amount, metadata, description, title, rawPlan, rawDays, orderId } = {}) {
+  // Pedido 187419436876: intervenção direta solicitada pelo dono (30 dias garantidos)
+  if (String(orderId) === '187419436876') {
+    return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
+  }
+
+  const md = metadata || payment?.metadata || {};
+  const desc = String(description || payment?.description || '').toLowerCase();
+  const itemTitle = String(title || payment?.additional_info?.items?.[0]?.title || '').toLowerCase();
+  const itemDesc = String(payment?.additional_info?.items?.[0]?.description || '').toLowerCase();
+  const extRef = String(payment?.external_reference || '').toLowerCase();
+  const combinedText = `${desc} ${itemTitle} ${itemDesc} ${extRef}`;
+
+  // 1. Dias explícitos em metadata ou argumentos
+  const explicitDays = Number(rawDays || md.days || md.dias || md.duration || md.periodo || 0);
+  if (explicitDays > 0) {
+    if (explicitDays >= 25) {
+      return { plan: 'mensal', days: explicitDays, label: `Mensal (${explicitDays} dias)` };
+    }
+    if (explicitDays <= 15) {
+      return { plan: 'teste', days: explicitDays, label: `Teste (${explicitDays} dias)` };
+    }
+    return { plan: explicitDays >= 20 ? 'mensal' : 'teste', days: explicitDays, label: `${explicitDays} dias` };
+  }
+
+  // 2. Metadados do checkout / webhook
+  const planStr = String(rawPlan || md.plan || md.plano || md.plan_id || md.plan_name || md.type || md.tipo || '').toLowerCase();
+  if (planStr.includes('mensal') || planStr.includes('month') || planStr.includes('30') || planStr.includes('pro') || planStr.includes('padrao')) {
+    return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
+  }
+  if (planStr.includes('trimestral') || planStr.includes('90')) {
+    return { plan: 'trimestral', days: 90, label: 'Trimestral (90 dias)' };
+  }
+  if (planStr.includes('anual') || planStr.includes('yearly') || planStr.includes('365')) {
+    return { plan: 'anual', days: 365, label: 'Anual (365 dias)' };
+  }
+  if (planStr.includes('teste') || planStr.includes('trial') || planStr.includes('test') || planStr === '7') {
+    return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+  }
+
+  // 3. Título e descrição do produto no Mercado Pago
+  if (combinedText.includes('mensal') || combinedText.includes('30 dias') || combinedText.includes('30d') || combinedText.includes('1 mes') || combinedText.includes('1 mês')) {
+    return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
+  }
+  if (combinedText.includes('trimestral') || combinedText.includes('90 dias')) {
+    return { plan: 'trimestral', days: 90, label: 'Trimestral (90 dias)' };
+  }
+  if (combinedText.includes('teste') || combinedText.includes('7 dias') || combinedText.includes('7d') || combinedText.includes('trial')) {
+    return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+  }
+
+  // 4. Valor financeiro
+  const val = Number(amount || payment?.transaction_amount || payment?.total_paid_amount || 0);
+  if (val >= 25) {
+    return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
+  }
+  // Somente se for estritamente em torno de R$ 10 E sem nenhuma menção a mensal
+  if (val >= 8 && val <= 15) {
+    return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+  }
+
+  // 5. Fallback seguro: Sempre Mensal (30 dias)
   return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
+}
+
+/**
+ * Função de conveniência retrocompatível
+ */
+function resolvePlan(amount, opts = {}) {
+  if (typeof amount === 'object' && amount !== null) {
+    return resolvePlanInfo(amount);
+  }
+  return resolvePlanInfo({ amount, ...opts });
 }
 
 const MAX_BODY_BYTES = 4096;
@@ -55,6 +130,9 @@ class SiteBridge {
     this.sock = sock;
     siteOrders.load();
 
+    // Tratamento e recuperação automática do pedido 187419436876 (Plano Mensal - 30 dias)
+    this._ensureOrder187419436876();
+
     // 1. Recuperação após crash/restart: reprocessa pedidos pendentes em fila
     for (const id of siteOrders.pendingIds()) this._enqueue(id);
 
@@ -66,6 +144,35 @@ class SiteBridge {
     // 3. Modo Servidor Webhook HTTP (Opcional, caso tenha porta pública configurada)
     if (settings.siteBridgeEnabled) {
       this._startServer();
+    }
+  }
+
+  /**
+   * Garante que o pedido 187419436876 esteja configurado com 30 dias (Plano Mensal)
+   * e pronto para ser reprocessado sem erros.
+   */
+  _ensureOrder187419436876() {
+    const id = '187419436876';
+    const existing = siteOrders.get(id);
+    if (existing) {
+      existing.plan = 'mensal';
+      existing.days = 30;
+      delete existing.error;
+      delete existing.reason;
+      if (Array.isArray(existing.groups)) {
+        for (const g of existing.groups) {
+          g.plan = 'mensal';
+          g.days = 30;
+          if (g.status === 'partial' || g.status === 'error' || g.status === 'pending') {
+            g.status = 'waiting_owner_join';
+          }
+        }
+      }
+      if (existing.status !== 'done') {
+        existing.status = 'queued';
+        existing.retry = true;
+      }
+      siteOrders.upsert(id, existing);
     }
   }
 
@@ -127,7 +234,9 @@ class SiteBridge {
 
         const id = String(p.id);
         const existing = siteOrders.get(id);
-        if (existing && ['done', 'partial', 'rejected'].includes(existing.status)) continue;
+        const isErroneous = existing?.error || existing?.status === 'error';
+        if (existing && ['done', 'rejected'].includes(existing.status) && !existing.retry) continue;
+        if (existing && existing.status === 'partial' && existing.reason === 'no_valid_invite' && !existing.retry && !isErroneous) continue;
 
         if (!existing) {
           siteOrders.upsert(id, { status: 'queued', groups: null });
@@ -265,7 +374,7 @@ class SiteBridge {
           await this._process(id);
         } catch (err) {
           logger.error({ err: err.message, id }, 'siteBridge: erro ao processar pedido');
-          siteOrders.upsert(id, { status: 'partial', error: String(err.message).slice(0, 200) });
+          siteOrders.upsert(id, { status: 'error', error: String(err.message).slice(0, 200) });
           await this._notifyOwner(`⚠️ Erro ao processar o pedido ${id}: ${err.message}\nTrate manualmente.`);
         } finally {
           this.queued.delete(id);
@@ -310,18 +419,25 @@ class SiteBridge {
     });
   }
 
-  async _process(id) {
+  async _process(id, options = {}) {
     let order = siteOrders.get(id);
-    if (order && ['done', 'partial', 'rejected'].includes(order.status)) return;
+    const force = Boolean(options.force || order?.retry);
+    if (order && ['done', 'rejected'].includes(order.status) && !force) return;
+    if (order && order.status === 'partial' && order.reason === 'no_valid_invite' && !force && !order.error) return;
 
-    let planInfo;
-    let meta;
-    if (order?.groups && order.plan) {
+    let planInfo = null;
+    let meta = null;
+    let payment = null;
+
+    const isSpecialOrder = String(id) === '187419436876';
+
+    if (order?.groups && order.plan && !force) {
       // retomada: dados já validados anteriormente
-      planInfo = { plan: order.plan, days: order.days };
-      meta = { name: order.name, phone: order.phone };
+      const days = isSpecialOrder ? 30 : (order.days || 30);
+      const plan = isSpecialOrder ? 'mensal' : (order.plan || 'mensal');
+      planInfo = { plan, days, label: plan === 'teste' ? 'Teste (7 dias)' : `Mensal (${days} dias)` };
+      meta = { name: order.name || 'Cliente', phone: order.phone || '' };
     } else {
-      let payment;
       if (settings.siteVerifyPayment) {
         payment = await this._verify(id);
         if (payment.notFound || payment.status !== 'approved') {
@@ -329,17 +445,14 @@ class SiteBridge {
           await this._notifyOwner(`🚫 Pedido ${id} rejeitado (pagamento não aprovado no Mercado Pago).`);
           return;
         }
-        planInfo = resolvePlan(payment.transaction_amount);
-        if (!planInfo) {
-          planInfo = { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
-        }
+        planInfo = isSpecialOrder ? { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' } : resolvePlanInfo({ payment, orderId: id });
       } else {
         // Modo inseguro (sem verificação): não aceita nada além do plano padrão
         planInfo = { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
         payment = { metadata: {} };
       }
 
-      const md = payment.metadata || {};
+      const md = payment?.metadata || {};
       const possibleLinks = [
         md.invite_link,
         md.invite_link_2,
@@ -347,16 +460,16 @@ class SiteBridge {
         md.group_link,
         md.link,
         md.whatsapp_link,
-        payment.description,
-        payment.additional_info?.items?.[0]?.description,
-        payment.external_reference
+        payment?.description,
+        payment?.additional_info?.items?.[0]?.description,
+        payment?.external_reference
       ];
       const codes = [...new Set(possibleLinks.map(extractInviteCode).filter(Boolean))];
 
-      let name = String(md.name || md.customer_name || md.client_name || payment.payer?.first_name || 'Cliente')
+      let name = String(md.name || md.customer_name || md.client_name || payment?.payer?.first_name || 'Cliente')
         .replace(/[\u0000-\u001F<>]/g, '')
         .slice(0, 80);
-      const phone = String(md.phone || md.customer_phone || md.whatsapp || md.celular || payment.payer?.phone?.number || '')
+      const phone = String(md.phone || md.customer_phone || md.whatsapp || md.celular || payment?.payer?.phone?.number || '')
         .replace(/\D/g, '')
         .slice(0, 15);
 
@@ -371,23 +484,27 @@ class SiteBridge {
       meta = { name, phone };
 
       if (codes.length === 0) {
-        siteOrders.upsert(id, { status: 'partial', plan: planInfo.plan, days: planInfo.days, ...meta, groups: [], reason: 'no_valid_invite' });
+        const amount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10);
+        siteOrders.upsert(id, { status: 'partial', plan: planInfo.plan, days: planInfo.days, amount, ...meta, groups: [], reason: 'no_valid_invite' });
         await this._notifyOwner(
           `⚠️ Pagamento Pix Aprovado no Mercado Pago, mas sem link de convite válido!\n\n` +
           `• Cliente: ${name}\n` +
           `• WhatsApp: https://wa.me/${phone} (${phone})\n` +
-          `• Plano: ${planInfo.plan} (R$ ${payment?.transaction_amount || 0})\n` +
+          `• Plano: ${planInfo.label} (R$ ${amount})\n` +
           `• ID Mercado Pago: ${id}\n\n` +
           `Entre em contato com o cliente ou libere manualmente via !liberar <link> <dias>.`
         );
         return;
       }
+
+      const amount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10);
       order = siteOrders.upsert(id, {
         status: 'processing',
         plan: planInfo.plan,
         days: planInfo.days,
+        amount,
         ...meta,
-        groups: codes.map((code) => ({ code, status: 'pending' }))
+        groups: codes.map((code) => ({ code, status: 'pending', days: planInfo.days, plan: planInfo.plan }))
       });
     }
 
@@ -434,8 +551,10 @@ class SiteBridge {
         g.renewal = true;
         g.jid = groupJid;
         g.groupName = groupName;
+        g.days = planInfo.days;
+        g.plan = planInfo.plan;
 
-        const planLabel = planInfo.plan === 'teste' ? 'Teste 7 dias' : 'Mensal 30 dias';
+        const planLabel = planInfo.plan === 'teste' ? 'Teste (7 dias)' : `Mensal (${planInfo.days} dias)`;
         const renewMsg =
           `🔁 *Renovação Aprovada & Licença Estendida!*\n\n` +
           `• Cliente: ${meta.name}\n` +
@@ -462,9 +581,11 @@ class SiteBridge {
         g.status = 'waiting_owner_join';
         g.jid = groupJid;
         g.groupName = groupName;
+        g.days = planInfo.days;
+        g.plan = planInfo.plan;
 
-        const planLabel = planInfo.plan === 'teste' ? 'Teste (7 dias)' : 'Mensal (30 dias)';
-        const paymentAmount = payment?.transaction_amount || (planInfo.plan === 'teste' ? 10 : 32);
+        const planLabel = planInfo.plan === 'teste' ? 'Teste (7 dias)' : `Mensal (${planInfo.days} dias)`;
+        const paymentAmount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10);
 
         const newOrderMsg =
           `🛒 *Novo Pix Aprovado no Mercado Pago!*\n\n` +
@@ -483,7 +604,58 @@ class SiteBridge {
       }
     }
 
-    siteOrders.upsert(id, { groups: order.groups, name: meta.name, phone: meta.phone, plan: planInfo.plan, days: planInfo.days });
+    siteOrders.upsert(id, {
+      groups: order.groups,
+      name: meta.name,
+      phone: meta.phone,
+      plan: planInfo.plan,
+      days: planInfo.days,
+      amount: payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10),
+      retry: false
+    });
+  }
+
+  /**
+   * Força o reprocessamento manual de um pedido pelo ID do Mercado Pago.
+   * @param {string} id 
+   * @param {number} [days] 
+   */
+  async reprocessOrder(id, days = null) {
+    const existing = siteOrders.get(id);
+    const targetDays = (days && Number(days) > 0) ? Number(days) : (String(id) === '187419436876' ? 30 : null);
+
+    if (!existing) {
+      siteOrders.upsert(id, {
+        status: 'queued',
+        days: targetDays || 30,
+        plan: (targetDays && targetDays < 20) ? 'teste' : 'mensal',
+        retry: true
+      });
+      this._enqueue(id);
+      return { ok: true, queued: true };
+    }
+
+    if (targetDays) {
+      existing.days = targetDays;
+      existing.plan = targetDays < 20 ? 'teste' : 'mensal';
+      if (Array.isArray(existing.groups)) {
+        for (const g of existing.groups) {
+          g.days = targetDays;
+          g.plan = existing.plan;
+          if (g.status === 'partial' || g.status === 'error' || g.status === 'done') {
+            g.status = 'pending';
+          }
+        }
+      }
+    }
+
+    delete existing.error;
+    delete existing.reason;
+    existing.status = 'queued';
+    existing.retry = true;
+    siteOrders.upsert(id, existing);
+    this._enqueue(id);
+    return { ok: true, order: existing };
   }
 
   /**
@@ -545,4 +717,7 @@ class SiteBridge {
   }
 }
 
-module.exports = new SiteBridge();
+const instance = new SiteBridge();
+instance.resolvePlanInfo = resolvePlanInfo;
+instance.resolvePlan = resolvePlan;
+module.exports = instance;

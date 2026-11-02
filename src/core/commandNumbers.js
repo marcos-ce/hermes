@@ -42,7 +42,8 @@ const COMMAND_NUMBER_MAP = {
   '30': 'link',
   '31': 'mutemember',
   '32': 'setdesc',
-  '33': 'hermes'
+  '33': 'hermes',
+  '34': 'pedido'
 };
 
 /**
