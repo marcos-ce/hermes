@@ -10,7 +10,8 @@ const { checkCooldown, sendSafeMessage } = require('../../utils/antiBan');
 const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
 const logger = require('../../utils/logger');
-const pollTracker = require('../../utils/pollTracker');
+const pollTracker  = require('../../utils/pollTracker');
+const intentStore  = require('../../services/intentStore');
 const { t: tr } = require('../../utils/i18n');
 
 // Cache em memória para debounce de alertas de erro enviados ao dono (10 min de cooldown)
@@ -1144,6 +1145,13 @@ module.exports = {
     // Data e Hora em Tempo Real (no fim do contexto para proteger o cache de prefixo)
     userPromptParts.push(`[Data e Hora Atual no Servidor: ${currentDateTimeStr} (${tz})]`);
 
+    // IntentStore: injeta histórico compacto das últimas 5 ações agênticas no grupo
+    // Habilita: "desfaz", "faz de novo", "o que fez hoje?", prevenção de duplicata
+    const recentActionsBlock = intentStore.formatForPrompt(from, 5);
+    if (recentActionsBlock) {
+      userPromptParts.push(recentActionsBlock);
+    }
+
     // Pedido atual do admin (único trecho tratado como instrução)
     const senderNumber = sender.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
     // Injeta identidade do remetente como âncora explícita ANTES do pedido
@@ -1292,6 +1300,18 @@ module.exports = {
               wizardCache.set(`undo_stack:${from}`, stack, 1800);
               wizardCache.set(`undo:${from}`, stack[0], 1800);
             }
+
+            // IntentStore: persiste ação agêntica bem-sucedida para undo robusto,
+            // relatório de atividade ("o que você fez hoje?") e prevenção de duplicata
+            intentStore.record(
+              from,
+              sender,
+              msg?.pushName || '',
+              call.name,
+              call.args,
+              true,
+              execResult.message || ''
+            );
           } else if (execResult?.error) {
             await reply(execResult.error);
           }
