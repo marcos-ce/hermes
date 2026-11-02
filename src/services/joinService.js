@@ -20,8 +20,11 @@ function normalizeGroupJid(id) {
 }
 
 function renewalUrl() {
-  // Abre o modal do site já em modo "Renovar"
-  if (settings.siteUrl) return `${settings.siteUrl.replace(/[?#].*$/, '')}?renovar=1`;
+  // Abre o modal do site já em modo "Renovar" (normaliza barras e remove parâmetros prévios)
+  if (settings.siteUrl) {
+    const base = settings.siteUrl.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
+    return `${base}/?renovar=1`;
+  }
   return settings.ownerNumber ? `https://wa.me/${settings.ownerNumber}` : '';
 }
 
