@@ -410,9 +410,47 @@ async function connectBot(options = {}) {
         }
         if (configManager.isGroupBanned(g.id)) continue;
 
-        const { shouldSendWelcome } = configManager.ensureGroupStarterKit(g.id, g.subject || '');
+        // Verifica se há licença pendente desta compra registrada pelo siteBridge
+        const siteOrders = require('../services/siteOrders');
+        let inviteCode = null;
+        try {
+          inviteCode = await sock.groupInviteCode(g.id);
+        } catch (_) {}
+
+        const pending = siteOrders.claimPendingGroup(g.id, inviteCode);
+        const effectiveDays = pending ? pending.days : 30;
+
+        const { shouldSendWelcome } = configManager.ensureGroupStarterKit(g.id, g.subject || '', effectiveDays);
         configManager.markWelcomeSent(g.id, true);
-        configManager.flushSync();
+
+        if (pending) {
+          const grp = configManager.getGroup(g.id);
+          if (grp) {
+            grp.ownerName = pending.ownerName || '';
+            grp.ownerPhone = pending.ownerPhone || '';
+            grp.autoLeave = true;
+            grp.plan = pending.plan;
+            grp.lastPaymentId = String(pending.paymentId);
+            configManager.setGroupExpiry(g.id, Date.now() + effectiveDays * 24 * 60 * 60 * 1000);
+          }
+          configManager.flushSync();
+
+          // Notifica o dono no Telegram confirmando a ativação
+          try {
+            const siteBridge = require('../services/siteBridge');
+            siteBridge.notifyActivationSuccess({
+              groupName: g.subject || 'Grupo',
+              groupJid: g.id,
+              days: effectiveDays,
+              ownerName: pending.ownerName,
+              ownerPhone: pending.ownerPhone
+            });
+          } catch (err) {
+            logger.warn({ err: err.message }, 'Falha ao notificar ativação no Telegram');
+          }
+        } else {
+          configManager.flushSync();
+        }
 
         if (shouldSendWelcome) {
           const groupPrefix = configManager.getGroupPrefix(g.id) || '!';

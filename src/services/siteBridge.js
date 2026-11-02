@@ -382,84 +382,117 @@ class SiteBridge {
     const sock = await this._waitSocket();
     siteOrders.upsert(id, { status: 'processing' });
 
-    let first = true;
+    // FLUXO 100% BLINDADO ANTI-BAN: O bot NUNCA executa groupAcceptInvite.
+    // Ele consulta os metadados do grupo, registra a licença pendente e avisa o dono no Telegram com o link.
+    // O dono clica no link pelo app oficial do WhatsApp e entra humanamente. O bot ativa os dias sozinho ao detectar a entrada!
+    const configManager = require('../core/configManager');
+
     for (const g of order.groups) {
-      if (g.status !== 'pending') continue;
-      await this._waitJoinSlot(id);
-      if (!first) await randomDelay(20000, 60000); // anti-ban entre entradas
-      first = false;
+      let groupJid = null;
+      let groupName = 'Grupo';
 
-      // Marca antes de agir: se o processo cair, NÃO soma dias duas vezes
-      g.status = 'attempting';
-      g.attemptedAt = Date.now();
-      siteOrders.upsert(id, { groups: order.groups });
-
-      let result;
+      // Consulta informações do convite sem forçar entrada (leitura pública oficial)
       try {
-        result = await joinAndLicense(sock, {
-          inviteCode: g.code,
+        const inviteInfo = await sock.groupGetInviteInfo(g.code);
+        if (inviteInfo?.id) {
+          groupJid = inviteInfo.id.endsWith('@g.us') ? inviteInfo.id : `${inviteInfo.id}@g.us`;
+          groupName = inviteInfo.subject || 'Grupo';
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, code: g.code }, 'siteBridge: link de convite indisponível para consulta prévia');
+      }
+
+      // Se o bot já está dentro do grupo: RENOVAÇÃO AUTOMÁTICA IMEDIATA!
+      const existing = groupJid ? configManager.getGroup(groupJid) : null;
+      const isAlreadyInGroup = Boolean(existing && !existing.leftAt);
+
+      if (isAlreadyInGroup) {
+        configManager.ensureGroupStarterKit(groupJid, groupName, planInfo.days);
+        const grp = configManager.getGroup(groupJid);
+        if (grp) {
+          grp.ownerName = meta.name;
+          grp.ownerPhone = meta.phone;
+          grp.autoLeave = true;
+          grp.plan = planInfo.plan;
+          grp.lastPaymentId = String(id);
+          configManager.flushSync();
+        }
+
+        g.status = 'done';
+        g.renewal = true;
+        g.jid = groupJid;
+        g.groupName = groupName;
+
+        const planLabel = planInfo.plan === 'teste' ? 'Teste 7 dias' : 'Mensal 30 dias';
+        const renewMsg =
+          `🔁 *Renovação Aprovada & Licença Estendida!*\n\n` +
+          `• Cliente: ${meta.name}\n` +
+          `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+          `• Grupo: "${groupName}"\n` +
+          `• Plano: ${planLabel} (+${planInfo.days} dias adicionados)\n` +
+          `• ID Mercado Pago: ${id}\n\n` +
+          `✅ Licença estendida automaticamente no grupo existente.`;
+
+        await this._notifyOwner(renewMsg);
+      } else {
+        // GRUPO NOVO: Registra a licença pendente e notifica o Dono com o link do Telegram!
+        siteOrders.registerPendingGroup({
+          paymentId: id,
+          code: g.code,
+          groupJid,
+          groupName,
           days: planInfo.days,
           plan: planInfo.plan,
           ownerName: meta.name,
-          ownerPhone: meta.phone,
-          paymentId: id
+          ownerPhone: meta.phone
         });
-      } catch (err) {
-        result = { ok: false, reason: 'exception', error: err.message };
+
+        g.status = 'waiting_owner_join';
+        g.jid = groupJid;
+        g.groupName = groupName;
+
+        const planLabel = planInfo.plan === 'teste' ? 'Teste (7 dias)' : 'Mensal (30 dias)';
+        const paymentAmount = payment?.transaction_amount || (planInfo.plan === 'teste' ? 10 : 32);
+
+        const newOrderMsg =
+          `🛒 *Novo Pix Aprovado no Mercado Pago!*\n\n` +
+          `• Cliente: ${meta.name}\n` +
+          `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+          `• Plano: *${planLabel}* — R$ ${paymentAmount}\n` +
+          `• Grupo: "${groupName}"\n` +
+          `• Link do Grupo: https://chat.whatsapp.com/${g.code}\n` +
+          `• ID Pagamento: ${id}\n\n` +
+          `👉 *AÇÃO NECESSÁRIA (100% Blindado Anti-Ban):*\n` +
+          `1. Clique no link do grupo acima pelo seu celular e entre.\n` +
+          `2. O Hermes reconhecerá sua entrada e ativará automaticamente os *${planInfo.days} dias*!\n` +
+          `*(Zero comandos necessários no grupo, tudo automático ao entrar)*`;
+
+        await this._notifyOwner(newOrderMsg);
       }
-      g.status = result.ok ? 'done' : 'manual';
-      g.renewal = Boolean(result.renewal);
-      if (result.renewal) g.attemptedAt = null; // renovação não é entrada nova: não conta no teto
-      g.jid = result.jid;
-      g.reason = result.reason;
-      g.groupName = result.name;
-      // Se joinAndLicense descobriu um ownerName já salvo no grupo, atualiza o meta.name
-      if (result.ownerName && result.ownerName !== 'Cliente' && (!meta.name || meta.name === 'Cliente')) {
-        meta.name = result.ownerName;
-      }
-      siteOrders.upsert(id, { groups: order.groups });
     }
 
-    // grupos que ficaram "attempting" por crash anterior exigem revisão manual (nunca reaplicar às cegas)
-    for (const g of order.groups) if (g.status === 'attempting') g.status = 'manual';
-
-    const allDone = order.groups.every((g) => g.status === 'done');
-    siteOrders.upsert(id, { status: allDone ? 'done' : 'partial', groups: order.groups, name: meta.name });
-
-    const isRenewal = order.groups.some((g) => g.renewal);
-    const title = isRenewal
-      ? '✅ Renovação Aprovada & Licença Estendida — Hermes.wpp'
-      : '✅ Novo Pix Aprovado & Bot Ativado — Hermes.wpp';
-
-    const groupDetails = order.groups.map((g, idx) => {
-      const gLabel = order.groups.length > 1 ? `Grupo ${idx + 1}` : 'Grupo';
-      if (g.status === 'done') {
-        const actionText = g.renewal ? '🔁 Licença renovada' : '🟢 Bot entrou e ativou';
-        return `• ${gLabel}: "${g.groupName || 'Grupo'}"\n  Status: ${actionText} (+${planInfo.days} dias adicionados)`;
-      } else {
-        return `• ${gLabel}: https://chat.whatsapp.com/${g.code}\n  Status: ❌ Falha (${g.reason || 'revisar'})`;
-      }
-    }).join('\n');
-
-    const paymentAmount = payment?.transaction_amount || (planInfo.plan === 'teste' ? 10 : 32);
-    const planLabel = planInfo.plan === 'teste' ? 'Teste de 7 Dias' : 'Mensal';
-
-    const msg =
-      `${title}\n\n` +
-      `• Cliente: ${meta.name}\n` +
-      `• Plano: ${planLabel} (R$ ${paymentAmount})\n` +
-      `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
-      `${groupDetails}\n` +
-      `• ID Mercado Pago: ${id}` +
-      (allDone ? '' : '\n\n⚠️ Atenção: Falha em grupo(s). Trate manualmente com !liberar <link> <dias>.');
-
-    await this._notifyOwner(msg);
+    siteOrders.upsert(id, { groups: order.groups, name: meta.name, phone: meta.phone, plan: planInfo.plan, days: planInfo.days });
   }
 
   /**
    * Avisos ao dono SOMENTE via Telegram (zero tráfego extra no WhatsApp = menos risco de ban).
    * Reaproveita BACKUP_TELEGRAM_TOKEN / BACKUP_TELEGRAM_CHAT_ID. Sem configuração: apenas log.
    */
+
+  /**
+   * Notifica o Dono no Telegram quando o grupo for ativado com sucesso após a entrada manual
+   */
+  async notifyActivationSuccess({ groupName, groupJid, days, ownerName, ownerPhone }) {
+    const text =
+      `🎉 *Hermes Ativado com Sucesso!*\n\n` +
+      `• Grupo: "${groupName || 'Grupo'}"\n` +
+      `• Licença Ativada: *${days} dias*\n` +
+      `• Cliente: ${ownerName || 'Cliente'}\n` +
+      `• WhatsApp: https://wa.me/${ownerPhone} (${ownerPhone})\n\n` +
+      `🛡️ O bot iniciou o monitoramento e o controle de validade com proteção Anti-Ban.`;
+    await this._notifyOwner(text);
+  }
+
   async _notifyOwner(text) {
     const token = settings.backupTelegramToken;
     const chatId = settings.backupTelegramChatId;

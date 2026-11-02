@@ -86,6 +86,98 @@ class SiteOrders {
     return null;
   }
 
+
+  /**
+   * Registra um grupo aguardando o dono entrar manualmente pelo app oficial do WhatsApp.
+   * Elimina completamente o groupAcceptInvite do bot (Zero Risco de Ban).
+   * @param {object} pendingData 
+   */
+  registerPendingGroup(pendingData) {
+    const { paymentId, code, groupJid, groupName, days, plan, ownerName, ownerPhone } = pendingData;
+    const id = String(paymentId);
+    const existing = this.orders.get(id) || { paymentId: id, createdAt: Date.now() };
+
+    const groups = existing.groups || [];
+    const gIdx = groups.findIndex(g => g.code === code || (groupJid && g.jid === groupJid));
+    const gEntry = {
+      code,
+      jid: groupJid || null,
+      groupName: groupName || 'Grupo',
+      days: days || 30,
+      plan: plan || 'mensal',
+      status: 'waiting_owner_join',
+      registeredAt: Date.now()
+    };
+
+    if (gIdx >= 0) {
+      groups[gIdx] = { ...groups[gIdx], ...gEntry };
+    } else {
+      groups.push(gEntry);
+    }
+
+    const next = {
+      ...existing,
+      status: 'waiting_owner_join',
+      plan: plan || 'mensal',
+      days: days || 30,
+      name: ownerName || 'Cliente',
+      phone: ownerPhone || '',
+      groups,
+      updatedAt: Date.now()
+    };
+    this.orders.set(id, next);
+    this._persist();
+    return next;
+  }
+
+  /**
+   * Busca e consome uma licença pendente quando o dono entra no grupo pelo app oficial.
+   * Suporta correspondência por groupJid ou por inviteCode do grupo.
+   * @param {string} groupJid 
+   * @param {string} [inviteCode]
+   * @returns {object|null}
+   */
+  claimPendingGroup(groupJid, inviteCode = null) {
+    if (!groupJid && !inviteCode) return null;
+    const cleanJid = groupJid ? (groupJid.endsWith('@g.us') ? groupJid : `${groupJid}@g.us`) : '';
+
+    // Varre pedidos aguardando entrada do dono (do mais antigo para o mais novo ou vice-versa)
+    for (const order of this.orders.values()) {
+      if (!order.groups || order.status === 'done') continue;
+
+      for (const g of order.groups) {
+        if (g.status !== 'waiting_owner_join') continue;
+
+        const matchesJid = cleanJid && g.jid && (g.jid === cleanJid || cleanJid.includes(g.jid.replace(/@.*$/, '')));
+        const matchesCode = inviteCode && g.code && g.code === inviteCode;
+
+        if (matchesJid || matchesCode) {
+          g.status = 'done';
+          g.activatedAt = Date.now();
+          if (cleanJid) g.jid = cleanJid;
+
+          const allDone = order.groups.every(og => og.status === 'done');
+          if (allDone) {
+            order.status = 'done';
+          }
+          order.updatedAt = Date.now();
+          this._persist();
+
+          return {
+            paymentId: order.paymentId,
+            days: g.days || order.days || 30,
+            plan: g.plan || order.plan || 'mensal',
+            ownerName: order.name,
+            ownerPhone: order.phone,
+            groupName: g.groupName
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
   _persist() {
     try {
       const obj = Object.fromEntries(this.orders.entries());
