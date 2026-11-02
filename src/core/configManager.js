@@ -457,8 +457,9 @@ class ConfigManager {
     group.expiryNotified = false;
 
     if (typeof days === 'number' && days > 0) {
-      if (isNewGroup) {
-        // Grupo novo nasce com 30 dias padrão: define a vigência EXATA informada (sem somar ao padrão)
+      const isDefaultStarter = !group.lastPaymentId && !group.autoLeave;
+      if (isNewGroup || isDefaultStarter) {
+        // Define a vigência EXATA especificada (ex: 7 dias de teste), sem somar aos 30 dias padrão
         this.setGroupExpiry(groupJid, Date.now() + days * 24 * 60 * 60 * 1000);
       } else {
         this.addDaysToGroup(groupJid, days);

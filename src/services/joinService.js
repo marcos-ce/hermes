@@ -79,8 +79,15 @@ async function joinAndLicense(sock, { inviteCode, days, plan, ownerName, ownerPh
   groupCache.set(jid, meta);
   const name = meta.subject || info.subject || 'Grupo';
 
-  // 4. Licença (soma dias; preserva configurações existentes)
-  const { group, shouldSendWelcome } = configManager.ensureGroupStarterKit(jid, name, days);
+  // 4. Licença (soma dias apenas se for renovação mensal real; se for teste ou compra nova, força vigência exata)
+  const isRealRenewal = Boolean(existing && existing.lastPaymentId && !existing.leftAt && plan === 'mensal');
+  const { group, shouldSendWelcome } = configManager.ensureGroupStarterKit(jid, name, isRealRenewal ? days : null);
+
+  if (!isRealRenewal) {
+    // Nova assinatura (ex: teste de 7 dias): FORÇA a vigência exata comprada, sem herdar 30 dias padrão do Baileys
+    configManager.setGroupExpiry(jid, Date.now() + days * 24 * 60 * 60 * 1000);
+  }
+
   group.autoLeave = true; // habilita a saída automática (carência) somente para grupos vendidos
   group.plan = plan;
   group.ownerName = ownerName || group.ownerName || '';
