@@ -77,7 +77,7 @@ const TOOLS = [
           allowedDomains: { type: 'string', description: 'Domínios liberados no antilink (ex: "youtube.com, instagram.com") ou "." para todos.' },
           maxMessages: { type: 'integer', description: 'Máximo de mensagens consecutivas em 5s no antiflood.' },
           maxChars: { type: 'integer', description: 'Limite de caracteres anti-trava.' },
-          allowedDdis: { type: 'string', description: 'DDIs liberados no antifake (ex: "55, 351").' },
+          allowedDdis: { type: 'string', description: 'DDIs liberados no antifake ou no autoapprove (ex: "55, 351" ou "351" ou "todos").' },
           welcomeMessage: { type: 'string', description: 'Texto de boas-vindas ({user}, {group}, {desc}).' },
           autoDeleteSeconds: { type: 'integer', description: 'Segundos para apagar boas-vindas (0 desativa).' },
           autoMsgText: { type: 'string', description: 'Texto do comunicado periódico.' },
@@ -395,19 +395,22 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'manage_join_requests',
-      description: 'Gerencia as solicitações de entrada de novos membros no grupo (fila de aprovação do WhatsApp). Acione para: aceitar quem pediu para entrar, aprovar pessoas, aprovar todos ou brasileiros pendentes, ver quem está na fila para entrar, listar pedidos de aprovação, ligar ou desligar aprovação automática de qualquer membro ou apenas de BRs.',
+      description: 'Gerencia as solicitações de entrada de novos membros no grupo (fila de aprovação do WhatsApp) e configurações de países/DDIs permitidos. Acione para: ver quem está na fila para entrar, aceitar pedidos pendentes, aprovar pessoas específicas por número ou menção, liberar mais países/DDIs (ex: Portugal 351, EUA 1, etc.), ligar ou desligar auto-aprovação.',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'approve_all_br', 'approve_all', 'enable_auto', 'disable_auto'],
-            description: '"list" para consultar/contar pendentes, "approve_all_br" para aprovar todos os brasileiros da fila, "approve_all" para aprovar todos os participantes pendentes (qualquer país), "enable_auto" para ativar a aprovação automática em tempo real, "disable_auto" para desativar.'
+            enum: ['list', 'approve_all', 'approve_all_br', 'approve_single', 'enable_auto', 'disable_auto', 'set_allowed_ddis'],
+            description: '"list" para consultar/contar pendentes e ver DDIs ativos, "approve_all" ou "approve_all_br" para aprovar membros autorizados pendentes em fila segura (1 a 2 min), "approve_single" para aprovar participante específico (usando "target"), "enable_auto" para ativar auto-aprovação em tempo real, "disable_auto" para desativar, "set_allowed_ddis" para liberar ou adicionar novos DDIs/países.'
           },
-          mode: {
+          allowed_ddis: {
             type: 'string',
-            enum: ['all', 'br_only'],
-            description: 'Ao ativar (enable_auto), define se aceita qualquer membro ("all") ou apenas brasileiros ("br_only"). Padrão: "br_only".'
+            description: 'DDIs que o admin deseja autorizar/liberar para entrada automática (ex: "55, 351" para Brasil e Portugal, "351" para adicionar Portugal, "1" para EUA, ou "todos").'
+          },
+          target: {
+            type: 'string',
+            description: 'Número de telefone, LID ou menção do participante específico a ser aprovado quando action for "approve_single" (ex: "5511999998888" ou "@fulano").'
           }
         },
         required: ['action']
