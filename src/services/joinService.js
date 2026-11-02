@@ -102,21 +102,11 @@ async function joinAndLicense(sock, { inviteCode, days, plan, ownerName, ownerPh
   group.lastPaymentId = String(paymentId);
   configManager.flushSync();
 
-  // 5. Mensagem no grupo (pausa humana de 5-15s após entrar: evita falar no mesmo instante do join)
-  try {
-    await randomDelay(5000, 15000);
-    const lang = group.lang || 'pt';
-    if (wasLicensed) {
-      const expiry = group.expiresAt ? new Date(group.expiresAt).toLocaleDateString('pt-BR') : '∞';
-      await sendSafeMessage(sock, jid, { text: t(lang, 'saas.site_renewed', { expiry }) });
-    } else if (shouldSendWelcome) {
-      const prefix = configManager.getGroupPrefix(jid) || '!';
-      await sendSafeMessage(sock, jid, { text: t(lang, 'saas.group_presentation', { prefix }) });
-      configManager.markWelcomeSent(jid, true);
-    }
-  } catch (err) {
-    logger.warn({ err: err.message }, 'joinService: falha ao enviar mensagem de boas-vindas');
-  }
+  // 5. Silêncio Total Anti-Ban ao Ingressar no Grupo:
+  // NUNCA disparar mensagem logo ao entrar via convite (gatilho clássico de banimento da Meta).
+  // O bot aguarda organicamente o primeiro comando de um administrador para se manifestar.
+  configManager.markWelcomeSent(jid, true);
+  logger.info({ jid, name }, '[joinService] Grupo ingressado com sucesso em modo silencioso (blindagem Anti-Ban)');
 
   return {
     ok: true,

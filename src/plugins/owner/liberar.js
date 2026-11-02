@@ -148,19 +148,8 @@ module.exports = {
         expiry: expiryDisplay
       }));
 
-      // 2. Envia a apresentação no grupo se ainda não tiver sido disparada pelo groups.upsert
-      if (shouldSendWelcome) {
-        setTimeout(async () => {
-          try {
-            try {
-              await sock.groupMetadata(targetJid);
-            } catch (_) {}
-            await sendSafeMessage(sock, targetJid, { text: presentationText });
-          } catch (err) {
-            logger.error({ err }, 'Erro ao enviar mensagem de apresentação no grupo liberado');
-          }
-        }, 3000);
-      }
+      // 2. Silêncio Total Anti-Ban no grupo: Não dispara apresentação automática ao ser liberado remotamente.
+      // O bot ingressa discretamente e aguarda o primeiro comando de um administrador.
 
       return;
     }

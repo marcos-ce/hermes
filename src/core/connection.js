@@ -2,7 +2,8 @@ const {
   default: makeWASocket, 
   useMultiFileAuthState, 
   DisconnectReason, 
-  fetchLatestBaileysVersion 
+  fetchLatestBaileysVersion,
+  Browsers 
 } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -162,7 +163,7 @@ async function connectBot(options = {}) {
       return undefined;
     },
     shouldIgnoreJid: (jid) => typeof jid === 'string' && (jid.endsWith('@newsletter') || jid.endsWith('@broadcast')),
-    browser: ['Ubuntu', 'Chrome', '120.0.0']
+    browser: Browsers.windows('Desktop')
   });
 
   currentSock = sock;

@@ -67,7 +67,7 @@ Todas as 26 ferramentas declaradas em `src/services/toolRegistry.js` possuem val
 | 6 | `unwarn_member` | `target` | Remove 1 advertência do membro | Admin |
 | 7 | `list_group_warns` | *(nenhum)* | Lista membros advertidos no grupo | Admin |
 | 8 | `delete_message` | `messageId`, `target` | Apaga mensagem do chat (citação ou ref `mID`) | Admin |
-| 9 | `hidetag_announcement` | `message` | Marca todos os membros de forma invisível | Admin |
+| 9 | `hidetag_announcement` | `message` | Envia comunicado oficial em destaque (sem menção em massa Anti-Ban) | Admin |
 | 10 | `promote_member` | `target` | Promove membro a administrador | Admin |
 | 11 | `demote_member` | `target` | Rebaixa administrador a membro comum | Admin |
 | 12 | `mute_member` | `target`, `duration`, `reason` | Silencia participante individualmente (até 24h) | Admin |

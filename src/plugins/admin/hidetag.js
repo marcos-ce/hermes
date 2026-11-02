@@ -5,7 +5,7 @@ module.exports = {
   name: 'hidetag',
   aliases: ['hidetag', 'totag', 'comunicado', 'todos', 'marcar', 'notificar', 'all'],
   usage: 'all [texto]',
-  description: 'Marca todos os membros do grupo de forma oculta',
+  description: 'Envia comunicado oficial em destaque no grupo (sem marcação em massa por segurança Anti-Ban)',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: false,
@@ -43,22 +43,11 @@ module.exports = {
       return reply(t('hidetag.empty'));
     }
 
-    const metadata = await getGroupMetadata(sock, from);
-    if (!metadata || !Array.isArray(metadata.participants)) {
-      return reply(t('common.error'));
-    }
-
-    const allMembers = new Set();
-    metadata.participants.forEach(p => {
-      if (p.id) allMembers.add(p.id);
-      if (p.jid) allMembers.add(p.jid);
-      if (p.lid) allMembers.add(p.lid);
-    });
-
-    // Envia a mensagem com todas as menções invisíveis
+    // BLINDAGEM ANTI-BAN: Menção oculta em massa de todos os membros foi desativada
+    // permanentemente para prevenir banimento imediato da conta pela Meta.
+    // O comunicado oficial é enviado com destaque visual no chat, sem adicionar menções invisíveis.
     await sendSafeMessage(sock, from, {
-      text: messageToSend,
-      mentions: Array.from(allMembers)
+      text: `📢 *COMUNICADO:*\n\n${messageToSend}`
     });
   }
 };
