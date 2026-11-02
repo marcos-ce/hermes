@@ -240,6 +240,31 @@ module.exports = {
       }));
     }
 
-    return reply('💡 Comandos do Bot:\n• `!bot on [dias]`\n• `!bot add <dias>`\n• `!bot off`\n• `!bot status`\n• `!bot list`\n• `!pv on/off`');
+    
+    // ==========================================
+    // Simulação de Vencimento e Saída (!bot testar-saida / !bot testar-aviso)
+    // ==========================================
+    if (sub === 'testar-saida' || sub === 'testleave' || sub === 'simular-saida') {
+      if (!isGroup) return reply('⚠️ Este comando deve ser executado dentro de um grupo.');
+      const group = configManager.getOrCreateGroup(from);
+      group.autoLeave = true;
+      group.expiresAt = Date.now() - 25 * 60 * 60 * 1000; // vencido há 25h (> 24h carência)
+      group.leftAt = null;
+      configManager.flushSync();
+      return reply('⏳ *Simulação de Saída Ativada!*\n\nA licença deste grupo foi configurada como vencida há 25h.\nNo próximo ciclo do scheduler (em até 60 segundos), o bot enviará a mensagem de despedida com o link de renovação e sairá do grupo automaticamente!');
+    }
+
+    if (sub === 'testar-aviso' || sub === 'testwarn' || sub === 'simular-aviso') {
+      if (!isGroup) return reply('⚠️ Este comando deve ser executado dentro de um grupo.');
+      const group = configManager.getOrCreateGroup(from);
+      group.autoLeave = true;
+      group.expiresAt = Date.now() + 60 * 60 * 1000; // vence em 1 hora (< 24h)
+      group.warned1d = false;
+      group.leftAt = null;
+      configManager.flushSync();
+      return reply('⏳ *Simulação de Aviso D-1 Ativada!*\n\nA licença foi configurada para vencer em 1h.\nNo próximo ciclo do scheduler (em até 60 segundos), o bot enviará o aviso oficial de renovação com o link do grupo já embutido!');
+    }
+
+    return reply('💡 Comandos do Bot:\n• `!bot on [dias]`\n• `!bot add <dias>`\n• `!bot off`\n• `!bot status`\n• `!bot list`\n• `!bot testar-aviso`\n• `!bot testar-saida`\n• `!pv on/off`');
   }
 };
