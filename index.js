@@ -152,7 +152,7 @@ async function main() {
   // 5. Inicializa o Scheduler de tarefas periódicas escalonadas
   scheduler.init(sock);
 
-  // 5b. Ponte com o site (entrada automática por link de convite) - desligada por padrão
+  // 5b. Ponte com o site (webhook de pagamentos e avisos no Telegram)
   require('./src/services/siteBridge').init(sock);
 
   // 6. Inicializa o Backup Automático Offsite (Telegram)

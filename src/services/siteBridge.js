@@ -2,8 +2,7 @@ const http = require('http');
 const crypto = require('crypto');
 const settings = require('../config/settings');
 const siteOrders = require('./siteOrders');
-const { joinAndLicense, extractInviteCode } = require('./joinService');
-const { randomDelay } = require('../utils/antiBan');
+const { extractInviteCode } = require('./joinService');
 const logger = require('../utils/logger');
 
 // Preços e prazos são definidos AQUI (nunca vêm do payload): valor pago -> plano
@@ -44,15 +43,10 @@ class SiteBridge {
     this.sock = sock;
     siteOrders.load();
 
-    // 1. Recuperação após crash/restart: reprocessa pedidos que ficaram no meio
+    // 1. Recuperação após crash/restart: reprocessa pedidos pendentes em fila
     for (const id of siteOrders.pendingIds()) this._enqueue(id);
 
-    // 2. Modo Polling do Mercado Pago (Ideal para Discloud e ambientes sem porta pública exposta)
-    if (settings.mpAccessToken && settings.mpPollingEnabled) {
-      this._startPolling();
-    }
-
-    // 3. Modo Servidor Webhook HTTP (Opcional, caso tenha porta pública configurada)
+    // 2. Modo Servidor Webhook HTTP (Opcional, caso tenha porta pública configurada)
     if (settings.siteBridgeEnabled) {
       this._startServer();
     }
@@ -83,69 +77,6 @@ class SiteBridge {
       logger.info(`siteBridge ouvindo em ${settings.siteBridgeHost}:${settings.siteBridgePort}`);
     });
     this.server.unref();
-  }
-
-  /**
-   * Inicia busca ativa (polling) periódica por novos pagamentos Pix aprovados no Mercado Pago.
-   * Não exige abertura de portas, túneis ou IPs públicos: funciona nativamente na Discloud.
-   */
-  _startPolling() {
-    const intervalSec = Math.max(settings.mpPollingIntervalSeconds || 30, 10);
-    logger.info(`siteBridge: Polling ativo do Mercado Pago iniciado (busca a cada ${intervalSec}s).`);
-
-    // Primeira checagem após 5s para dar tempo da conexão do WhatsApp estabilizar
-    setTimeout(() => this._pollMercadoPago(), 5000);
-
-    this.pollInterval = setInterval(() => {
-      this._pollMercadoPago();
-    }, intervalSec * 1000);
-    this.pollInterval.unref();
-  }
-
-  async _pollMercadoPago() {
-    if (!settings.mpAccessToken || this.isPolling) return;
-    this.isPolling = true;
-
-    try {
-      const url = 'https://api.mercadopago.com/v1/payments/search?sort=date_approved&criteria=desc&status=approved&limit=15';
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${settings.mpAccessToken}` },
-        signal: AbortSignal.timeout(12000)
-      });
-
-      if (!res.ok) {
-        logger.warn({ status: res.status }, 'siteBridge: falha ao consultar pagamentos recentes no Mercado Pago');
-        return;
-      }
-
-      const data = await res.json();
-      const results = Array.isArray(data?.results) ? data.results : [];
-      const now = Date.now();
-      const maxAgeMs = 24 * 60 * 60 * 1000; // só processa pagamentos das últimas 24h
-
-      for (const p of results) {
-        if (!p?.id || p.status !== 'approved' || p.payment_method_id !== 'pix') continue;
-        const approvedMs = p.date_approved ? new Date(p.date_approved).getTime() : 0;
-        if (approvedMs > 0 && now - approvedMs > maxAgeMs) continue;
-
-        const md = p.metadata || {};
-        // Só processa pagamentos do Hermes que tenham link de convite de grupo
-        if (!md.invite_link && !md.invite_link_2) continue;
-
-        const id = String(p.id);
-        const existing = siteOrders.get(id);
-        if (existing && ['done', 'partial', 'rejected'].includes(existing.status)) continue;
-
-        if (!existing) {
-          siteOrders.upsert(id, { status: 'queued', groups: null });
-        }
-        this._enqueue(id);
-      }
-    } catch (err) {
-      logger.warn({ err: err?.message || err }, 'siteBridge: erro no ciclo de polling do Mercado Pago');
-    } finally {
-      this.isPolling = false;
-    }
   }
 
   // ---------------- HTTP ----------------
@@ -288,28 +219,6 @@ class SiteBridge {
       const check = () => (this.sock?.user ? resolve(this.sock) : setTimeout(check, 5000));
       check();
     });
-  }
-
-  /**
-   * Teto de entradas em grupos (hora/dia). Excedente FICA NA FILA e entra assim que abrir vaga.
-   * Os tempos de tentativa são persistidos, então o teto sobrevive a reinícios.
-   */
-  async _waitJoinSlot(id) {
-    let notified = false;
-    for (;;) {
-      const now = Date.now();
-      const stamps = siteOrders.attemptTimestamps();
-      const lastHour = stamps.filter((t) => now - t < 60 * 60 * 1000).length;
-      const lastDay = stamps.filter((t) => now - t < 24 * 60 * 60 * 1000).length;
-      if (lastHour < settings.siteMaxJoinsPerHour && lastDay < settings.siteMaxJoinsPerDay) return;
-      if (!notified) {
-        notified = true;
-        await this._notifyOwner(
-          `⏳ Pedido ${id} na fila: teto de entradas atingido (${lastHour}/${settings.siteMaxJoinsPerHour} na última hora, ${lastDay}/${settings.siteMaxJoinsPerDay} no dia). Entra automaticamente quando abrir vaga.`
-        );
-      }
-      await new Promise((r) => setTimeout(r, 60 * 1000));
-    }
   }
 
   async _process(id) {

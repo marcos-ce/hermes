@@ -50,15 +50,6 @@ class SiteOrders {
     return next;
   }
 
-  /** Timestamps das tentativas de entrada em grupos (para o teto por hora/dia). */
-  attemptTimestamps() {
-    const out = [];
-    for (const o of this.orders.values()) {
-      for (const g of o.groups || []) if (g.attemptedAt) out.push(g.attemptedAt);
-    }
-    return out;
-  }
-
   pendingIds() {
     return [...this.orders.values()]
       .filter((o) => o.status === 'queued' || o.status === 'processing')

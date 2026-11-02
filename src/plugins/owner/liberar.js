@@ -80,7 +80,7 @@ module.exports = {
       targetJid = from;
     }
 
-    // Se temos um código de convite, tenta obter info e entrar no grupo
+    // Se temos um código de convite, consulta metadados do grupo (sem forçar entrada automática por link)
     if (inviteCode) {
       try {
         inviteInfo = await sock.groupGetInviteInfo(inviteCode);
@@ -91,17 +91,8 @@ module.exports = {
         logger.warn({ err: err.message }, 'Falha ao consultar info do convite');
       }
 
-      try {
-        const joinedJid = await sock.groupAcceptInvite(inviteCode);
-        if (joinedJid) {
-          targetJid = joinedJid.endsWith('@g.us') ? joinedJid : `${joinedJid}@g.us`;
-        }
-      } catch (err) {
-        logger.warn({ err: err.message }, 'groupAcceptInvite retornou erro (possivelmente já está no grupo)');
-        // Se já tínhamos o targetJid obtido via inviteInfo, prossegue normalmente
-        if (!targetJid) {
-          return reply(t('saas.liberate_invite_error'));
-        }
+      if (!targetJid) {
+        return reply(t('saas.liberate_invite_error'));
       }
     }
 
