@@ -180,16 +180,16 @@ module.exports = async function manageCalendar({ sock, from, sender, lang, args 
 
     let confirmMsg = '';
     if (actionType === 'poll_result') {
-      confirmMsg = `📊 Apuração da enquete agendada com sucesso para ${parsedTime} (${parsedDate}). No horário, os votos serão apurados e o resultado oficial será publicado aqui no grupo!`;
+      confirmMsg = `Apuração da enquete agendada para ${parsedTime}.`;
     } else if (actionType === 'raffle') {
       const prizeInfo = args.text ? ` (${args.text})` : '';
-      confirmMsg = `🎲 Sorteio agendado com sucesso para ${parsedTime} (${parsedDate})${prizeInfo}. No horário marcado, o ganhador será anunciado!`;
+      confirmMsg = `Sorteio agendado para ${parsedTime}${prizeInfo}.`;
     } else if (actionType === 'unpin') {
-      confirmMsg = `📌 Desafixação de mensagens agendada com sucesso para ${parsedTime} (${parsedDate}).`;
+      confirmMsg = `Desafixação de mensagens agendada para ${parsedTime}.`;
     } else if (actionType === 'close_group') {
-      confirmMsg = `🔒 Fechamento do grupo agendado com sucesso para ${parsedTime} (${parsedDate}).`;
+      confirmMsg = `Fechamento do grupo agendado para ${parsedTime}.`;
     } else if (actionType === 'open_group') {
-      confirmMsg = `🔓 Abertura do grupo agendada com sucesso para ${parsedTime} (${parsedDate}).`;
+      confirmMsg = `Abertura do grupo agendada para ${parsedTime}.`;
     } else {
       confirmMsg = t(lang, 'calendar.added', {
         id: newId,

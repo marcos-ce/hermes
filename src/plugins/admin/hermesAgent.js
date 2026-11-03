@@ -72,75 +72,6 @@ async function isAdminOrOwner(sock, from, sender) {
 }
 
 /**
- * Gatekeeper Anti-Desperdício: Detecta se a mensagem é um pedido de promoção a administrador sem menção @.
- * Executado localmente em 0ms para evitar queimar tokens de IA inutilmente.
- * 
- * @param {object} params
- * @param {string} params.queryText Texto limpo da mensagem
- * @param {object} params.msg Objeto original da mensagem
- * @param {object} params.sock Socket do Baileys
- * @returns {boolean}
- */
-function isUnmarkedPromotionRequest({ queryText, msg, sock }) {
-  if (!queryText || typeof queryText !== 'string') return false;
-
-  const norm = queryText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-  // 1. Verifica se expressa intenção de promover / dar adm
-  // Padrões diretos: "dá adm", "dar adm", "promove", "promover", "bota de adm", "virar adm", "add adm"
-  const isPromotionVerb = /\b(?:promove|promover|promueva|promueve|promote)\b/i.test(norm);
-  const isGiveAdmin = /\b(?:da|de|dar|bote|bota|botar|coloque|coloca|colocar|passa|passar|torne|torna|tornar|faca|faz|fazer|virar|vira|adiciona|adicionar|add|give|make|poner|pon|nombrar)\b(?:\s+(?:ele|ela|o|a|esse|essa|este|esta|alguem|alguien|someone|him|her|this|the))?\s+(?:de\s+|como\s+|a\s+|pra\s+|para\s+)?(?:adm|admin|administrador(?:a)?)\b/i.test(norm);
-  const isDirectAdm = /^(?:adm|admin)\b/i.test(norm);
-
-  if (!isPromotionVerb && !isGiveAdmin && !isDirectAdm) {
-    return false;
-  }
-
-  // 2. Filtra dúvidas ou perguntas puramente informativas (ex: "quem é o adm?", "como funciona o adm?")
-  const isQuestion = /\b(?:quem|quais|qual|o\s+que|oque|quien|quienes|cual|cuales|who|what|how)\s+(?:e|sao|seria|consigo|posso|viro|funciona|ser|is|are|can|do|does)\b/i.test(norm);
-  if (isQuestion) {
-    return false;
-  }
-
-  // 3. Extrai menções com @ para verificar se alguém além do bot foi marcado
-  const realMsg = msg?.message?.ephemeralMessage?.message ||
-                  msg?.message?.viewOnceMessage?.message ||
-                  msg?.message?.viewOnceMessageV2?.message ||
-                  msg?.message?.documentWithCaptionMessage?.message ||
-                  msg?.message;
-
-  const contextInfo = realMsg?.extendedTextMessage?.contextInfo ||
-                      realMsg?.imageMessage?.contextInfo ||
-                      realMsg?.videoMessage?.contextInfo ||
-                      realMsg?.documentMessage?.contextInfo;
-
-  const rawMentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
-  const targetMentions = rawMentions
-    .map(m => cleanJid(m))
-    .filter(m => !isBotIdentity(sock, m));
-
-  // Verifica menções por texto: @551199999999 (PN/LID) ou @Fulano (nome literal).
-  const textAtTokens = (queryText.match(/(?:^|\s)@([^\s@]+)/g) || [])
-    .map(tm => tm.replace(/^[^@]*@/, '').replace(/[.,!?;:)\]}'"»”’]+$/g, '').trim())
-    .filter(Boolean)
-    .filter(token => {
-      const numeric = token.replace(/^\+/, '');
-      if (/^\d{8,20}$/.test(numeric)) return !isBotIdentity(sock, numeric);
-
-      const normalized = token.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const { botName } = getBotIdentity(sock);
-      const normBotName = botName ? botName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
-      if (normBotName && normalized === normBotName) return false;
-      return normalized !== 'hermes' && normalized !== 'bot' && !isBotIdentity(sock, token);
-    });
-
-  const hasExplicitMention = targetMentions.length > 0 || textAtTokens.length > 0;
-
-  // Se tem intenção de promover MAS NÃO tem menção explícita com @ -> INTERCEPTAR!
-  return !hasExplicitMention;
-}
-
-/**
  * Guard rail R1: Detecta se a IA está afirmando em texto livre que executou uma ação
  * administrativa sem que nenhuma Tool Call correspondente tenha sido disparada.
  * @param {string} text
@@ -460,30 +391,6 @@ module.exports = {
       if (!sub || HERMES_SUBCOMMANDS.includes(sub)) {
         return false;
       }
-    } else if (/^@[a-zA-Z0-9_:.-]+\s+/i.test(trimmedText)) {
-      let afterMention = trimmedText.replace(/^@[a-zA-Z0-9_:.-]+\s+/i, '').trim();
-      const hasPrefixChar = afterMention.startsWith(groupPrefix) || afterMention.startsWith('/') || afterMention.startsWith('!');
-      if (hasPrefixChar) {
-        afterMention = afterMention.slice(1).trim();
-      }
-      const words = afterMention.split(/\s+/).filter(Boolean);
-      let firstWord = words[0]?.toLowerCase();
-      if (['da', 'de', 'dar'].includes(firstWord) && ['adm', 'admin'].includes(words[1]?.toLowerCase())) {
-        firstWord = 'adm';
-      }
-      const cmdPlugin = firstWord ? pluginLoader.findCommand(firstWord) : null;
-
-      // Se começar com prefixo explícito (ex: "@bot !fechar") ou for comando simples de até 4 palavras
-      // sem conectivos de linguagem natural (ex: "@bot ping", "@bot fechar", "@bot ban @user", "@bot da adm ao @user"):
-      // delega para o plugin tradicional determinístico.
-      // MAS se contiver linguagem natural, múltiplos pedidos ou frases (ex: "feche o grupo e reabra amanhã",
-      // "com um lembrete", "se chover"), entrega para a IA do Hermes atender o pedido composto completo!
-      const hasNaturalLanguage = /\b(e|com|que|quando|se|amanh[aã]|depois|daqui|horas?|lembrete|aviso|ver|favor|por favor)\b/i.test(afterMention);
-      const isSimpleDeterministicCmd = cmdPlugin && cmdPlugin.name !== 'hermes' && (hasPrefixChar || (!hasNaturalLanguage && words.length <= 4));
-
-      if (isSimpleDeterministicCmd) {
-        return false;
-      }
     }
 
     // 2. Verificação ampla de endereçamento ao bot
@@ -706,14 +613,6 @@ module.exports = {
       if (processedMsgIds.size > 300) {
         processedMsgIds.delete(processedMsgIds.values().next().value);
       }
-    }
-
-    // Gatekeeper Anti-Desperdício: Pedido de promoção sem menção explícita com @
-    // Responde com template padrão determinístico sem gastar tokens da API DeepSeek
-    if (isUnmarkedPromotionRequest({ queryText, msg, sock })) {
-      logger.info({ from, sender, queryText }, 'Gatekeeper: pedido de promoção sem menção @ barrado localmente (economia de tokens de IA)');
-      await reply(tr(lang, 'promote.need_explicit_mention'));
-      return;
     }
 
     const flightKey = `${from}:${sender}`;

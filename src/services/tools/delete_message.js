@@ -73,5 +73,5 @@ module.exports = async function deleteMessage({ sock, msg, from, sender, isBotAd
     participant: deleteParticipant
   });
 
-  return { success: true, message: t(lang, 'clear.success') };
+  return { success: true };
 };

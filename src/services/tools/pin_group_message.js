@@ -17,12 +17,12 @@ module.exports = async function pinGroupMessage({ sock, msg, from, isBotAdmin, l
     if (count === 0) {
       return {
         success: true,
-        message: '📌 Não há mensagens fixadas registradas neste grupo.'
+        message: 'Não há mensagens fixadas registradas neste grupo.'
       };
     }
     return {
       success: true,
-      message: `📌 Todas as ${count} mensagem(ns) fixada(s) foram desafixadas com sucesso!`
+      message: `${count} mensagem(ns) desafixada(s).`
     };
   }
 
@@ -94,8 +94,7 @@ module.exports = async function pinGroupMessage({ sock, msg, from, isBotAdmin, l
       });
       pinTracker.removePin(from, targetKey.id);
       return {
-        success: true,
-        message: t(lang, 'pin.unpinned')
+        success: true
       };
     } catch (err) {
       logger.error({ err, from }, 'Erro ao desafixar mensagem via Hermes');
@@ -104,13 +103,10 @@ module.exports = async function pinGroupMessage({ sock, msg, from, isBotAdmin, l
   }
 
   let durationSecs = 86400;
-  let durationLabel = '24 horas';
   if (args.duration === '7d') {
     durationSecs = 604800;
-    durationLabel = '7 dias';
   } else if (args.duration === '30d') {
     durationSecs = 2592000;
-    durationLabel = '30 dias';
   }
 
   try {
@@ -121,8 +117,7 @@ module.exports = async function pinGroupMessage({ sock, msg, from, isBotAdmin, l
     });
     pinTracker.addPin(from, targetKey);
     return {
-      success: true,
-      message: t(lang, 'pin.pinned', { duration: durationLabel })
+      success: true
     };
   } catch (err) {
     logger.error({ err, from }, 'Erro ao fixar mensagem via Hermes');
