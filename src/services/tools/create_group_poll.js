@@ -75,20 +75,8 @@ module.exports = async function createGroupPoll({ sock, from, lang, args }) {
       }
     }
 
-    const typeLabel = isMultiple ? t(lang, 'poll.type_multi') : t(lang, 'poll.type_single');
-    const confirmMsg = t(lang, 'poll.success', {
-      title,
-      type: typeLabel,
-      count: options.length
-    });
-
-    const agentNote = conditionalActions
-      ? `\n🤖 _Ação automática configurada: após a apuração, executarei o decidido pelo grupo._`
-      : '';
-
     return {
-      success: true,
-      message: confirmMsg + agentNote
+      success: true
     };
   } catch (err) {
     logger.error({ err, from, title }, 'Erro ao criar enquete via Hermes');

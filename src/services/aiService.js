@@ -33,9 +33,9 @@ class AIService {
     this.model = process.env.AI_MODEL || 'deepseek-chat';
     // Teto de saída: só é cobrado o que o modelo realmente gerar; 500 permite respostas explicativas e JSONs completos
     this.maxTokens = Math.max(parseInt(process.env.AI_MAX_TOKENS, 10) || 500, 200);
-    // Temperatura calibrada: 0.45 oferece equilíbrio ideal entre Tool Calling determinístico e compreensão natural de gírias
+    // Temperatura calibrada: 0.3 oferece determinismo cirúrgico para Tool Calling sem perder a naturalidade
     const temp = parseFloat(process.env.AI_TEMPERATURE);
-    this.temperature = Number.isFinite(temp) ? temp : 0.45;
+    this.temperature = Number.isFinite(temp) ? temp : 0.3;
     this._initialized = true;
   }
 

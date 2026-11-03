@@ -1304,6 +1304,9 @@ module.exports = {
               wizardCache.set(`undo:${from}`, stack[0], 1800);
             }
 
+          }
+
+          if (execResult?.success !== false && !execResult?.error) {
             // IntentStore: persiste ação agêntica bem-sucedida para undo robusto,
             // relatório de atividade ("o que você fez hoje?") e prevenção de duplicata
             intentStore.record(
@@ -1313,7 +1316,7 @@ module.exports = {
               call.name,
               call.args,
               true,
-              execResult.message || ''
+              execResult?.message || (call.name === 'create_group_poll' ? `Enquete criada: ${call.args.title || ''}` : '')
             );
           } else if (execResult?.error) {
             await reply(execResult.error);
