@@ -10,28 +10,54 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
   }
 
   const currentCfg = configManager.getPluginConfig(from, mod) || {};
-  const enabled = args.enabled !== undefined ? Boolean(args.enabled) : (currentCfg.enabled !== false);
-  const updates = { enabled };
 
-  let extraFeedback = '';
+  let enabled = currentCfg.enabled !== false;
+  if (args.enabled !== undefined) {
+    enabled = Boolean(args.enabled);
+  } else if (
+    args.allowedDomains !== undefined ||
+    args.maxWarns !== undefined ||
+    args.action !== undefined ||
+    args.maxMessages !== undefined ||
+    args.maxChars !== undefined ||
+    args.allowedDdis !== undefined ||
+    args.welcomeMessage !== undefined ||
+    args.autoDeleteSeconds !== undefined ||
+    args.autoMsgText !== undefined ||
+    args.intervalMinutes !== undefined ||
+    args.groupMsgLimit !== undefined ||
+    args.windowSeconds !== undefined ||
+    args.lockMinutes !== undefined
+  ) {
+    enabled = true;
+  }
+
+  const updates = { enabled };
+  const specificFeedbacks = [];
 
   if (mod === 'antilink') {
     // Se especificou maxWarns (ex: "ban no 2º link", "2 links = ban"):
-    // A ação do antilink é 'warn' (adverte a cada link) e o limite de warn é maxWarns
     if (args.maxWarns && Number(args.maxWarns) >= 1) {
       updates.action = 'warn';
       const warnLimit = parseInt(args.maxWarns, 10);
       configManager.updatePluginConfig(from, 'warn', { maxWarns: warnLimit, enabled: true });
-      extraFeedback = `\n⚠️ *Regra de Punição:* Banimento automático no ${warnLimit}º link (${warnLimit} advertências).`;
+      specificFeedbacks.push(t(lang, 'protection.antilink.warn_limit', { limit: warnLimit }));
     } else if (args.action && ['delete', 'warn', 'ban'].includes(args.action)) {
       updates.action = args.action;
+      specificFeedbacks.push(t(lang, 'protection.antilink.action_updated', { action: args.action }));
     }
 
     if (args.allowedDomains !== undefined) {
       const rawDoms = String(args.allowedDomains).trim();
-      updates.allowedDomains = (rawDoms === '.' || rawDoms === '' || rawDoms === 'todos')
+      const parsedDomains = (rawDoms === '.' || rawDoms === '' || rawDoms === 'todos' || rawDoms === 'none')
         ? []
         : rawDoms.split(/[\s,]+/).map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')).filter(Boolean);
+      updates.allowedDomains = parsedDomains;
+      if (parsedDomains.length > 0) {
+        specificFeedbacks.push(t(lang, 'protection.antilink.domains_updated', { domains: parsedDomains.join(', ') }));
+      } else {
+        specificFeedbacks.push(t(lang, 'protection.antilink.all_blocked'));
+      }
     }
   }
 
@@ -40,12 +66,13 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
       updates.action = 'warn';
       const warnLimit = parseInt(args.maxWarns, 10);
       configManager.updatePluginConfig(from, 'warn', { maxWarns: warnLimit, enabled: true });
-      extraFeedback = `\n⚠️ *Regra de Punição:* Banimento automático na ${warnLimit}ª advertência de flood.`;
+      specificFeedbacks.push(t(lang, 'protection.warn.limit_updated', { limit: warnLimit }));
     } else if (args.action && ['warn', 'ban'].includes(args.action)) {
       updates.action = args.action;
     }
     if (args.maxMessages && Number(args.maxMessages) >= 2) {
       updates.maxMessages = parseInt(args.maxMessages, 10);
+      specificFeedbacks.push(t(lang, 'protection.antiflood.config_updated', { limit: updates.maxMessages, window: 5 }));
     }
     if (args.maxChars && Number(args.maxChars) >= 100) {
       updates.maxChars = parseInt(args.maxChars, 10);
@@ -54,15 +81,20 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
 
   if (mod === 'antifake' && args.allowedDdis !== undefined) {
     const ddis = String(args.allowedDdis).split(/[\s,]+/).map(d => d.replace(/\D/g, '')).filter(Boolean);
-    if (ddis.length > 0) updates.allowedDdis = ddis;
+    if (ddis.length > 0) {
+      updates.allowedDdis = ddis;
+      specificFeedbacks.push(t(lang, 'protection.antifake.ddis_updated', { ddis: ddis.join(', ') }));
+    }
   }
 
   if (mod === 'welcome') {
     if (args.welcomeMessage && String(args.welcomeMessage).trim().length > 0) {
       updates.message = String(args.welcomeMessage).trim();
+      specificFeedbacks.push(t(lang, 'protection.welcome.message_updated'));
     }
     if (args.autoDeleteSeconds !== undefined && Number(args.autoDeleteSeconds) >= 0) {
       updates.autoDeleteSeconds = parseInt(args.autoDeleteSeconds, 10);
+      specificFeedbacks.push(t(lang, 'protection.welcome.autodelete_updated', { seconds: updates.autoDeleteSeconds }));
     }
   }
 
@@ -72,12 +104,13 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     }
     if (args.intervalMinutes && Number(args.intervalMinutes) > 0) {
       updates.intervalMinutes = Math.max(parseInt(args.intervalMinutes, 10), 5);
+      specificFeedbacks.push(t(lang, 'protection.automsg.interval_updated', { minutes: updates.intervalMinutes }));
     }
   }
 
   if (mod === 'warn' && args.maxWarns && Number(args.maxWarns) >= 1) {
     updates.maxWarns = parseInt(args.maxWarns, 10);
-    extraFeedback = `\n⚠️ *Limite:* Banimento configurado para ${updates.maxWarns} advertências.`;
+    specificFeedbacks.push(t(lang, 'protection.warn.limit_updated', { limit: updates.maxWarns }));
   }
 
   if (mod === 'ban' && args.customBanMessage !== undefined) {
@@ -97,17 +130,27 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
 
   // autolockflood: configura gatilho coletivo de flood → fechamento automático
   if (mod === 'autolockflood') {
+    let touchedConfig = false;
     if (args.groupMsgLimit && Number(args.groupMsgLimit) >= 5) {
       updates.groupMsgLimit = parseInt(args.groupMsgLimit, 10);
+      touchedConfig = true;
     }
     if (args.windowSeconds && Number(args.windowSeconds) >= 5) {
       updates.windowSeconds = parseInt(args.windowSeconds, 10);
+      touchedConfig = true;
     }
     if (args.lockMinutes !== undefined && Number(args.lockMinutes) >= 0) {
       updates.lockMinutes = parseInt(args.lockMinutes, 10);
+      touchedConfig = true;
     }
     if (args.ignoreAdmins !== undefined) {
       updates.ignoreAdmins = Boolean(args.ignoreAdmins);
+    }
+    if (touchedConfig) {
+      const minutes = updates.lockMinutes !== undefined ? updates.lockMinutes : (currentCfg.lockMinutes !== undefined ? currentCfg.lockMinutes : 5);
+      const limit = updates.groupMsgLimit || currentCfg.groupMsgLimit || 20;
+      const window = updates.windowSeconds || currentCfg.windowSeconds || 10;
+      specificFeedbacks.push(t(lang, 'protection.autolockflood.config_updated', { minutes, limit, window }));
     }
   }
 
@@ -142,12 +185,23 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
   }
 
   // Feedback em Linguagem Natural centralizado no motor canônico i18n (PT/ES/EN)
-  const stateKey = enabled ? "on" : "off";
-  const i18nKey = `protection.${mod}.${stateKey}`;
-  const translated = t(lang, i18nKey);
-  const feedback = (translated && translated !== i18nKey)
-    ? `${translated}${extraFeedback}`
-    : `⚙️ Módulo *${mod}* ${enabled ? t(lang, "common.enabled") : t(lang, "common.disabled")}.${extraFeedback}`;
+  let feedback = '';
+  if (args.enabled === false) {
+    const i18nKey = `protection.${mod}.off`;
+    const translated = t(lang, i18nKey);
+    feedback = (translated && translated !== i18nKey)
+      ? translated
+      : `Módulo ${mod} ${t(lang, "common.disabled")}.`;
+  } else if (specificFeedbacks.length > 0) {
+    feedback = specificFeedbacks.join('\n');
+  } else {
+    const stateKey = enabled ? "on" : "off";
+    const i18nKey = `protection.${mod}.${stateKey}`;
+    const translated = t(lang, i18nKey);
+    feedback = (translated && translated !== i18nKey)
+      ? translated
+      : `Módulo ${mod} ${enabled ? t(lang, "common.enabled") : t(lang, "common.disabled")}.`;
+  }
 
   return {
     success: true,

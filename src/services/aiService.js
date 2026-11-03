@@ -208,6 +208,8 @@ class AIService {
       '    -> Isso configura o antilink para advertir a cada link e o warn para expulsar automaticamente ao atingir o limite!',
       '  * BAN NO PRIMEIRO LINK DIRETO ("mandou link é ban", "ban em qualquer link", "ban direto em link", "qualquer link expulsa"):',
       '    -> Chame "toggle_group_protection" com module: "antilink", action: "ban".',
+      '  * LIBERAR OU BLOQUEAR DETERMINADOS DOMÍNIOS NO ANTILINK ("libera links do youtube", "permite instagram e youtube", "bloqueia todos os links", "só links do site X"):',
+      '    -> Chame "toggle_group_protection" com module: "antilink", allowedDomains: "youtube.com, instagram.com" (ou "." para bloquear todos sem exceção).',
       '  * APENAS APAGAR LINK SEM PUNIR ("só apaga o link", "limpar links", "bloqueia links sem ban"):',
       '    -> Chame "toggle_group_protection" com module: "antilink", action: "delete".',
       '  * LIMITE GERAL DE ADVERTÊNCIAS ("3 advertências leva ban", "com 2 avisos bane", "limite de 5 warns"):',
