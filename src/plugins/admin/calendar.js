@@ -8,6 +8,7 @@ const pollTracker = require('../../utils/pollTracker');
 const pinTracker = require('../../utils/pinTracker');
 const { pickWinners } = require('../../utils/raffle');
 const logger = require('../../utils/logger');
+const intentStore = require('../../services/intentStore');
 
 /**
  * Normaliza e valida data no formato DD/MM
@@ -81,6 +82,20 @@ function parseTime(timeStr) {
  */
 
 /**
+ * Normaliza o identificador da ação pós-enquete
+ * @param {string} act
+ * @returns {string}
+ */
+function normalizeActionName(act) {
+  if (!act) return '';
+  const a = String(act).toLowerCase().trim();
+  if (a === 'close_group' || a === 'close' || a === 'fechar' || a === 'mute' || a === 'lock') return 'close_group';
+  if (a === 'open_group' || a === 'open' || a === 'abrir' || a === 'unmute' || a === 'unlock') return 'open_group';
+  if (a === 'announce' || a === 'anunciar' || a === 'message') return 'announce';
+  return a;
+}
+
+/**
  * Executa autonomamente a ação agentica vencedora de uma enquete condicional.
  * ISOLAMENTO: chamado apenas por executeCalendarAction (poll_result). Zero IA.
  * @param {object} sock
@@ -89,8 +104,10 @@ function parseTime(timeStr) {
  * @param {string} lang
  */
 async function executeAgentPollAction(sock, groupJid, matchedAction, lang) {
-  const { action, params = {} } = matchedAction;
-  switch (action) {
+  const normAction = normalizeActionName(matchedAction.action);
+  const params = matchedAction.params || {};
+
+  switch (normAction) {
     case 'close_group':
       await sock.groupSettingUpdate(groupJid, 'announcement');
       break;
@@ -103,7 +120,7 @@ async function executeAgentPollAction(sock, groupJid, matchedAction, lang) {
       }
       break;
     default:
-      logger.warn({ groupJid, action }, 'Ação agentica pós-enquete desconhecida ou não suportada em modo autônomo');
+      logger.warn({ groupJid, action: matchedAction.action }, 'Ação agentica pós-enquete desconhecida ou não suportada em modo autônomo');
   }
 }
 
@@ -113,6 +130,7 @@ async function executeAgentPollAction(sock, groupJid, matchedAction, lang) {
  * @returns {string}
  */
 function formatActionLabel(action) {
+  const normAction = normalizeActionName(action);
   const labels = {
     close_group: 'Fechar o grupo',
     open_group: 'Abrir o grupo',
@@ -122,7 +140,7 @@ function formatActionLabel(action) {
     raffle: 'Sorteio realizado',
     reminder: 'Lembrete agendado'
   };
-  return labels[action] || action;
+  return labels[normAction] || action;
 }
 
 async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', config = {} }) {
@@ -130,7 +148,7 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
 
   // 1. Apuração e publicação do resultado de enquete
   if (actionType === 'poll_result') {
-    const pollResults = pollTracker.getPollResults(groupJid);
+    const pollResults = pollTracker.getPollResults(groupJid, event.pollId);
     if (!pollResults) {
       await sendSafeMessage(sock, groupJid, {
         text: '📊 *[APURAÇÃO AUTOMÁTICA DE ENQUETE]*\n\nNenhuma votação recente com votos computados foi encontrada neste grupo.'
@@ -139,22 +157,70 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
     }
 
     // ── Execução agentica: ação condicional atrelada à enquete ───────────
-    const conditionalActions = pollTracker.getConditionalActions(pollResults.pollId);
+    const conditionalActions =
+      event.conditionalActions ||
+      pollTracker.getConditionalActions(pollResults.pollId) ||
+      pollTracker.getConditionalActions(groupJid);
+
     let agentActionNote = '';
-    if (conditionalActions && Array.isArray(conditionalActions) && pollResults.winner && !pollResults.isTie) {
+    let matchedAction = null;
+
+    if (pollResults.winner && !pollResults.isTie) {
       const winnerName = pollResults.winner.name.trim().toLowerCase();
-      const matchedAction = conditionalActions.find(ca => {
-        const optNorm = String(ca.option || '').trim().toLowerCase();
-        return optNorm === winnerName ||
-               winnerName.includes(optNorm) ||
-               optNorm.includes(winnerName);
-      });
+
+      // 1. Busca por mapeamento explícito de conditionalActions
+      if (conditionalActions && Array.isArray(conditionalActions)) {
+        matchedAction = conditionalActions.find(ca => {
+          const optNorm = String(ca.option || '').trim().toLowerCase();
+          return optNorm === winnerName ||
+                 winnerName.includes(optNorm) ||
+                 optNorm.includes(winnerName);
+        });
+      }
+
+      // 2. Safety Net Semântico Determinístico: se não houver conditionalActions ou não casou,
+      // mas a enquete/opção for evidentemente sobre abrir ou fechar o grupo
+      if (!matchedAction) {
+        const titleLower = String(pollResults.title || '').toLowerCase();
+        if (
+          winnerName.includes('abrir') || winnerName.includes('open') || winnerName.includes('liberar') || winnerName.includes('destrancar') ||
+          ((titleLower.includes('abrir') || titleLower.includes('open')) && (winnerName.startsWith('sim') || winnerName === 'yes' || winnerName === 's'))
+        ) {
+          matchedAction = { option: pollResults.winner.name, action: 'open_group' };
+        } else if (
+          winnerName.includes('fechar') || winnerName.includes('close') || winnerName.includes('trancar') || winnerName.includes('mutar') ||
+          ((titleLower.includes('fechar') || titleLower.includes('close') || titleLower.includes('trancar')) && (winnerName.startsWith('sim') || winnerName === 'yes' || winnerName === 's'))
+        ) {
+          matchedAction = { option: pollResults.winner.name, action: 'close_group' };
+        }
+      }
 
       if (matchedAction) {
         logger.info({ groupJid, action: matchedAction.action, winner: pollResults.winner.name }, 'Hermes: executando ação agentica pós-enquete');
         try {
           await executeAgentPollAction(sock, groupJid, matchedAction, lang);
           agentActionNote = `\n\n🤖 _Ação executada automaticamente: *${formatActionLabel(matchedAction.action)}* conforme o resultado da votação._`;
+
+          // Registra no IntentStore para histórico, undo e memória de contexto do Hermes
+          try {
+            const isMute = matchedAction.action === 'close_group' || matchedAction.action === 'open_group' ||
+                           normalizeActionName(matchedAction.action) === 'close_group' || normalizeActionName(matchedAction.action) === 'open_group';
+            intentStore.record(
+              groupJid,
+              event.creatorJid || groupJid,
+              event.creatorDisplay || 'Agendamento Automático',
+              isMute ? 'set_group_mute' : matchedAction.action,
+              {
+                action: normalizeActionName(matchedAction.action) === 'close_group' ? 'close' : 'open',
+                pollTitle: pollResults.title,
+                winner: pollResults.winner.name
+              },
+              true,
+              `Executado automaticamente pela enquete "${pollResults.title}": ${formatActionLabel(matchedAction.action)}`
+            );
+          } catch (iErr) {
+            logger.warn({ err: iErr.message }, 'Falha ao registrar ação de enquete no IntentStore');
+          }
         } catch (err) {
           logger.error({ err, groupJid, action: matchedAction.action }, 'Erro ao executar ação agentica pós-enquete');
           agentActionNote = `\n\n⚠️ _Tentei executar a ação automática (${matchedAction.action}), mas encontrei um erro. Verifique as permissões do bot._`;
@@ -181,6 +247,9 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
     try {
       await sock.groupSettingUpdate(groupJid, 'announcement');
       await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.closed') });
+      try {
+        intentStore.record(groupJid, event.creatorJid || groupJid, event.creatorDisplay || 'Agendamento', 'set_group_mute', { action: 'close' }, true, 'Grupo fechado por agendamento');
+      } catch (_) {}
     } catch (_) {}
     return;
   }
@@ -190,6 +259,9 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
     try {
       await sock.groupSettingUpdate(groupJid, 'not_announcement');
       await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.opened') });
+      try {
+        intentStore.record(groupJid, event.creatorJid || groupJid, event.creatorDisplay || 'Agendamento', 'set_group_mute', { action: 'open' }, true, 'Grupo aberto por agendamento');
+      } catch (_) {}
     } catch (_) {}
     return;
   }

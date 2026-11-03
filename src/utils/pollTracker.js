@@ -21,6 +21,8 @@ class PollTracker {
     this.polls = new Map();
     /** @type {Map<string, string>} groupJid -> último pollId */
     this.latestByGroup = new Map();
+    /** @type {Map<string, Array<object>>} groupJid -> últimas ações condicionais */
+    this.latestConditionalActionsByGroup = new Map();
     this.MAX_POLLS = 100;
     this.POLL_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 dias
     this.filePath = path.resolve(process.cwd(), 'data', 'polls.json');
@@ -166,25 +168,61 @@ class PollTracker {
    * Chamado por create_group_poll quando o LLM passa conditionalActions.
    * @param {string} pollId  ID da mensagem da enquete (sent.key.id)
    * @param {Array<{option:string, action:string, params?:object}>} actions
+   * @param {string} [groupJid] JID do grupo (backup redundante)
    */
-  setConditionalActions(pollId, actions) {
+  setConditionalActions(pollId, actions, groupJid = null) {
     if (!pollId || !Array.isArray(actions) || actions.length === 0) return;
     const stored = this.polls.get(pollId);
-    if (!stored) return;
-    stored.conditionalActions = actions;
+    if (stored) {
+      stored.conditionalActions = actions;
+    }
+    const targetGroup = groupJid || stored?.key?.remoteJid;
+    if (targetGroup && targetGroup.endsWith('@g.us')) {
+      this.latestConditionalActionsByGroup.set(targetGroup, actions);
+    }
     this.scheduleSave();
-    logger.info({ pollId, count: actions.length }, 'Ações condicionais agenticas associadas à enquete');
+    logger.info({ pollId, targetGroup, count: actions.length }, 'Ações condicionais agenticas associadas à enquete');
   }
 
   /**
-   * Recupera o mapa de ações condicionais de uma enquete (ou null se não houver).
-   * @param {string} pollId
+   * Recupera o mapa de ações condicionais de uma enquete ou do grupo (ou null se não houver).
+   * @param {string} pollIdOrGroupJid
    * @returns {Array<{option:string, action:string, params?:object}>|null}
    */
-  getConditionalActions(pollId) {
-    if (!pollId) return null;
-    const stored = this.polls.get(pollId);
-    return stored?.conditionalActions || null;
+  getConditionalActions(pollIdOrGroupJid) {
+    if (!pollIdOrGroupJid) return null;
+
+    // 1. Se for JID de grupo
+    if (pollIdOrGroupJid.endsWith('@g.us')) {
+      const latestId = this.latestByGroup.get(pollIdOrGroupJid);
+      if (latestId) {
+        const stored = this.polls.get(latestId);
+        if (stored?.conditionalActions) return stored.conditionalActions;
+      }
+      return this.latestConditionalActionsByGroup.get(pollIdOrGroupJid) || null;
+    }
+
+    // 2. Se for ID de enquete
+    const stored = this.polls.get(pollIdOrGroupJid);
+    if (stored?.conditionalActions) return stored.conditionalActions;
+
+    // 3. Fallback: se a enquete pertencer a um grupo, busca no cache do grupo
+    const groupJid = stored?.key?.remoteJid;
+    if (groupJid && this.latestConditionalActionsByGroup.has(groupJid)) {
+      return this.latestConditionalActionsByGroup.get(groupJid);
+    }
+
+    return null;
+  }
+
+  /**
+   * Retorna o ID da última enquete registrada no grupo
+   * @param {string} groupJid
+   * @returns {string|null}
+   */
+  getLatestPollId(groupJid) {
+    if (!groupJid) return null;
+    return this.latestByGroup.get(groupJid) || null;
   }
 
   /**
@@ -231,22 +269,35 @@ class PollTracker {
       if (oldestId) this._deletePollEntry(oldestId);
     }
 
+    const targetGroup = groupJid || pollMsg.key.remoteJid;
     const existing = this.polls.get(pollId);
+
+    // 🛡️ PRESERVAÇÃO CRÍTICA DE AÇÕES CONDICIONAIS:
+    // Garante que o eco messages.upsert do WhatsApp não apague as conditionalActions cadastradas no boot
+    const conditionalActions =
+      pollMsg.conditionalActions ||
+      existing?.conditionalActions ||
+      (targetGroup && this.latestConditionalActionsByGroup.get(targetGroup)) ||
+      null;
+
     const stored = {
       key: pollMsg.key,
       message: storedMessage,
       pollUpdates: existing?.pollUpdates || [],
-      createdAt: existing?.createdAt || now
+      createdAt: existing?.createdAt || now,
+      conditionalActions
     };
 
     this.polls.set(pollId, stored);
-    const targetGroup = groupJid || pollMsg.key.remoteJid;
     if (targetGroup && targetGroup.endsWith('@g.us')) {
       this.latestByGroup.set(targetGroup, pollId);
+      if (conditionalActions) {
+        this.latestConditionalActionsByGroup.set(targetGroup, conditionalActions);
+      }
     }
 
     this.scheduleSave();
-    logger.debug({ pollId, targetGroup }, 'Enquete registrada no pollTracker');
+    logger.debug({ pollId, targetGroup, hasActions: Boolean(conditionalActions) }, 'Enquete registrada no pollTracker');
   }
 
   /**

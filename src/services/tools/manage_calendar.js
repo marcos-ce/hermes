@@ -3,6 +3,7 @@ const configManager = require('../../core/configManager');
 const { cleanJid, resolveParticipant } = require('../../utils/jidResolver');
 const { parseRelativeTime } = require('../timeParser');
 const { executeCalendarAction } = require('../../plugins/admin/calendar');
+const pollTracker = require('../../utils/pollTracker');
 const logger = require('../../utils/logger');
 const { t } = require('../../utils/i18n');
 
@@ -128,12 +129,20 @@ module.exports = async function manageCalendar({ sock, from, sender, lang, args 
 
     const maxId = events.reduce((max, e) => Math.max(max, parseInt(e.id, 10) || 0), 0);
     const newId = String(maxId + 1);
+
+    const activePollId = (actionType === 'poll_result') ? (args.pollId || pollTracker.getLatestPollId(from) || null) : null;
+    const pollConditionalActions = (actionType === 'poll_result')
+      ? ((activePollId ? pollTracker.getConditionalActions(activePollId) : null) || pollTracker.getConditionalActions(from) || null)
+      : null;
+
     const newEvent = {
       id: newId,
       date: parsedDate,
       time: parsedTime,
       text: reminderText,
       action: actionType,
+      pollId: activePollId,
+      conditionalActions: pollConditionalActions,
       raffleQuantity: args.quantity ? parseInt(args.quantity, 10) : 1,
       rafflePrize: args.text || args.prize || '',
       createdBy: creatorNum,

@@ -64,12 +64,14 @@ module.exports = async function createGroupPoll({ sock, from, lang, args }) {
     });
 
     if (sent?.key?.id) {
+      // Salva a mensagem da enquete com conditionalActions pré-anexado
+      sent.conditionalActions = conditionalActions;
       pollTracker.savePoll(from, sent);
 
-      // Persiste o mapa de ações condicionais junto à enquete
+      // Persiste o mapa de ações condicionais junto à enquete e ao grupo
       if (conditionalActions) {
-        pollTracker.setConditionalActions(sent.key.id, conditionalActions);
-        logger.info({ pollId: sent.key.id, conditionalActions }, 'Enquete criada com ações condicionais agenticas');
+        pollTracker.setConditionalActions(sent.key.id, conditionalActions, from);
+        logger.info({ pollId: sent.key.id, from, conditionalActions }, 'Enquete criada com ações condicionais agenticas');
       }
     }
 
