@@ -885,14 +885,22 @@ function detectBotMention(sock, msg, text = '') {
     if (isMentionedInMeta) {
       if (otherMentions.length === 0) {
         // Se após a menção há um comando com prefixo conhecido (ex: "@Administrativo !config", "@Hermes Bot /menu")
-        const cmdMatch = cleanText.match(/^(@[^\n!/#.$]+?)(?=\s*[!/#.$]|\s*$)/);
+        const cmdMatch = cleanText.match(/^(@[^\n!/#.$]+?)\s*(?=[!/#.$])/);
         if (cmdMatch) {
           mentionPrefix = cmdMatch[0] + (cleanText.slice(cmdMatch[0].length).match(/^\s+/)?.[0] || '');
           cleanText = cleanText.slice(mentionPrefix.length);
         } else {
-          // Para texto sem símbolo de comando: captura o @ e o nome/número da menção do WhatsApp
-          const spaceMatch = cleanText.match(/^(@\S+(?:\s+\S+)?)\s+/);
-          if (spaceMatch) {
+          // Se começa com @botName conhecido (ex: "@Hermes 02", "@Hermes") ou @botNum
+          const escName = (botName || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const nameRegex = escName ? `(?:${escName}|hermes|bot)` : '(?:hermes|bot)';
+          const botNumPattern = botNum ? `|${botNum}` : '';
+          const botTagMatch = cleanText.match(new RegExp(`^@(?:${nameRegex}${botNumPattern})\\b\\s*`, 'i'));
+
+          if (botTagMatch) {
+            mentionPrefix = botTagMatch[0];
+            cleanText = cleanText.slice(mentionPrefix.length);
+          } else if (cleanText.match(/^(@\S+(?:\s+\S+)?)\s+/)) {
+            const spaceMatch = cleanText.match(/^(@\S+(?:\s+\S+)?)\s+/);
             mentionPrefix = spaceMatch[0];
             cleanText = cleanText.slice(mentionPrefix.length);
           } else {

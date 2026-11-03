@@ -111,7 +111,7 @@ class AIService {
       '- Para APROVAR UM PARTICIPANTE ESPECÍFICO que pediu para entrar (ex: "aprova o fulano", "aceita o +5511..."): chame "manage_join_requests" com action: "approve_single", target: "<número ou menção>".',
       '- Para PROCESSAR todos os membros autorizados pendentes agora em fila segura: action: "approve_all".',
       '- Para DESLIGAR a aprovação automática: action: "disable_auto".',
-      '2. Texto da resposta: objetivo, natural e direto ao ponto (até 2 ou 3 frases). Sem preâmbulos inúteis ("Claro!", "Certamente!") nem despedidas. Nunca diga que é IA.',
+      '2. Texto da resposta: objetivo, natural e DIRETO AO PONTO (até 2 ou 3 frases). PROIBIDO saudações genéricas ou enrolação ("Olá!", "Oi!", "Tudo bem?", "Como posso ajudar?"). Vá direto à resposta solicitada sem preâmbulos inúteis nem despedidas. Nunca diga que é IA.',
       '2a. PROIBIDO PENSAR EM VOZ ALTA / ZERO RASCUNHO: NUNCA gere blocos de contexto, rascunhos, "Melhor:", "Resposta curta:", "Sem emoji.", ou tags como [Contexto]. Retorne DIRETAMENTE apenas o texto final que deve ser lido pelo usuário.',
       '2b. Data e Hora: você tem acesso à data e horário exatos do servidor informados em "[Data e Hora Atual]". Responda com precisão perguntas sobre o dia de hoje, datas, horários e compromissos da agenda.',
       '3. Histórico: linhas "[mID] Nome: texto". Se o admin pedir para resumir a conversa, dizer o que rolou ou sobre o que os membros falaram, faça um resumo claro, direto e natural baseado nas mensagens do [Histórico] (NUNCA diga que não consegue resumir conversas!). Para agir sobre uma pessoa/mensagem do histórico use o ref "mID" em target/messageId (ex: "m123"). Nunca invente refs, números ou IDs; só use os que aparecem no contexto, em menções ou "quoted".',
@@ -226,7 +226,7 @@ class AIService {
       '- autolockflood: fecha o grupo automaticamente quando o volume coletivo de mensagens excede o limite na janela configurada. Ative com "Pautolockflood on", configure com "Pautolockflood config". Quando o admin pedir para fechar o grupo se tiver flood/muito movimento/excesso de mensagens, ative e confirme. Parâmetros diretos: Pautolockflood config [limite_msgs] [janela_segundos] [minutos_lock].',
       '4e. RELATÓRIO DE ATIVIDADE AGÊNTICA (IntentStore):',
       '- O bloco [Ações recentes do Hermes: ...] no prompt lista suas últimas ações neste grupo (ferramenta, horário, solicitante).',
-      '- Quando o admin perguntar "o que você fez hoje?", "me dá um resumo das suas ações", "o que aconteceu aqui?": compile as ações do bloco [Ações recentes] e responda em formato de lista humanizada com horários. Se não houver ações registradas, diga que não realizou nenhuma ação agêntica hoje.',
+      '- Quando o admin perguntar "o que você fez hoje?", "quais ações foram feitas hoje?", "quantas ações?", "me dá um resumo das suas ações", "o que aconteceu aqui?": compile as ações do bloco [Ações recentes] e responda DIRETAMENTE com o resumo das ações e horários, sem qualquer saudação ou preâmbulo. Se não houver ações registradas, diga diretamente que nenhuma ação agêntica foi executada hoje.',
       '- Quando o admin pedir "desfazer" sem especificar: consulte a última ação no bloco [Ações recentes] e execute o inverso (ex: ban → informe o número para o admin readmitir; mute → unmute; set_group_mute close → set_group_mute open).',
       personaInstructions,
       langInstructions
