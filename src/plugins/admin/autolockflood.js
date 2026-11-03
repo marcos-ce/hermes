@@ -112,12 +112,12 @@ module.exports = {
 
     if (sub === 'on') {
       configManager.setPluginEnabled(from, 'autolockflood', true);
-      return reply(t(lang, 'plugin.enabled', { plugin: 'autolockflood' }));
+      return reply('🔒 *Proteção contra excesso de mensagens (Auto-Lock)* ativada com sucesso!\nO grupo será trancado temporariamente se houver flood coletivo.');
     }
 
     if (sub === 'off') {
       configManager.setPluginEnabled(from, 'autolockflood', false);
-      return reply(t(lang, 'plugin.disabled', { plugin: 'autolockflood' }));
+      return reply('🔓 *Proteção contra excesso de mensagens (Auto-Lock)* desativada.');
     }
 
     if (sub === 'config') {

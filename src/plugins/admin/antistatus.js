@@ -68,12 +68,12 @@ module.exports = {
 
     if (sub === 'on') {
       configManager.setPluginEnabled(from, 'antistatus', true);
-      return reply(t(lang, 'plugin.enabled', { plugin: 'antistatus' }));
+      return reply('🚫 *Filtro anti-status ativado com sucesso!*\nMensagens mencionando @status no grupo serão apagadas imediatamente.');
     }
 
     if (sub === 'off') {
       configManager.setPluginEnabled(from, 'antistatus', false);
-      return reply(t(lang, 'plugin.disabled', { plugin: 'antistatus' }));
+      return reply('🚫 *Filtro anti-status desativado.*');
     }
 
     if (sub === 'config') {

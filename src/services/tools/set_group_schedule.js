@@ -8,7 +8,7 @@ module.exports = async function setGroupSchedule({ from, lang, args }) {
     configManager.setPluginEnabled(from, 'schedule', false);
     return {
       success: true,
-      message: `${t(lang, 'common.saved')}\n⏰ *Horários Automáticos:* ${t(lang, 'common.disabled')}`
+      message: '⏰ *Horários automáticos diários desativados.*\nO grupo não será mais aberto ou fechado por rotina programada.'
     };
   }
 
