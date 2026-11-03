@@ -863,9 +863,9 @@ function detectBotMention(sock, msg, text = '') {
     }
   }
 
-  const explicitTextRegexes = [/@hermes\b/i, /@bot\b/i];
+  const explicitTextRegexes = [/@hermes(?:\s*\d{1,4})?\b/i, /@bot(?:\s*\d{1,4})?\b/i];
   if (botName && botName.length >= 2) {
-    explicitTextRegexes.push(new RegExp(`@${escapeRegex(botName)}\\b`, 'i'));
+    explicitTextRegexes.push(new RegExp(`@${escapeRegex(botName)}(?:\\s*\\d{1,4})?\\b`, 'i'));
   }
   for (const num of botNumberVariants) {
     if (num && num.length >= 8) {
@@ -894,7 +894,7 @@ function detectBotMention(sock, msg, text = '') {
           const escName = (botName || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const nameRegex = escName ? `(?:${escName}|hermes|bot)` : '(?:hermes|bot)';
           const botNumPattern = botNum ? `|${botNum}` : '';
-          const botTagMatch = cleanText.match(new RegExp(`^@(?:${nameRegex}${botNumPattern})\\b\\s*`, 'i'));
+          const botTagMatch = cleanText.match(new RegExp(`^@(?:${nameRegex}${botNumPattern})(?:\\s*\\d{1,4})?\\b[\\s,.:!?-]*`, 'i'));
 
           if (botTagMatch) {
             mentionPrefix = botTagMatch[0];
@@ -929,7 +929,7 @@ function detectBotMention(sock, msg, text = '') {
     // checa contra os regexes explícitos de @hermes, @bot, @5545...
     if (!mentionPrefix) {
       for (const rx of explicitTextRegexes) {
-        const startMatch = cleanText.match(new RegExp(`^${rx.source}\\s*`, 'i'));
+        const startMatch = cleanText.match(new RegExp(`^${rx.source}[\\s,.:!?-]*`, 'i'));
         if (startMatch) {
           mentionPrefix = startMatch[0];
           cleanText = cleanText.slice(mentionPrefix.length);

@@ -110,6 +110,19 @@ function isActionHallucination(text) {
 }
 
 /**
+ * Remove saudações e preâmbulos vazios no início da resposta gerada pela IA
+ * Garante respostas diretas ao ponto, sem quebrar a experiência do admin.
+ */
+function stripLeadingGreeting(text) {
+  if (!text || typeof text !== 'string') return '';
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^(?:ol[aá]|oi|oie|opa|bom\s+dia|boa\s+tarde|boa\s+noite)[!.,\s-]*/i, '');
+  cleaned = cleaned.replace(/^(?:tudo\s+bem|como\s+vai|beleza|em\s+que\s+posso\s+(?:ajudar|colaborar)|como\s+posso\s+ajudar[^?!\n]*[?!\n]*)\s*/i, '');
+  cleaned = cleaned.replace(/^[:\-–—.,!?\s]+/, '').trim();
+  return cleaned || text.trim();
+}
+
+/**
  * Notifica o Dono do bot no privado com diagnóstico completo caso ocorra erro na IA
  * Evita expor falhas técnicas e saldo insuficiente nos grupos
  */
@@ -541,10 +554,12 @@ module.exports = {
     }
 
     cleanQuery = cleanQuery
-      .replace(/^hermes[\s,.:!?-]*/i, '')
-      .replace(/(?:^|\s)(?:ei|ô|o|fala|eai|ae|por\s+favor)?\s*hermes[\s,.:!?-]*/gi, ' ')
-      .replace(/@hermes\b/gi, '')
-      .replace(/@bot\b/gi, '');
+      .replace(/^hermes(?:\s+\d{1,4})?[\s,.:!?-]*/i, '')
+      .replace(/(?:^|\s)(?:ei|ô|o|fala|eai|ae|por\s+favor)?\s*hermes(?:\s+\d{1,4})?[\s,.:!?-]*/gi, ' ')
+      .replace(/@hermes(?:\s+\d{1,4})?\b/gi, '')
+      .replace(/@bot(?:\s+\d{1,4})?\b/gi, '')
+      .replace(/^(?:\d{1,4}\s*[,.:!?-]?\s*)/, '')
+      .replace(/^[\s,.:!?-]+/, '');
 
     if (botNum) {
       cleanQuery = cleanQuery.replace(new RegExp(`@${botNum}\\b`, 'g'), '');
@@ -1243,7 +1258,7 @@ module.exports = {
           return;
         }
 
-        const finalReply = rawContent;
+        const finalReply = stripLeadingGreeting(rawContent);
         await reply(`${notice}${finalReply}`);
         memoryEngine.saveMessage(from, 'hermes@bot', finalReply, null, 'Hermes');
 
