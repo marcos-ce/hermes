@@ -8,6 +8,7 @@ const settings = require('../../config/settings');
 const { sendSafeMessage } = require('../../utils/antiBan');
 const logger = require('../../utils/logger');
 const { parseHumanDuration, formatHumanDuration } = wizardEngine;
+const { generateAutomsgVariation } = require('../../services/automsgVariationService');
 
 /**
  * ============================================================
@@ -413,6 +414,16 @@ module.exports = {
           en: 'Enable Night Sleep Mode (pauses sends between 23:00 and 08:00 to prevent reports)?'
         },
         default: true
+      },
+      {
+        name: 'useAI',
+        type: 'boolean',
+        question: {
+          pt: 'Usar IA para variar o texto automaticamente a cada envio? (Evita spam de mensagem idêntica):',
+          es: '¿Usar IA para variar el texto automáticamente en cada envío? (Evita spam de mensaje idéntico):',
+          en: 'Use AI to automatically vary the text on each send? (Prevents repeated message spam):'
+        },
+        default: true
       }
     ]
   },
@@ -493,14 +504,27 @@ module.exports = {
           nextJitterMinutes: nextJitter
         });
 
+        // ── Variação de texto via IA (anti-spam de mensagem idêntica) ──
+        let msgToSend = automsgCfg.message || '';
+        if (msgToSend && automsgCfg.useAI !== false) {
+          try {
+            const groupLangForAI = group?.lang || 'pt';
+            const varied = await Promise.race([
+              generateAutomsgVariation(msgToSend, groupLangForAI),
+              new Promise(resolve => setTimeout(() => resolve(null), 7000))
+            ]);
+            if (varied) msgToSend = varied;
+          } catch (_) { /* fallback: usa texto original */ }
+        }
+
         if (hasMedia) {
-          // Envia imagem com hash jitter novo em memória + legenda
-          const sent = await sendAutomsgMedia(sock, groupJid, automsgCfg.media, automsgCfg.message || '');
-          if (!sent && automsgCfg.message) {
-            await sendSafeMessage(sock, groupJid, { text: automsgCfg.message });
+          // Envia imagem com hash jitter novo em memória + legenda (possivelmente variada)
+          const sent = await sendAutomsgMedia(sock, groupJid, automsgCfg.media, msgToSend);
+          if (!sent && msgToSend) {
+            await sendSafeMessage(sock, groupJid, { text: msgToSend });
           }
         } else {
-          await sendSafeMessage(sock, groupJid, { text: automsgCfg.message });
+          await sendSafeMessage(sock, groupJid, { text: msgToSend });
         }
       }
     });
