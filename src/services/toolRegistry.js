@@ -319,13 +319,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'pin_group_message',
-      description: 'Fixa ("pin"), desafixa ("unpin") mensagem respondida ou desafixa todas as mensagens ("unpin_all"). Acione "pin" para: fixar, pinar, pregar no topo, deixar destacado, /pin, /fixar. Acione "unpin" para: desafixar, despinar, tirar do topo, /unpin.',
+      description: 'Fixa ("pin"), desafixa ("unpin") mensagem específica/respondida ou desafixa todas ("unpin_all"). Suporta enviar e fixar um texto novo diretamente via parâmetro text (ex: pinar a hora atual, avisos). Para desafixar seletivamente mantendo outra mensagem, use unpin com messageId.',
       parameters: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['pin', 'unpin', 'unpin_all'], description: '"pin" para fixar, "unpin" para desafixar a mensagem ou "unpin_all" para desafixar todas as mensagens fixadas do grupo.' },
+          action: { type: 'string', enum: ['pin', 'unpin', 'unpin_all'], description: '"pin" para fixar, "unpin" para desafixar mensagem específica ou "unpin_all" para desafixar todas as mensagens fixadas.' },
           duration: { type: 'string', enum: ['24h', '7d', '30d'], description: 'Duração: "24h", "7d" ou "30d" (padrão: "24h").' },
-          messageId: { type: 'string', description: 'Ref "m123" ou omita para a mensagem respondida.' }
+          messageId: { type: 'string', description: 'ID da mensagem fixada (para desafixar seletivamente) ou ref "m123" do histórico.' },
+          text: { type: 'string', description: 'Texto a ser enviado e fixado no topo (obrigatório se o admin pedir para pinar a hora atual ou mensagem nova).' }
         },
         required: ['action']
       }

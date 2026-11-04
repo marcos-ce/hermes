@@ -15,13 +15,18 @@ class PinTracker {
    * @param {string} groupJid 
    * @param {object} key Objeto de chave WAMessageKey ({ remoteJid, id, fromMe, participant })
    */
-  addPin(groupJid, key) {
+  addPin(groupJid, key, preview = null) {
     if (!groupJid || !key?.id) return;
     if (!this.pinnedByGroup.has(groupJid)) {
       this.pinnedByGroup.set(groupJid, new Map());
     }
     const groupPins = this.pinnedByGroup.get(groupJid);
-    groupPins.set(key.id, key);
+    groupPins.set(key.id, {
+      key,
+      id: key.id,
+      preview: typeof preview === 'string' ? preview : null,
+      timestamp: Date.now()
+    });
 
     // Limite de segurança em RAM (WhatsApp permite até 3 fixadas por chat)
     if (groupPins.size > 10) {
@@ -63,7 +68,67 @@ class PinTracker {
     if (!groupJid) return [];
     const groupPins = this.pinnedByGroup.get(groupJid);
     if (!groupPins || groupPins.size === 0) return [];
-    return Array.from(groupPins.values());
+    return Array.from(groupPins.values()).map(e => e.key || e);
+  }
+
+  /**
+   * Retorna as mensagens fixadas com texto/preview resolvido via memoryEngine
+   * @param {string} groupJid
+   * @param {object} [memoryEngine]
+   * @returns {Array<{ id: string, key: object, text: string, senderNum: string }>}
+   */
+  getPinnedWithDetails(groupJid, memoryEngine = null) {
+    if (!groupJid) return [];
+    const groupPins = this.pinnedByGroup.get(groupJid);
+    if (!groupPins || groupPins.size === 0) return [];
+
+    const list = [];
+    for (const [id, entry] of groupPins.entries()) {
+      const key = entry.key || entry;
+      let text = entry.preview || '';
+      let sender = key.participant || (key.fromMe ? 'bot' : '');
+
+      if (!text && memoryEngine) {
+        const msg = memoryEngine.getMessageByMsgId(groupJid, id);
+        if (msg) {
+          text = msg.text || '';
+          sender = msg.sender || sender;
+        }
+      }
+
+      const senderNum = String(sender || '').replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+      list.push({
+        id,
+        key,
+        text: text ? text.slice(0, 100) : '[Foto/Mídia ou Mensagem]',
+        senderNum: senderNum || (key.fromMe ? 'Hermes' : 'membro')
+      });
+    }
+    return list;
+  }
+
+  /**
+   * Desafixa uma mensagem específica pelo stanzaId
+   * @param {object} sock
+   * @param {string} groupJid
+   * @param {string} stanzaId
+   * @returns {Promise<boolean>}
+   */
+  async unpinMessage(sock, groupJid, stanzaId) {
+    if (!sock || !groupJid || !stanzaId) return false;
+    const groupPins = this.pinnedByGroup.get(groupJid);
+    if (!groupPins) return false;
+    const entry = groupPins.get(stanzaId);
+    if (!entry) return false;
+    const key = entry.key || entry;
+    try {
+      await sock.sendMessage(groupJid, { pin: key, type: 2 });
+      groupPins.delete(stanzaId);
+      return true;
+    } catch (err) {
+      logger.error({ err, groupJid, stanzaId }, 'Erro ao desafixar mensagem individual');
+      return false;
+    }
   }
 
   /**

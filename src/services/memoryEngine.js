@@ -261,6 +261,55 @@ class MemoryEngine {
   }
 
   /**
+   * Obtém os dados de uma mensagem pelo stanzaId (msg_id).
+   * @param {string} groupJid
+   * @param {string} msgId
+   * @returns {{ id: number, msgId: string, participant: string, sender: string, text: string }|null}
+   */
+  getMessageByMsgId(groupJid, msgId) {
+    if (!groupJid || !msgId) return null;
+    const cleanId = String(msgId).trim();
+
+    if (!this.db) {
+      const list = this.fallbackStore.get(groupJid) || [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const item = list[i];
+        if (item && item.msgId === cleanId) {
+          return {
+            id: item.id,
+            msgId: item.msgId,
+            participant: item.participant || item.sender,
+            sender: item.sender,
+            text: item.text
+          };
+        }
+      }
+      return null;
+    }
+
+    try {
+      const row = this.db.prepare(`
+        SELECT id, sender_jid, sender_name, text, msg_id, participant
+        FROM messages
+        WHERE group_jid = ? AND msg_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `).get(groupJid, cleanId);
+
+      if (!row || !row.msg_id) return null;
+      return {
+        id: row.id,
+        msgId: row.msg_id,
+        participant: row.participant || row.sender_jid,
+        sender: row.sender_jid,
+        text: row.text
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
    * Converte o histórico recente em formato de diálogo legível para o prompt do modelo,
    * incluindo nome e @numero para que a IA correlacione quem disse o quê e possa agir por nome.
    * @param {string} groupJid 

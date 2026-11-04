@@ -11,6 +11,7 @@ const { wizardCache } = require('../../utils/cache');
 const settings = require('../../config/settings');
 const logger = require('../../utils/logger');
 const pollTracker  = require('../../utils/pollTracker');
+const pinTracker   = require('../../utils/pinTracker');
 const intentStore  = require('../../services/intentStore');
 const { t: tr } = require('../../utils/i18n');
 
@@ -1059,6 +1060,17 @@ module.exports = {
       wizardCache.del(clarifKey);
     }
 
+        // Mensagens atualmente fixadas no topo do grupo (para o modelo distinguir e desfixar seletivamente)
+    try {
+      const currentPinned = pinTracker.getPinnedWithDetails(from, memoryEngine);
+      if (currentPinned.length > 0) {
+        const pinDesc = currentPinned.map((p, idx) => {
+          return `[Fixado ${idx + 1}] ID: "${p.id}" | Autor: @${p.senderNum} | Conteúdo: "${p.text}"`;
+        }).join(' ; ');
+        userPromptParts.push(`[Mensagens atualmente FIXADAS no topo deste grupo: ${pinDesc}]`);
+      }
+    } catch (_) {}
+
     // Data e Hora em Tempo Real (no fim do contexto para proteger o cache de prefixo)
     userPromptParts.push(`[Data e Hora Atual no Servidor: ${currentDateTimeStr} (${tz})]`);
 
@@ -1198,6 +1210,7 @@ module.exports = {
           return reply(tr(lang, 'hermes.unclear'));
         }
 
+        let toolsSentMessage = false;
         for (const call of validCalls) {
           logger.info({ tool: call.name, args: call.args, sender, from }, 'Executando Tool Call do Hermes');
 
@@ -1257,6 +1270,17 @@ module.exports = {
             await reply(execResult.error);
           }
         }
+        // Se as ferramentas não enviaram nenhuma mensagem ao chat (ex: pin nativo)
+        // ou se a IA produziu uma resposta textual no content, enviamos o texto:
+        if (!toolsSentMessage && aiResponse.content && aiResponse.content.trim().length > 0) {
+          const rawContent = aiResponse.content.trim();
+          const cleanSilence = rawContent.replace(/[*_`"']/g, '').trim();
+          if (!/^\[SIL[EÊ]NCIO\]/i.test(cleanSilence)) {
+            await reply(rawContent);
+            memoryEngine.saveMessage(from, 'hermes@bot', rawContent, null, 'Hermes');
+          }
+        }
+
         wizardCache.set(`post_action:${from}:${sender}`, { lastTool: validCalls[validCalls.length - 1].name }, 30);
         return;
       }
