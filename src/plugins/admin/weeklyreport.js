@@ -7,19 +7,13 @@ const logger = require('../../utils/logger');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Busca stats semanais diretamente no SQLite do memoryEngine.
- * Retorna: { totalMsgs, topSenders: [{num, name, count}], perDay: {YYYY-MM-DD: count} }
- */
 function fetchWeekStats(groupJid) {
   const db = memoryEngine.db;
   if (!db) return null;
 
-  const sinceMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const sinceTs = Math.floor(sinceMs / 1000);
+  const sinceTs = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
 
   try {
-    // Total de mensagens na semana
     const totalRow = db.prepare(
       'SELECT COUNT(*) as cnt FROM messages WHERE group_jid = ? AND timestamp >= ?'
     ).get(groupJid, sinceTs);
@@ -27,7 +21,6 @@ function fetchWeekStats(groupJid) {
 
     if (totalMsgs === 0) return { totalMsgs: 0, topSenders: [], perDay: {} };
 
-    // Top 5 remetentes
     const topRows = db.prepare(`
       SELECT sender_jid, sender_name, COUNT(*) as cnt
       FROM messages
@@ -43,7 +36,6 @@ function fetchWeekStats(groupJid) {
       count: r.cnt
     }));
 
-    // Mensagens por dia (últimos 7 dias)
     const dayRows = db.prepare(`
       SELECT DATE(timestamp, 'unixepoch', 'localtime') as day, COUNT(*) as cnt
       FROM messages
@@ -53,9 +45,7 @@ function fetchWeekStats(groupJid) {
     `).all(groupJid, sinceTs);
 
     const perDay = {};
-    for (const r of dayRows) {
-      perDay[r.day] = r.cnt;
-    }
+    for (const r of dayRows) perDay[r.day] = r.cnt;
 
     return { totalMsgs, topSenders, perDay };
   } catch (err) {
@@ -64,10 +54,6 @@ function fetchWeekStats(groupJid) {
   }
 }
 
-/**
- * Formata os números de dias da semana para exibição compacta.
- * Ex: { '2026-10-28': 12, '2026-10-29': 5 } → "Ter 12 | Qua 5"
- */
 function formatDayBar(perDay, lang) {
   const dayNames = {
     pt: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
@@ -83,12 +69,45 @@ function formatDayBar(perDay, lang) {
   }).join(' · ');
 }
 
+/**
+ * Função compartilhada que constrói o texto e as menções do relatório.
+ * Usada tanto pelo onSchedule quanto pelo execute "agora".
+ */
+async function buildReport(sock, groupJid, lang) {
+  const stats = fetchWeekStats(groupJid);
+  if (!stats || stats.totalMsgs === 0) return null;
+
+  let metadata;
+  try { metadata = await getGroupMetadata(sock, groupJid); } catch (_) {}
+  const groupName = metadata?.subject || 'Grupo';
+  const totalMembers = metadata?.participants?.length || 0;
+
+  const groupData = configManager.getGroup(groupJid) || {};
+  const warns = groupData.warns || {};
+  const totalWarned = Object.keys(warns).length;
+  const dayBar = formatDayBar(stats.perDay, lang);
+
+  const topText = stats.topSenders.length > 0
+    ? stats.topSenders.map((s, i) => `${i + 1}. @${s.num} (${s.count} msgs)`).join('\n')
+    : t(lang, 'weeklyreport.no_data');
+  const mentions = stats.topSenders.map(s => `${s.num}@s.whatsapp.net`);
+
+  let text = t(lang, 'weeklyreport.header', { group: groupName }) + '\n\n';
+  text += t(lang, 'weeklyreport.total_msgs', { count: stats.totalMsgs }) + '\n';
+  text += t(lang, 'weeklyreport.total_members', { count: totalMembers }) + '\n';
+  if (dayBar) text += `📅 ${dayBar}\n`;
+  text += '\n' + t(lang, 'weeklyreport.top_title') + '\n' + topText;
+  if (totalWarned > 0) text += '\n\n' + t(lang, 'weeklyreport.warns', { count: totalWarned });
+
+  return { text, mentions };
+}
+
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
 module.exports = {
   name: 'weeklyreport',
   aliases: ['weeklyreport', 'relatorio', 'relatório', 'reporte', 'report', 'semana'],
-  description: 'Relatório semanal automático: top ativos, advertências, bans e resumo de movimento',
+  description: 'Relatório semanal automático: top ativos, advertências e resumo de movimento',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: false,
@@ -119,19 +138,14 @@ module.exports = {
     ]
   },
 
-  /**
-   * Scheduler: dispara toda segunda-feira no horário configurado.
-   */
   async onSchedule({ sock, groupJid, group, config, currentHHMM, currentDateKey, lang, queueTask, lastExecuted }) {
     const cfg = config || {};
     const sendTime = cfg.sendTime || '08:00';
 
     if (currentHHMM !== sendTime) return;
 
-    // Só segunda-feira (day 1)
-    // currentDateKey é DD/MM/YYYY (locale pt-BR) ou YYYY-M-D
-    const now = new Date();
-    if (now.getDay() !== 1) return; // 0=Dom, 1=Seg, 2=Ter...
+    // Só segunda-feira (day === 1)
+    if (new Date().getDay() !== 1) return;
 
     const execKey = `weeklyreport:${groupJid}:${currentDateKey}`;
     if (lastExecuted.get(execKey)) return;
@@ -140,37 +154,9 @@ module.exports = {
     queueTask({
       run: async () => {
         try {
-          const stats = fetchWeekStats(groupJid);
-          if (!stats) return;
-
-          let metadata;
-          try { metadata = await getGroupMetadata(sock, groupJid); } catch (_) {}
-          const groupName = metadata?.subject || 'Grupo';
-          const totalMembers = metadata?.participants?.length || 0;
-
-          // Dados de moderação da semana (warns e bans acumulados no grupo)
-          const groupData = configManager.getGroup(groupJid) || {};
-          const warns = groupData.warns || {};
-          const totalWarned = Object.keys(warns).length;
-
-          // Monta o texto do relatório
-          const dayBar = formatDayBar(stats.perDay, lang);
-          const topText = stats.topSenders.length > 0
-            ? stats.topSenders.map((s, i) => `${i + 1}. @${s.num} (${s.count} msgs)`).join('\n')
-            : t(lang, 'weeklyreport.no_data');
-
-          const mentions = stats.topSenders.map(s => `${s.num}@s.whatsapp.net`);
-
-          let text = t(lang, 'weeklyreport.header', { group: groupName }) + '\n\n';
-          text += t(lang, 'weeklyreport.total_msgs', { count: stats.totalMsgs }) + '\n';
-          text += t(lang, 'weeklyreport.total_members', { count: totalMembers }) + '\n';
-          if (dayBar) text += `📅 ${dayBar}\n`;
-          text += '\n' + t(lang, 'weeklyreport.top_title') + '\n' + topText;
-          if (totalWarned > 0) {
-            text += '\n\n' + t(lang, 'weeklyreport.warns', { count: totalWarned });
-          }
-
-          await sendSafeMessage(sock, groupJid, { text, mentions });
+          const report = await buildReport(sock, groupJid, lang);
+          if (!report) return;
+          await sendSafeMessage(sock, groupJid, { text: report.text, mentions: report.mentions });
         } catch (err) {
           logger.error({ err, groupJid }, '[weeklyreport] Erro ao enviar relatório semanal');
         }
@@ -193,37 +179,21 @@ module.exports = {
       return reply(t(lang, 'weeklyreport.off'));
     }
 
-    // !relatorio now → envia imediatamente (sem esperar segunda)
+    // !relatorio agora — envia imediatamente
     if (sub === 'now' || sub === 'agora' || sub === 'ahora' || sub === 'enviar') {
-      const stats = fetchWeekStats(from);
-      if (!stats || stats.totalMsgs === 0) {
-        return reply(t(lang, 'weeklyreport.no_data'));
-      }
-      let metadata;
-      try { metadata = await getGroupMetadata(sock, from); } catch (_) {}
-      const groupName = metadata?.subject || 'Grupo';
-      const totalMembers = metadata?.participants?.length || 0;
-      const groupData = configManager.getGroup(from) || {};
-      const warns = groupData.warns || {};
-      const totalWarned = Object.keys(warns).length;
-      const dayBar = formatDayBar(stats.perDay, lang);
-      const topText = stats.topSenders.length > 0
-        ? stats.topSenders.map((s, i) => `${i + 1}. @${s.num} (${s.count} msgs)`).join('\n')
-        : t(lang, 'weeklyreport.no_data');
-      const mentions = stats.topSenders.map(s => `${s.num}@s.whatsapp.net`);
-      let text = t(lang, 'weeklyreport.header', { group: groupName }) + '\n\n';
-      text += t(lang, 'weeklyreport.total_msgs', { count: stats.totalMsgs }) + '\n';
-      text += t(lang, 'weeklyreport.total_members', { count: totalMembers }) + '\n';
-      if (dayBar) text += `📅 ${dayBar}\n`;
-      text += '\n' + t(lang, 'weeklyreport.top_title') + '\n' + topText;
-      if (totalWarned > 0) text += '\n\n' + t(lang, 'weeklyreport.warns', { count: totalWarned });
-      return await sendSafeMessage(sock, from, { text, mentions });
+      const report = await buildReport(sock, from, lang);
+      if (!report) return reply(t(lang, 'weeklyreport.no_data'));
+      return await sendSafeMessage(sock, from, { text: report.text, mentions: report.mentions });
     }
 
     // Status
     const enabled = configManager.isPluginEnabled(from, 'weeklyreport');
     const statusStr = enabled ? translate('common.enabled') : translate('common.disabled');
     const time = cfg.sendTime || '08:00';
-    return reply(`📊 *Relatório Semanal:* ${statusStr}\n⏰ Horário: ${time} (toda segunda-feira)\n\n💡 *Comandos:*\n• \`!relatorio on\` / \`!relatorio off\`\n• \`!relatorio agora\` — envia imediatamente`);
+    return reply(
+      `📊 *Relatório Semanal:* ${statusStr}\n` +
+      `⏰ Horário: ${time} (toda segunda-feira)\n\n` +
+      `💡 *Comandos:*\n• \`!relatorio on\` / \`!relatorio off\`\n• \`!relatorio agora\` — envia imediatamente`
+    );
   }
 };

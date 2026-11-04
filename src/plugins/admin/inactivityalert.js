@@ -1,12 +1,82 @@
 const configManager = require('../../core/configManager');
 const { sendSafeMessage } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
+const { getGroupMetadata } = require('../../utils/jidResolver');
 const logger = require('../../utils/logger');
+
+// ─── Pool de mensagens variadas por idioma ───────────────────────────────────
+// Anti-Ban: rotação garante que nunca envie o mesmo texto consecutivamente.
+// O admin pode substituir com mensagem personalizada via !inatividade config.
+
+const DEFAULT_POOL = {
+  pt: [
+    '💬 Ei, {group}! Que tal uma boa conversa? 😄',
+    '🤔 Oi, {group}! Alguém tem algum assunto pra compartilhar?',
+    '👋 Olá, {group}! Passando pra ver como todo mundo tá. 😊',
+    '🗨️ {group} no silêncio? Vamos movimentar! Alguma novidade?',
+    '☀️ Boa! {group} — alguém acordado por aqui? 😄',
+    '💡 {group} — tem alguma dúvida, dica ou curiosidade pra compartilhar?',
+    '🎲 {group} — que tal jogar uma pergunta pra galera responder?',
+  ],
+  es: [
+    '💬 ¡Ei, {group}! ¿Qué tal una buena charla? 😄',
+    '🤔 ¡Hola, {group}! ¿Alguien tiene algo para compartir?',
+    '👋 ¡Hola, {group}! Pasando a ver cómo están todos. 😊',
+    '🗨️ ¿{group} en silencio? ¡Vamos a movernos! ¿Alguna novedad?',
+    '☀️ ¡{group} — alguien despierto por aquí? 😄',
+    '💡 {group} — ¿tienen alguna duda, tip o curiosidad para compartir?',
+    '🎲 {group} — ¿qué tal lanzar una pregunta para que todos respondan?',
+  ],
+  en: [
+    '💬 Hey, {group}! How about a good chat? 😄',
+    '🤔 Hi, {group}! Anyone have something to share?',
+    '👋 Hello, {group}! Just checking in. 😊',
+    '🗨️ {group} gone quiet? Let\'s get it going! Any news?',
+    '☀️ {group} — anyone awake in here? 😄',
+    '💡 {group} — any tips, doubts or curiosities to share?',
+    '🎲 {group} — how about throwing a question for everyone to answer?',
+  ]
+};
+
+/**
+ * Escolhe uma mensagem da pool que seja diferente da última enviada.
+ * Persiste o índice usado em cfg.lastPoolIndex para evitar repetição.
+ */
+function pickPoolMessage(lang, groupName, cfg) {
+  // Se o admin configurou mensagem personalizada, usa ela (sem rotação)
+  if (cfg.message && cfg.message !== DEFAULT_POOL.pt[0]) {
+    return cfg.message.replace(/\{group\}/g, groupName);
+  }
+
+  const pool = DEFAULT_POOL[lang] || DEFAULT_POOL.pt;
+  const lastIndex = typeof cfg._lastPoolIndex === 'number' ? cfg._lastPoolIndex : -1;
+
+  // Sorteia um índice diferente do último
+  let idx;
+  if (pool.length === 1) {
+    idx = 0;
+  } else {
+    do {
+      idx = Math.floor(Math.random() * pool.length);
+    } while (idx === lastIndex);
+  }
+
+  // Persiste o índice de forma não-destrutiva
+  configManager.updatePluginConfig(
+    // groupJid é passado fora — salva via closure no onSchedule
+    null, null, null, // placeholder: veja uso abaixo
+    idx
+  );
+
+  return pool[idx].replace(/\{group\}/g, groupName);
+}
+
+// ─── Plugin ─────────────────────────────────────────────────────────────────
 
 module.exports = {
   name: 'inactivityalert',
   aliases: ['inactivityalert', 'inatividade', 'inactividad', 'inactivity', 'alertainativo', 'grupoinativo'],
-  description: 'Envia mensagem de estímulo quando o grupo fica inativo por X horas',
+  description: 'Envia mensagem variada de estímulo quando o grupo fica inativo por X horas',
   ownerOnly: false,
   adminOnly: true,
   botAdminRequired: false,
@@ -19,9 +89,9 @@ module.exports = {
       en: 'Inactive Group Alert'
     },
     description: {
-      pt: 'Envia mensagem automática quando ninguém fala por um período configurado',
-      es: 'Envía mensaje automático cuando nadie habla por el tiempo configurado',
-      en: 'Sends automatic message when nobody talks for a configured period'
+      pt: 'Envia mensagem automática variada quando ninguém fala por um período configurado',
+      es: 'Envía mensaje automático variado cuando nadie habla por el tiempo configurado',
+      en: 'Sends a varied automatic message when nobody talks for a configured period'
     },
     fields: [
       {
@@ -38,11 +108,11 @@ module.exports = {
         name: 'message',
         type: 'string',
         question: {
-          pt: 'Texto da mensagem de estímulo (use {group} para o nome do grupo, ou "padrão" para o texto padrão):',
-          es: 'Texto del mensaje de estímulo (usa {group} para el nombre del grupo, o "predeterminado" para el texto predeterminado):',
-          en: 'Stimulus message text (use {group} for group name, or "default" for default text):'
+          pt: 'Texto customizado (opcional). Use {group} para o nome do grupo. Deixe em branco para usar a rotação de mensagens variadas automática:',
+          es: 'Texto personalizado (opcional). Usa {group} para el nombre del grupo. Deja vacío para usar la rotación de mensajes variados automática:',
+          en: 'Custom message (optional). Use {group} for group name. Leave blank to use automatic varied message rotation:'
         },
-        default: '💬 Ei, {group}! Tá tudo bem por aí? Que tal trocar uma ideia? 😄'
+        default: ''
       },
       {
         name: 'cooldownHours',
@@ -57,7 +127,7 @@ module.exports = {
     ]
   },
 
-  async onSchedule({ sock, groupJid, group, config, queueTask, lastExecuted, currentDateKey }) {
+  async onSchedule({ sock, groupJid, group, config, queueTask, lastExecuted }) {
     const cfg = config || {};
     const thresholdHours = Math.min(Math.max(parseFloat(cfg.thresholdHours) || 12, 1), 72);
     const cooldownHours = Math.min(Math.max(parseFloat(cfg.cooldownHours) || 24, 1), 168);
@@ -67,30 +137,51 @@ module.exports = {
 
     const now = Date.now();
     const lastActivity = group?.lastActivity || 0;
-    const timeSinceActivity = now - lastActivity;
 
-    // Ainda não passou do threshold de inatividade
-    if (timeSinceActivity < thresholdMs) return;
+    if (now - lastActivity < thresholdMs) return;
 
-    // Verifica cooldown: só envia uma vez por período de cooldown
     const execKey = `inactivityalert:${groupJid}`;
     const lastSent = lastExecuted.get(execKey) || 0;
     if (now - lastSent < cooldownMs) return;
 
     lastExecuted.set(execKey, now);
 
+    // Captura o índice antes de enfileirar (para fechar a closure corretamente)
+    const lang = group?.lang || 'pt';
+    const lastIndex = typeof cfg._lastPoolIndex === 'number' ? cfg._lastPoolIndex : -1;
+    const pool = DEFAULT_POOL[lang] || DEFAULT_POOL.pt;
+    let idx;
+    if (pool.length === 1) {
+      idx = 0;
+    } else {
+      do { idx = Math.floor(Math.random() * pool.length); } while (idx === lastIndex);
+    }
+    // Persiste o índice de forma não-destrutiva para evitar repetição no próximo ciclo
+    configManager.updatePluginConfig(groupJid, 'inactivityalert', { _lastPoolIndex: idx });
+
     queueTask({
       run: async () => {
         try {
-          const lang = group?.lang || 'pt';
-          const style = group?.style || 'default';
-          const groupName = groupCache_safe(groupJid) || 'Grupo';
+          // Busca nome real do grupo via metadata (não usa cache local que pode estar desatualizado)
+          let groupName = 'Grupo';
+          try {
+            const metadata = await getGroupMetadata(sock, groupJid);
+            groupName = metadata?.subject || 'Grupo';
+          } catch (_) {}
 
-          let message = cfg.message || t(lang, 'inactivityalert.default_message', { group: groupName }, style);
-          message = message.replace(/\{group\}/g, groupName);
+          // Monta a mensagem: custom ou pool rotacionada
+          let message;
+          if (cfg.message && cfg.message.trim().length > 0) {
+            message = cfg.message.replace(/\{group\}/g, groupName);
+          } else {
+            message = pool[idx].replace(/\{group\}/g, groupName);
+          }
 
           await sendSafeMessage(sock, groupJid, { text: message });
-          logger.info({ groupJid, thresholdHours, timeSinceActivity: Math.round(timeSinceActivity / 3600000) + 'h' }, '[inactivityalert] Alerta de inatividade enviado');
+          logger.info(
+            { groupJid, poolIdx: idx, thresholdHours, idleHours: Math.round((now - lastActivity) / 3600000) },
+            '[inactivityalert] Alerta de inatividade enviado'
+          );
         } catch (err) {
           logger.error({ err, groupJid }, '[inactivityalert] Erro ao enviar alerta de inatividade');
         }
@@ -118,27 +209,19 @@ module.exports = {
     const statusStr = enabled ? translate('common.enabled') : translate('common.disabled');
     const hours = cfg.thresholdHours || 12;
     const cooldown = cfg.cooldownHours || 24;
-    const group = configManager.getGroup(from) || {};
-    const lastActivity = group.lastActivity || 0;
-    const idleMs = Date.now() - lastActivity;
-    const idleH = Math.round(idleMs / 3600000);
+    const groupData = configManager.getGroup(from) || {};
+    const idleH = Math.round((Date.now() - (groupData.lastActivity || 0)) / 3600000);
+    const modeStr = cfg.message && cfg.message.trim().length > 0
+      ? `Customizada: _"${cfg.message.slice(0, 40)}${cfg.message.length > 40 ? '…' : ''}"_`
+      : `Rotação automática (${(DEFAULT_POOL[lang] || DEFAULT_POOL.pt).length} variações)`;
 
     return reply(
       `😴 *Alerta de Inatividade:* ${statusStr}\n` +
       `⏱️ Disparo após: *${hours}h* sem mensagens\n` +
       `🔁 Cooldown: *${cooldown}h* entre alertas\n` +
-      `💬 Última mensagem: há *${idleH}h*\n\n` +
-      `💡 *Comandos:*\n• \`!inatividade on\` / \`!inatividade off\`\n• \`!inatividade config\` — abre o assistente de configuração`
+      `💬 Última mensagem: há *${idleH}h*\n` +
+      `📝 Modo: ${modeStr}\n\n` +
+      `💡 *Comandos:*\n• \`!inatividade on\` / \`!inatividade off\`\n• \`!inatividade config\` — abre o assistente`
     );
   }
 };
-
-// Helper leve para nome do grupo sem bloquear o scheduler
-function groupCache_safe(groupJid) {
-  try {
-    const { groupCache } = require('../../utils/cache');
-    return groupCache.get(groupJid)?.subject || null;
-  } catch (_) {
-    return null;
-  }
-}

@@ -54,9 +54,7 @@ function getTempBlacklist(groupJid) {
 }
 
 function addTempBlacklist(groupJid, jid, expiresAt) {
-  const group = configManager.getOrCreateGroup
-    ? configManager.getOrCreateGroup(groupJid)
-    : configManager.getGroup(groupJid);
+  const group = configManager.getOrCreateGroup(groupJid);
   if (!group) return;
   if (!group.tempBlacklist) group.tempBlacklist = {};
   const clean = jid.replace(/@.*$/, '').replace(/\D/g, '');

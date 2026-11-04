@@ -28,7 +28,8 @@ const toolHandlers = new Map([
   ['learn_group_fact', require('./learn_group_fact')],
   ['forget_group_fact', require('./forget_group_fact')],
   ['manage_join_requests', require('./manage_join_requests')],
-  ['set_group_milestone', require('./set_group_milestone')]
+  ['set_group_milestone', require('./set_group_milestone')],
+  ['get_group_info', require('./get_group_info')]
 ]);
 
 module.exports = toolHandlers;

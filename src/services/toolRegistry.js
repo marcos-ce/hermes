@@ -420,6 +420,18 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_group_info',
+      description: 'Obtém informações atuais do grupo: total de membros, admins, descrição, histórico de mensagens, advertências ativas e licença. Acione para: "quantos membros tem o grupo?", "qual o tamanho do grupo?", "quem são os admins?", "me dá um resumo do grupo", "dados do grupo", "quantas pessoas estão aqui?", "qual o nome do grupo?", "há alguém silenciado?", "quanto tempo de licença resta?".',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'set_group_milestone',
       description: 'Configura uma meta progressiva de quantidade de membros no grupo. Acione para: "quando chegar a 100 membros celebre", "ao bater 500 membros faça sorteio", "meta de 50 membros: abrir o grupo", "configure meta de crescimento", "ao atingir 200 pessoas diga X", "quando completar 1000 membros". Tags dinâmicas suportadas na mensagem: {user} (marca o novo membro), {count} (número da meta), {group} (nome do grupo).',
       parameters: {
