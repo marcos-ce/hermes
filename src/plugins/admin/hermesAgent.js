@@ -1069,6 +1069,27 @@ module.exports = {
       userPromptParts.push(recentActionsBlock);
     }
 
+    // Membro em evidência: detecta quem foi mais ativo nos últimos 5min (provável alvo de ações pronominais)
+    try {
+      const recentMsgs = memoryEngine.getRecentMessages(from, 20);
+      const fiveMinAgo = Math.floor(Date.now() / 1000) - 300;
+      const mentionCount = {};
+      for (const m of recentMsgs) {
+        if (m.timestamp >= fiveMinAgo && m.sender && m.sender !== sender && m.sender !== 'hermes@bot') {
+          mentionCount[m.sender] = (mentionCount[m.sender] || 0) + 1;
+        }
+      }
+      const top = Object.entries(mentionCount).sort((a, b) => b[1] - a[1])[0];
+      if (top && top[1] >= 2) {
+        const topJid = top[0];
+        const topNum = topJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+        const topName = memoryEngine.getParticipantName(from, topJid) || topNum;
+        userPromptParts.push(
+          `[Membro em evidência recente: ${topName} (@${topNum}) — ${top[1]} mensagens nos últimos 5min. Se o admin usar "ele", "esse cara", "fulano" sem especificar, este é o alvo mais provável.]`
+        );
+      }
+    } catch (_) { /* não bloqueia se memória falhar */ }
+
     // Pedido atual do admin (único trecho tratado como instrução)
     const senderNumber = sender.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
     // Injeta identidade do remetente como âncora explícita ANTES do pedido
