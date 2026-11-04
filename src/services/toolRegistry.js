@@ -82,6 +82,7 @@ const TOOLS = [
           autoDeleteSeconds: { type: 'integer', description: 'Segundos para apagar boas-vindas (0 desativa).' },
           autoMsgText: { type: 'string', description: 'Texto do comunicado periódico.' },
           intervalMinutes: { type: 'integer', description: 'Intervalo em minutos do comunicado.' },
+          useAI: { type: 'boolean', description: 'automsg: se true, ativa variação inteligente do texto via IA a cada envio para evitar spam repetitivo; se false, usa texto fixo.' },
           maxWarns: { type: 'integer', description: 'Contagem/limite de advertências antes do ban automático (ex: 2 para banir no 2º link/aviso, 3 para banir no 3º). Pode ser passado diretamente com module "antilink", "antiflood" ou "warn".' },
           customBanMessage: { type: 'string', description: 'Mensagem personalizada de ban ({user}).' },
           personality: { type: 'string', enum: ['descontraido', 'formal'], description: 'Tom do Hermes IA: "descontraido" ou "formal".' },

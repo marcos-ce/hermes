@@ -106,6 +106,10 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
       updates.intervalMinutes = Math.max(parseInt(args.intervalMinutes, 10), 5);
       specificFeedbacks.push(t(lang, 'protection.automsg.interval_updated', { minutes: updates.intervalMinutes }));
     }
+    if (args.useAI !== undefined) {
+      updates.useAI = Boolean(args.useAI);
+      specificFeedbacks.push(updates.useAI ? '🤖 Variação de texto por IA ativada (anti-spam).' : '📝 Variação por IA desativada (texto fixo).');
+    }
   }
 
   if (mod === 'warn' && args.maxWarns && Number(args.maxWarns) >= 1) {
