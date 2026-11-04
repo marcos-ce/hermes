@@ -577,6 +577,21 @@ module.exports = {
       return reply(`🌙 *Modo Silencioso Noturno:* ${currentSleep ? '*Ativado* (pausa das 23h às 08h)' : '*Desativado*'}\nUse \`/automsg silencio on\` ou \`/automsg silencio off\`.`);
     }
 
+    // Controle de Variação Inteligente via IA (Anti-Spam de texto repetido)
+    if (['ia', 'ai', 'variar', 'variacao', 'variacion'].includes(sub)) {
+      const mode = (args[1] || '').toLowerCase();
+      if (['on', 'ativar', 'sim', '1'].includes(mode)) {
+        configManager.updatePluginConfig(from, 'automsg', { useAI: true, enabled: true });
+        return reply('🤖 *Variação por IA ATIVADA!* O texto do anúncio será reformulado automaticamente a cada disparo para evitar spam repetitivo.');
+      }
+      if (['off', 'desativar', 'nao', 'não', '0'].includes(mode)) {
+        configManager.updatePluginConfig(from, 'automsg', { useAI: false, enabled: true });
+        return reply('📝 *Variação por IA DESATIVADA.* O anúncio será enviado sempre com o texto fixo original.');
+      }
+      const currentAI = cfg.useAI !== false;
+      return reply(`🤖 *Variação por IA:* ${currentAI ? '*Ativada*' : '*Desativada*'}\nUse \`/automsg ia on\` ou \`/automsg ia off\`.`);
+    }
+
     // Bloqueio educativo de vídeos e áudios
     if (['video', 'audio', 'aud', 'gravacao', 'som'].includes(sub)) {
       return reply('⚠️ *Envio de Vídeo/Áudio Bloqueado (Segurança Anti-Ban)*\n\nPara proteger o número contra banimentos do WhatsApp por tráfego excessivo e denúncias, o anúncio periódico aceita *apenas fotos ou banners leves* (máx. 2.5 MB).\n\n👉 *Como usar:* envie ou responda a uma foto/banner com o comando `/automsg foto [legenda]`');
@@ -741,6 +756,7 @@ module.exports = {
     help += `• \`/automsg texto [seu texto]\` (atualiza apenas a mensagem)\n`;
     help += `• \`/automsg tempo 3h\` (ou \`/automsg tempo 30m\`)\n`;
     help += `• \`/automsg silencio on\` ou \`off\` (pausa das 23h às 08h)\n`;
+    help += `• \`/automsg ia on\` ou \`off\` (varia o texto a cada envio via IA)\n`;
     help += `• \`/automsg removerfoto\` (remove a foto anexada)\n`;
     help += `• \`/automsg teste\` (envia um teste imediato)\n`;
     help += `• \`/automsg config\` (abre o assistente interativo)`;
