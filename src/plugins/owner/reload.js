@@ -15,7 +15,7 @@ module.exports = {
       pluginLoader.reloadPlugins();
       const configRes = configManager.reloadFromDisk();
       if (!configRes.success) {
-        return reply(`⚠️ Plugins recarregados, mas erro ao recarregar data/groups.json: ${configRes.error}`);
+        return reply(`Plugins recarregados, mas erro ao recarregar data/groups.json: ${configRes.error}`);
       }
       return reply(t('reload.success'));
     } catch (err) {

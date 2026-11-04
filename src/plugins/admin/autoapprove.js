@@ -775,7 +775,7 @@ module.exports = {
       });
 
       let text = `${translate('common.saved')}\n\n`;
-      text += `🛡️ *Auto-Aprovação Ativada em Modo Natural Seguro (DDI 55 - Brasil)*\n\nPor proteção rigorosa Anti-Ban, a aprovação automática indiscriminada de todos os países está desativada por padrão.\n\n⏱️ A aprovação opera exclusivamente em *fila natural humana (1 a 2 minutos por membro)*.\nPara personalizar DDIs autorizados de forma consciente, use \`${p}aprovar config\`.`;
+      text += `*Auto-Aprovação Ativada em Modo Natural Seguro (DDI 55 - Brasil)*\n\nPor segurança, a aprovação automática indiscriminada de todos os países está desativada por padrão.\n\nA aprovação opera exclusivamente em *fila natural humana (1 a 2 minutos por membro)*.\nPara personalizar DDIs autorizados de forma consciente, use \`${p}aprovar config\`.`;
 
       const meta = adminStatus.metadata;
       if (meta && meta.joinApprovalMode === false) {

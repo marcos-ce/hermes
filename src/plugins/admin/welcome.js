@@ -138,12 +138,12 @@ module.exports = {
       }
       const secs = cfg.autoDeleteSeconds || 0;
       const formattedTime = formatHumanDuration(secs, 'seconds', groupLang);
-      return reply(`${translate('common.saved')}\n👋 *Boas-Vindas:* ATIVADO (Foto do grupo + texto)\n⏱️ *Auto-delete:* ${formattedTime}`);
+      return reply(`${translate('common.saved')}\nBoas-Vindas ativado. Auto-delete: ${formattedTime}`);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'welcome', false);
-      return reply(translate('common.saved') + '\n👋 *Boas-Vindas:* DESATIVADO');
+      return reply(translate('common.saved') + '\nBoas-Vindas desativado.');
     }
 
     // Configuração direta de tempo de auto-delete
@@ -167,12 +167,12 @@ module.exports = {
       }
 
       if (isNaN(parsedSecs) || parsedSecs < 0) {
-        return reply('⚠️ Digite o tempo de auto-delete. Ex: `/bemvindo tempo 1m` (1 minuto), `/bemvindo tempo 30s` ou `0` para permanente.');
+        return reply('Digite o tempo de auto-delete. Ex: `/bemvindo tempo 1m` (1 minuto), `/bemvindo tempo 30s` ou `0` para permanente.');
       }
 
       configManager.updatePluginConfig(from, 'welcome', { autoDeleteSeconds: parsedSecs, enabled: true });
       const displayTime = formatHumanDuration(parsedSecs, 'seconds', groupLang);
-      return reply(`💾 *Boas-Vindas atualizado:* Auto-delete definido para *${displayTime}*.`);
+      return reply(`Boas-Vindas atualizado. Auto-delete: *${displayTime}*.`);
     }
 
     // Resetar para mensagem padrão
@@ -181,17 +181,17 @@ module.exports = {
         message: '👋 Olá {user}, seja bem-vindo(a) ao grupo {group}!\n\n📋 Regras/Descrição: {desc}',
         enabled: true 
       });
-      return reply('💾 *Boas-Vindas atualizado:* Mensagem redefinida para o padrão.');
+      return reply('Boas-Vindas atualizado. Mensagem redefinida para o padrão.');
     }
 
     // Configuração direta do texto da mensagem (se começou com "texto" ou texto livre longo)
     if (sub === 'texto' || sub === 'msg' || args.length > 1 || (args.length === 1 && !['status', 'config', 'wizard'].includes(sub))) {
       const customText = sub === 'texto' || sub === 'msg' ? args.slice(1).join(' ') : args.join(' ');
       if (customText.length < 3) {
-        return reply('⚠️ Texto muito curto. Use: `/bemvindo Olá {user}, bem-vindo ao {group}!`');
+        return reply('Texto muito curto. Use: `/bemvindo Olá {user}, bem-vindo ao {group}!`');
       }
       configManager.updatePluginConfig(from, 'welcome', { message: customText, enabled: true });
-      return reply(`💾 *Boas-Vindas atualizado!*\n\n📝 *Novo texto:* \n${customText}\n\n💡 *Tags suportadas:* \`{user}\` (menção), \`{group}\` (nome do grupo), \`{desc}\` (regras).`);
+      return reply(`Boas-Vindas atualizado.\n\nNovo texto:\n${customText}\n\nTags: \`{user}\` (menção), \`{group}\` (nome do grupo), \`{desc}\` (regras).`);
     }
 
     const status = configManager.isPluginEnabled(from, 'welcome') ? translate('common.enabled') : translate('common.disabled');
@@ -199,8 +199,8 @@ module.exports = {
     const formattedTime = formatHumanDuration(seconds, 'seconds', groupLang);
     const currentMsg = cfg.message || translate('welcome.default');
 
-    let help = `${translate('welcome.status', { status, time: formattedTime })}\n📝 *Mensagem atual:*\n${currentMsg}`;
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 1m\` (apaga após 1 minuto) ou \`/bemvindo tempo 30s\`\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre assistente interativo)`;
+    let help = `${translate('welcome.status', { status, time: formattedTime })}\n*Mensagem atual:*\n${currentMsg}`;
+    help += `\n\n*Comandos Diretos:*\n• \`/bemvindo on\` ou \`/bemvindo off\`\n• \`/bemvindo [seu texto aqui]\` (suporta {user}, {group}, {desc})\n• \`/bemvindo tempo 1m\` (apaga após 1 minuto) ou \`/bemvindo tempo 30s\`\n• \`/bemvindo padrao\` (restaura padrão)\n• \`/bemvindo config\` (abre assistente interativo)`;
     return reply(help);
   }
 };

@@ -55,7 +55,7 @@ module.exports = {
 
       let res = `${translate('blacklist.list_title')}\n\n`;
       if (groupList.length > 0) {
-        res += `📌 *Lista do Grupo:*\n`;
+        res += `*Lista do Grupo:*\n`;
         for (const jid of groupList) {
           const num = jid.replace(/@.*$/, '').replace(/\D/g, '');
           res += `▫️ +${num}\n`;
@@ -63,7 +63,7 @@ module.exports = {
       }
 
       if (globalList.length > 0) {
-        res += `\n🌐 *Lista Negra Global:*\n`;
+        res += `\n*Lista Negra Global:*\n`;
         for (const jid of globalList) {
           const num = jid.replace(/@.*$/, '').replace(/\D/g, '');
           res += `▫️ +${num}\n`;
@@ -108,7 +108,7 @@ module.exports = {
       }
 
       if (settings.isOwner(targetData.phoneJid, sock) || settings.isOwner(targetData.groupJid, sock)) {
-        return reply('⚠️ Não é permitido adicionar o dono à lista negra.');
+        return reply('Não é permitido adicionar o dono à lista negra.');
       }
 
       configManager.addGroupBlacklist(from, targetData.phoneJid);
@@ -153,9 +153,9 @@ module.exports = {
         });
       }
 
-      return reply('⚠️ Este usuário não estava na lista negra.');
+      return reply('Este usuário não estava na lista negra.');
     }
 
-    return reply('💡 Uso do comando:\n• `!blacklist add @user`\n• `!blacklist del @user`\n• `!blacklist list`\n• `!blacklist global @user` (Apenas Dono)');
+    return reply('Uso do comando:\n• `!blacklist add @user`\n• `!blacklist del @user`\n• `!blacklist list`\n• `!blacklist global @user` (Apenas Dono)');
   }
 };

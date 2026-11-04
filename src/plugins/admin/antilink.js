@@ -190,15 +190,15 @@ module.exports = {
     // Configuração direta de ação: ban, del, warn
     if (['ban', 'banir', 'expulsar'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'ban', enabled: true, configured: true });
-      return reply('💾 *AntiLink atualizado:* Ação definida para *EXPULSAR (BAN)*.');
+      return reply('AntiLink atualizado. Ação: expulsar (ban).');
     }
     if (['delete', 'del', 'apagar', 'remover'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'delete', enabled: true, configured: true });
-      return reply('💾 *AntiLink atualizado:* Ação definida para *APENAS APAGAR*.');
+      return reply('AntiLink atualizado. Ação: apenas apagar.');
     }
     if (['warn', 'adv', 'advertir', 'aviso'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'warn', enabled: true, configured: true });
-      return reply('💾 *AntiLink atualizado:* Ação definida para *APAGAR E ADVERTIR (WARN)*.');
+      return reply('AntiLink atualizado. Ação: apagar e advertir.');
     }
 
     // Configuração direta de Whitelist: permitir domínios
@@ -206,12 +206,12 @@ module.exports = {
       const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
       configManager.updatePluginConfig(from, 'antilink', { allowedDomains: domains, enabled: true, configured: true });
       const display = domains.length ? domains.join(', ') : 'Nenhum (Bloqueia Todos)';
-      return reply(`💾 *AntiLink atualizado:* Domínios permitidos: \`${display}\``);
+      return reply(`AntiLink atualizado. Domínios permitidos: \`${display}\``);
     }
 
     if (['bloquear', 'blockall', 'bloqueartodos'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { allowedDomains: [], enabled: true, configured: true });
-      return reply('💾 *AntiLink atualizado:* Bloqueando absolutamente *TODOS* os links.');
+      return reply('AntiLink atualizado. Bloqueando todos os links.');
     }
 
     // Status

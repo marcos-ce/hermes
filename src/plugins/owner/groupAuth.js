@@ -36,7 +36,7 @@ module.exports = {
         return reply(t('saas.pv_off'));
       } else {
         const current = configManager.isPrivateEnabled() ? t('common.enabled') : t('common.disabled');
-        return reply(`🔒 *Privado (DM):* ${current}\nUse: \`/pv on\` ou \`/pv off\``);
+        return reply(`*Privado (DM):* ${current}\nUse: \`/pv on\` ou \`/pv off\``);
       }
     }
 
@@ -89,7 +89,7 @@ module.exports = {
         ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
         : (isGroup ? from : null);
       if (!targetJid) {
-        return reply('⚠️ Informe o ID do grupo ou execute dentro do grupo.\nEx: `/bot ban 120363000000000@g.us`');
+        return reply('Informe o ID do grupo ou execute dentro do grupo.\nEx: `/bot ban 120363000000000@g.us`');
       }
       configManager.banGroup(targetJid, args.slice(2).join(' '));
       return reply(t('bangroup.banned', { id: targetJid }));
@@ -101,7 +101,7 @@ module.exports = {
         ? (args[1].endsWith('@g.us') ? args[1] : `${args[1]}@g.us`)
         : (isGroup ? from : null);
       if (!targetJid) {
-        return reply('⚠️ Informe o ID do grupo ou execute dentro do grupo.\nEx: `/bot unban 120363000000000@g.us`');
+        return reply('Informe o ID do grupo ou execute dentro do grupo.\nEx: `/bot unban 120363000000000@g.us`');
       }
       configManager.unbanGroup(targetJid);
       return reply(t('bangroup.unbanned', { id: targetJid }));
@@ -187,7 +187,7 @@ module.exports = {
       }
       const daysArg = parseInt(args[1], 10);
       if (isNaN(daysArg) || daysArg <= 0) {
-        return reply('⚠️ Digite a quantidade de dias válida. Ex: `!bot add 30`');
+        return reply('Digite a quantidade de dias válida. Ex: `!bot add 30`');
       }
 
       const expiresAt = configManager.addDaysToGroup(from, daysArg);
@@ -217,7 +217,7 @@ module.exports = {
           const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
           expiryDisplay = `${new Date(group.expiresAt).toLocaleDateString()} (${days} ${t('common.days')})`;
         } else {
-          expiryDisplay = '⚠️ EXPIRADA';
+          expiryDisplay = 'EXPIRADA';
         }
       }
 
@@ -245,7 +245,7 @@ module.exports = {
     // Simulação de Vencimento e Saída (!bot testar-saida / !bot testar-aviso)
     // ==========================================
     if (sub === 'testar-saida' || sub === 'testleave' || sub === 'simular-saida') {
-      if (!isGroup) return reply('⚠️ Este comando deve ser executado dentro de um grupo.');
+      if (!isGroup) return reply('Este comando deve ser executado dentro de um grupo.');
       const group = configManager.getOrCreateGroup(from);
       group.autoLeave = true;
       group.expiresAt = Date.now() - 25 * 60 * 60 * 1000; // vencido há 25h (> 24h carência)
@@ -255,7 +255,7 @@ module.exports = {
     }
 
     if (sub === 'testar-aviso' || sub === 'testwarn' || sub === 'simular-aviso') {
-      if (!isGroup) return reply('⚠️ Este comando deve ser executado dentro de um grupo.');
+      if (!isGroup) return reply('Este comando deve ser executado dentro de um grupo.');
       const group = configManager.getOrCreateGroup(from);
       group.autoLeave = true;
       group.expiresAt = Date.now() + 60 * 60 * 1000; // vence em 1 hora (< 24h)
@@ -265,6 +265,6 @@ module.exports = {
       return reply('⏳ *Simulação de Aviso D-1 Ativada!*\n\nA licença foi configurada para vencer em 1h.\nNo próximo ciclo do scheduler (em até 60 segundos), o bot enviará o aviso oficial de renovação com o link do grupo já embutido!');
     }
 
-    return reply('💡 Comandos do Bot:\n• `!bot on [dias]`\n• `!bot add <dias>`\n• `!bot off`\n• `!bot status`\n• `!bot list`\n• `!bot testar-aviso`\n• `!bot testar-saida`\n• `!pv on/off`');
+    return reply('Comandos do Bot:\n• `!bot on [dias]`\n• `!bot add <dias>`\n• `!bot off`\n• `!bot status`\n• `!bot list`\n• `!bot testar-aviso`\n• `!bot testar-saida`\n• `!pv on/off`');
   }
 };

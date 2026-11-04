@@ -599,7 +599,7 @@ module.exports = {
     if (['midia', 'media', 'mídia', 'foto', 'imagem', 'imagen', 'banner'].includes(sub)) {
       const extracted = await extractMediaBuffer(sock, msg);
       if (!extracted) {
-        return reply('⚠️ Envie ou *responda (quote)* a uma foto com a legenda `/automsg foto`.\n_Exemplo: responda ao banner do grupo com `/automsg foto Acesse nosso site!`_');
+        return reply('Envie ou responda a uma foto com a legenda `/automsg foto`.\nExemplo: responda ao banner do grupo com `/automsg foto Acesse nosso site!`');
       }
 
       // Trava Anti-Ban: Rejeita vídeos e áudios com explicação
@@ -609,12 +609,12 @@ module.exports = {
 
       // Trava de tamanho máximo de imagem (2.5 MB)
       if (extracted.buffer.length > MAX_IMAGE_BYTES) {
-        return reply(`⚠️ *Imagem muito pesada!* (${(extracted.buffer.length / 1024 / 1024).toFixed(2)} MB)\nO limite máximo para anúncios automáticos é *2.5 MB* para garantir leveza e proteção Anti-Ban. Comprima a imagem e tente novamente.`);
+        return reply(`Imagem muito pesada (${(extracted.buffer.length / 1024 / 1024).toFixed(2)} MB).\nO limite máximo para anúncios automáticos é *2.5 MB* por segurança. Comprima a imagem e tente novamente.`);
       }
 
       const mediaMeta = saveAutomsgMedia(from, extracted.buffer, extracted);
       if (!mediaMeta) {
-        return reply('❌ Não foi possível salvar a imagem. Tente novamente.');
+        return reply('Não foi possível salvar a imagem. Tente novamente.');
       }
 
       const update = {
@@ -637,14 +637,14 @@ module.exports = {
       let intervalNote = '';
       if (currentInterval < MIN_INTERVAL_WITH_MEDIA) {
         update.intervalMinutes = MIN_INTERVAL_WITH_MEDIA;
-        intervalNote = `\n⏱️ *Intervalo ajustado para 3h* (mínimo com foto, anti-ban).`;
+        intervalNote = `\nIntervalo ajustado para 3h (mínimo com foto, por segurança).`;
       }
       configManager.updatePluginConfig(from, 'automsg', update);
 
       const activeCaption = update.message || cfg.message || '';
-      const captionInfo = activeCaption ? `\n💬 *Legenda:* ${activeCaption}` : '\n💬 *Legenda:* _(nenhuma)_';
+      const captionInfo = activeCaption ? `\nLegenda: ${activeCaption}` : '\nLegenda: _(nenhuma)_';
 
-      return reply(`📎 *Foto do AutoMsg atualizada com proteção Anti-Ban!*\n🖼️ *Tamanho:* ${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB\n🛡️ *Hash Jitter:* Ativo (novo SHA-256 a cada envio)${captionInfo}\n\n⏱️ A foto será enviada a cada intervalo configurado.${intervalNote}`);
+      return reply(`Foto do AutoMsg atualizada.\nTamanho: ${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB${captionInfo}\n\nA foto será enviada a cada intervalo configurado.${intervalNote}`);
     }
 
     // Remoção da mídia (volta a ser apenas texto)
@@ -654,7 +654,7 @@ module.exports = {
         try { fs.unlinkSync(media.path); } catch (_) {}
       }
       configManager.updatePluginConfig(from, 'automsg', { media: null });
-      return reply('🗑️ *Foto do AutoMsg removida.* O anúncio voltará a ser apenas texto (se houver).');
+      return reply('Foto do AutoMsg removida. O anúncio voltará a ser apenas texto (se houver).');
     }
 
     // Configuração direta: /automsg 3h <texto...> ou /automsg 120 <texto...>

@@ -94,12 +94,12 @@ module.exports = {
 
     if (['ban', 'banir', 'expulsar'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antiflood', { action: 'ban', enabled: true });
-      return reply('💾 *AntiFlood atualizado:* Ação definida para *EXPULSAR (BAN)*.');
+      return reply('AntiFlood atualizado. Ação: expulsar (ban).');
     }
 
     if (['warn', 'adv', 'advertir'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antiflood', { action: 'warn', enabled: true });
-      return reply('💾 *AntiFlood atualizado:* Ação definida para *ADVERTIR (WARN)*.');
+      return reply('AntiFlood atualizado. Ação: advertir (warn).');
     }
 
     // Configuração direta: /antiflood 5 2000
@@ -111,7 +111,7 @@ module.exports = {
         maxChars: parsedChars, 
         enabled: true 
       });
-      return reply(`💾 *AntiFlood atualizado e ATIVADO!*\n⚡ *Limite Flood:* \`${parsedMsgs} mensagens em 5s\`\n🛡️ *Limite Anti-Trava:* \`${parsedChars} caracteres\``);
+      return reply(`AntiFlood atualizado e ativado. Flood: \`${parsedMsgs} msgs/5s\` | Anti-trava: \`${parsedChars} chars\``);
     }
 
     const status = configManager.isPluginEnabled(from, 'antiflood') ? t('common.enabled') : t('common.disabled');
@@ -120,7 +120,7 @@ module.exports = {
     const action = cfg.action || 'warn';
 
     let help = t('antiflood.status', { status, msgs, chars, action });
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/antiflood on\` ou \`/antiflood off\`\n• \`/antiflood 5 2000\` (msgs/5s + limite anti-trava)\n• \`/antiflood ban\` (expulsa infrator)\n• \`/antiflood adv\` (adverte infrator)\n• \`/antiflood config\` (abre wizard)`;
+    help += `\n\n*Comandos Diretos:*\n• \`/antiflood on\` ou \`/antiflood off\`\n• \`/antiflood 5 2000\` (msgs/5s + limite anti-trava)\n• \`/antiflood ban\` (expulsa infrator)\n• \`/antiflood adv\` (adverte infrator)\n• \`/antiflood config\` (abre wizard)`;
     return reply(help);
   },
 

@@ -68,12 +68,12 @@ module.exports = {
 
     if (sub === 'on') {
       configManager.setPluginEnabled(from, 'antistatus', true);
-      return reply('🚫 *Filtro anti-status ativado com sucesso!*\nMensagens mencionando @status no grupo serão apagadas imediatamente.');
+      return reply('Filtro anti-status ativado com sucesso. Mensagens mencionando @status no grupo serão apagadas imediatamente.');
     }
 
     if (sub === 'off') {
       configManager.setPluginEnabled(from, 'antistatus', false);
-      return reply('🚫 *Filtro anti-status desativado.*');
+      return reply('Filtro anti-status desativado.');
     }
 
     if (sub === 'config') {
@@ -141,7 +141,7 @@ module.exports = {
         {
           text: t(lang, 'antistatus.warn', {
             user: `@${senderNum}`,
-            fallback: `⚠️ @${senderNum} Mensagens com menção ao @status são apagadas automaticamente neste grupo.`
+            fallback: `@${senderNum} Mensagens com menção ao @status são apagadas automaticamente neste grupo.`
           }),
           mentions: [sender]
         },

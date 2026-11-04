@@ -16,7 +16,7 @@ module.exports = async function setGroupSettings({ sock, msg, from, sender, lang
   }
   if (args.clearMemory) {
     memoryEngine.clearGroupMemory(from);
-    results.push('🧹 *Memória limpa:* O histórico de conversas do Hermes neste grupo foi zerado.');
+    results.push('*Memória limpa:* O histórico de conversas do Hermes neste grupo foi zerado.');
   }
   if (args.openPanel) {
     await wizardEngine.startConfigPanel(sock, msg, from, sender);

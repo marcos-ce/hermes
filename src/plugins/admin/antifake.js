@@ -90,26 +90,26 @@ module.exports = {
         return await wizardEngine.startWizard(sock, msg, from, sender, 'antifake');
       }
       const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
-      return reply(`${translate('common.saved')}\n🎭 *AntiFake:* ATIVADO\n🌍 *DDIs permitidos:* \`${ddis}\``);
+      return reply(`${translate('common.saved')}\nAntiFake ativado. DDIs permitidos: \`${ddis}\``);
     }
 
     if (sub === 'off' || sub === 'desativar') {
       configManager.setPluginEnabled(from, 'antifake', false);
-      return reply(translate('common.saved') + '\n🎭 *AntiFake:* DESATIVADO');
+      return reply(translate('common.saved') + '\nAntiFake desativado.');
     }
 
     // Configuração direta de DDIs: /antifake 55 ou /antifake 55 351 1
     const ddiCandidates = args.map(a => a.replace(/\D/g, '')).filter(Boolean);
     if (ddiCandidates.length > 0 && !['status', 'config', 'wizard', 'setup'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antifake', { allowedDdis: ddiCandidates, enabled: true });
-      return reply(`💾 *AntiFake atualizado e ATIVADO!*\n🌍 *DDIs permitidos:* \`${ddiCandidates.join(', ')}\``);
+      return reply(`AntiFake atualizado e ativado. DDIs permitidos: \`${ddiCandidates.join(', ')}\``);
     }
 
     const status = configManager.isPluginEnabled(from, 'antifake') ? translate('common.enabled') : translate('common.disabled');
     const ddis = (cfg.allowedDdis && cfg.allowedDdis.length) ? cfg.allowedDdis.join(', ') : '55, 351, 1, 34, 54, 52';
 
     let help = translate('antifake.status', { status, ddis });
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/antifake on\` ou \`/antifake off\`\n• \`/antifake 55\` (permite apenas Brasil)\n• \`/antifake 55 351 1\` (permite Brasil, Portugal e EUA)\n• \`/antifake config\` (abre wizard)`;
+    help += `\n\n*Comandos Diretos:*\n• \`/antifake on\` ou \`/antifake off\`\n• \`/antifake 55\` (permite apenas Brasil)\n• \`/antifake 55 351 1\` (permite Brasil, Portugal e EUA)\n• \`/antifake config\` (abre wizard)`;
     return reply(help);
   }
 };

@@ -145,19 +145,19 @@ module.exports = {
       const closeTime = normFirst;
       const openTime = (args[1] && normalizeTime(args[1])) || cfg.openTime || '07:00';
       configManager.updatePluginConfig(from, 'schedule', { closeTime, openTime, enabled: true });
-      return reply(`💾 *Horários atualizados e ATIVADOS!*\n🔒 *Fechar:* \`${closeTime}\`\n🔓 *Abrir:* \`${openTime}\``);
+      return reply(`Horários atualizados. Fechar: \`${closeTime}\` | Abrir: \`${openTime}\``);
     }
 
     if (sub === 'fechar' && args[1] && normalizeTime(args[1])) {
       const closeTime = normalizeTime(args[1]);
       configManager.updatePluginConfig(from, 'schedule', { closeTime, enabled: true });
-      return reply(`💾 *Horário de fechar atualizado:* \`${closeTime}\``);
+      return reply(`Horário de fechar atualizado: \`${closeTime}\``);
     }
 
     if (sub === 'abrir' && args[1] && normalizeTime(args[1])) {
       const openTime = normalizeTime(args[1]);
       configManager.updatePluginConfig(from, 'schedule', { openTime, enabled: true });
-      return reply(`💾 *Horário de abrir atualizado:* \`${openTime}\``);
+      return reply(`Horário de abrir atualizado: \`${openTime}\``);
     }
 
     const status = configManager.isPluginEnabled(from, 'schedule') ? translate('common.enabled') : translate('common.disabled');
@@ -165,7 +165,7 @@ module.exports = {
     const open = cfg.openTime || '07:00';
 
     let help = translate('schedule.status', { status, close, open });
-    help += `\n\n💡 *Comandos Diretos:*\n• \`/horarios on\` ou \`/horarios off\`\n• \`/horarios 23:00 07:00\` (define fechar e abrir direto)\n• \`/horarios fechar 23:00\`\n• \`/horarios abrir 07:00\`\n• \`/horarios config\` (abre wizard)`;
+    help += `\n\n*Comandos Diretos:*\n• \`/horarios on\` ou \`/horarios off\`\n• \`/horarios 23:00 07:00\` (define fechar e abrir direto)\n• \`/horarios fechar 23:00\`\n• \`/horarios abrir 07:00\`\n• \`/horarios config\` (abre wizard)`;
     return reply(help);
   }
 };

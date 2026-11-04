@@ -10,6 +10,7 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
   }
 
   const currentCfg = configManager.getPluginConfig(from, mod) || {};
+  const wasEnabled = currentCfg.enabled === true;
 
   let enabled = currentCfg.enabled !== false;
   if (args.enabled !== undefined) {
@@ -69,6 +70,7 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
       specificFeedbacks.push(t(lang, 'protection.warn.limit_updated', { limit: warnLimit }));
     } else if (args.action && ['warn', 'ban'].includes(args.action)) {
       updates.action = args.action;
+      specificFeedbacks.push(`Ação do AntiFlood configurada para: ${args.action}.`);
     }
     if (args.maxMessages && Number(args.maxMessages) >= 2) {
       updates.maxMessages = parseInt(args.maxMessages, 10);
@@ -76,6 +78,7 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     }
     if (args.maxChars && Number(args.maxChars) >= 100) {
       updates.maxChars = parseInt(args.maxChars, 10);
+      specificFeedbacks.push(`Limite de caracteres do Anti-Trava atualizado para ${updates.maxChars}.`);
     }
   }
 
@@ -101,6 +104,7 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
   if (mod === 'automsg') {
     if (args.autoMsgText && String(args.autoMsgText).trim().length > 0) {
       updates.message = String(args.autoMsgText).trim();
+      specificFeedbacks.push(t(lang, 'protection.automsg.message_updated') || 'Texto dos comunicados periódicos atualizado.');
     }
     if (args.intervalMinutes !== undefined) {
       const requested = parseInt(args.intervalMinutes, 10);
@@ -127,16 +131,19 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
 
   if (mod === 'ban' && args.customBanMessage !== undefined) {
     updates.customMessage = String(args.customBanMessage).trim();
+    specificFeedbacks.push('Mensagem de banimento atualizada.');
   }
 
   if (mod === 'hermes' && args.personality && ['descontraido', 'formal'].includes(args.personality)) {
     updates.personality = args.personality;
+    specificFeedbacks.push(`Personalidade do Hermes alterada para ${args.personality}.`);
   }
 
   // antistatus: toggle de aviso público após apagar menção @status
   if (mod === 'antistatus') {
     if (args.warn !== undefined) {
       updates.warn = Boolean(args.warn);
+      specificFeedbacks.push(updates.warn ? 'Aviso após apagar menção a @status ativado.' : 'Aviso após apagar menção a @status desativado.');
     }
   }
 
@@ -210,9 +217,13 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     const stateKey = enabled ? "on" : "off";
     const i18nKey = `protection.${mod}.${stateKey}`;
     const translated = t(lang, i18nKey);
-    feedback = (translated && translated !== i18nKey)
-      ? translated
-      : `Módulo ${mod} ${enabled ? t(lang, "common.enabled") : t(lang, "common.disabled")}.`;
+    if (wasEnabled && enabled && args.enabled === undefined) {
+      feedback = `Configurações do módulo ${mod} salvas.`;
+    } else {
+      feedback = (translated && translated !== i18nKey)
+        ? translated
+        : `Módulo ${mod} ${enabled ? t(lang, "common.enabled") : t(lang, "common.disabled")}.`;
+    }
   }
 
   return {

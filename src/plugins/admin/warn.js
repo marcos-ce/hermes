@@ -51,10 +51,10 @@ module.exports = {
     if (trigger === 'max' || trigger === 'limite') {
       const parsedMax = parseInt(args[1], 10);
       if (isNaN(parsedMax) || parsedMax < 1 || parsedMax > 20) {
-        return reply('⚠️ Digite um número válido entre 1 e 20. Ex: `/adv max 3`');
+        return reply('Digite um número válido entre 1 e 20. Ex: `/adv max 3`');
       }
       configManager.updatePluginConfig(from, 'warn', { maxWarns: parsedMax, enabled: true });
-      return reply(`💾 *Limite atualizado:* O grupo agora banirá automaticamente ao atingir *${parsedMax} advertências*.`);
+      return reply(`Limite atualizado. O grupo banirá automaticamente ao atingir *${parsedMax} advertências*. `);
     }
 
     // Zerar advertências de um membro (!adv zerar @user)
@@ -65,7 +65,7 @@ module.exports = {
         return reply(t('common.not_found_target'));
       }
       configManager.resetWarns(from, targetData.phoneJid);
-      return reply(`✅ Advertências de @${targetData.displayNum} foram *zeradas*.`, {
+      return reply(`Advertências de @${targetData.displayNum} foram zeradas.`, {
         mentions: [targetData.groupJid, targetData.phoneJid]
       });
     }

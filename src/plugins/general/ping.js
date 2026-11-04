@@ -41,7 +41,7 @@ module.exports = {
           const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
           expiryDisplay = `${new Date(group.expiresAt).toLocaleDateString()} (${days} ${t('common.days')})`;
         } else {
-          expiryDisplay = '⚠️ EXPIRADA';
+          expiryDisplay = 'EXPIRADA';
         }
       }
     } else {

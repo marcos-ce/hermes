@@ -15,7 +15,7 @@ module.exports = async function setAutomsgMedia({ sock, msg, from, lang, args })
     configManager.updatePluginConfig(from, 'automsg', { media: null });
     return {
       success: true,
-      message: '🗑️ Foto do anúncio periódico removida. O anúncio volta a ser só texto (se houver).'
+      message: 'Foto do anúncio periódico removida. O anúncio volta a ser só texto (se houver).'
     };
   }
 
@@ -33,14 +33,14 @@ module.exports = async function setAutomsgMedia({ sock, msg, from, lang, args })
   if (extracted.type !== 'image') {
     return {
       success: false,
-      error: '⚠️ Segurança Anti-Ban: O anúncio periódico aceita apenas fotos/banners leves (JPG, PNG ou WebP). Vídeos e áudios não são permitidos para evitar bloqueios do WhatsApp.'
+      error: 'Por segurança, o anúncio periódico aceita apenas fotos/banners leves (JPG, PNG ou WebP). Vídeos e áudios não são permitidos.'
     };
   }
 
   if (extracted.buffer.length > automsgPlugin.MAX_IMAGE_BYTES) {
     return {
       success: false,
-      error: `Imagem muito pesada (${(extracted.buffer.length / 1024 / 1024).toFixed(2)} MB). O limite máximo para o anúncio periódico é de 2.5 MB (Anti-Ban).`
+      error: `Imagem muito pesada (${(extracted.buffer.length / 1024 / 1024).toFixed(2)} MB). O limite máximo para o anúncio periódico é de 2.5 MB por segurança.`
     };
   }
 
@@ -66,12 +66,12 @@ module.exports = async function setAutomsgMedia({ sock, msg, from, lang, args })
   configManager.updatePluginConfig(from, 'automsg', updates);
 
   const intervalNote = updates.intervalMinutes
-    ? `\n⏱️ Intervalo ajustado para 3h (mínimo com foto, anti-ban).`
+    ? `\nIntervalo ajustado para 3h (mínimo com foto, por segurança).`
     : '';
   const captionNote = updates.message ? `\n💬 *Legenda:* ${updates.message}` : '';
 
   return {
     success: true,
-    message: `📎 *Foto anexada ao anúncio periódico com proteção Anti-Ban!*\n🖼️ *Tamanho:* ${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB\n🛡️ *Hash Jitter:* Ativo (novo SHA-256 a cada envio)${captionNote}${intervalNote}`
+    message: `Foto anexada ao anúncio periódico.\nTamanho: ${(mediaMeta.size / 1024 / 1024).toFixed(2)} MB${captionNote}${intervalNote}`
   };
 };
