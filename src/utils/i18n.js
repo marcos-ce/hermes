@@ -169,6 +169,28 @@ const dictionaries = {
     'milestone.pending': "Pendente",
     'milestone.cleared': "Todas as metas foram removidas.",
 
+    // ─── RELATÓRIO SEMANAL ───
+    'weeklyreport.on': "📊 Relatório semanal ativado. Será enviado toda segunda-feira.",
+    'weeklyreport.off': "📊 Relatório semanal desativado.",
+    'weeklyreport.header': "📊 *Resumo Semanal — {group}*",
+    'weeklyreport.total_msgs': "💬 Mensagens na semana: *{count}*",
+    'weeklyreport.total_members': "👥 Membros atuais: *{count}*",
+    'weeklyreport.top_title': "🏆 *Top 5 mais ativos:*",
+    'weeklyreport.warns': "⚠️ Membros com advertência ativa: *{count}*",
+    'weeklyreport.no_data': "Sem dados suficientes para o relatório desta semana.",
+
+    // ─── ALERTA DE INATIVIDADE ───
+    'inactivityalert.on': "😴 Alerta de inatividade ativado.",
+    'inactivityalert.off': "😴 Alerta de inatividade desativado.",
+    'inactivityalert.default_message': "💬 Ei, {group}! Tá tudo bem por aí? Que tal trocar uma ideia? 😄",
+
+    // ─── EXPIRAÇÃO AUTOMÁTICA (BLTEMP / MUTE) ───
+    'expiry.mute_expired': "🔊 O silenciamento de @{user} expirou. Pode falar!",
+    'expiry.blacklist_expired': "🔓 O banimento temporário de @{user} expirou.",
+    'expiry.blacklist_added': "⏱️ @{user} adicionado à lista negra temporária por *{duration}*. Será removido automaticamente.",
+    'expiry.blacklist_removed': "✅ @{user} removido da lista negra temporária.",
+    'expiry.blacklist_empty': "Nenhum membro na lista negra temporária.",
+
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprovação:* {status}\nDDIs autorizados: {ddis}\nAção para estrangeiros: {foreignAction}\nNotificação no grupo: {notify}",
     'autoapprove.summary': "📋 *Solicitações de Entrada Pendentes*\n\nTotal na fila: {total}\n• Números do Brasil (DDI 55): {brCount}\n• Números Estrangeiros: {foreignCount}\n• Identificadores LIDs: {unknownCount}\n\n🛡️ *Fila Natural Anti-Ban:* Intervalo seguro de 1 a 2 minutos entre cada participante.\n\nComandos disponíveis:\n• `{prefix}aprovar agora` - Iniciar aprovação natural dos {brCount} brasileiros em fila segura\n• `{prefix}aprovar <número>` - Aprovar um participante específico\n• `{prefix}aprovar on` - Ativar aprovação automática natural em tempo real\n• `{prefix}aprovar off` - Desativar aprovação automática\n• `{prefix}aprovar config` - Configurar DDIs e regras de moderação",
@@ -528,6 +550,28 @@ const dictionaries = {
     'milestone.pending': "Pendiente",
     'milestone.cleared': "Todas las metas han sido eliminadas.",
 
+    // ─── RELATÓRIO SEMANAL ───
+    'weeklyreport.on': "📊 Reporte semanal activado. Se enviará cada lunes.",
+    'weeklyreport.off': "📊 Reporte semanal desactivado.",
+    'weeklyreport.header': "📊 *Resumen Semanal — {group}*",
+    'weeklyreport.total_msgs': "💬 Mensajes en la semana: *{count}*",
+    'weeklyreport.total_members': "👥 Miembros actuales: *{count}*",
+    'weeklyreport.top_title': "🏆 *Top 5 más activos:*",
+    'weeklyreport.warns': "⚠️ Miembros con advertencia activa: *{count}*",
+    'weeklyreport.no_data': "Sin datos suficientes para el reporte de esta semana.",
+
+    // ─── ALERTA DE INATIVIDADE ───
+    'inactivityalert.on': "😴 Alerta de inactividad activado.",
+    'inactivityalert.off': "😴 Alerta de inactividad desactivado.",
+    'inactivityalert.default_message': "💬 ¡Ei, {group}! ¿Todo bien por ahí? ¿Qué tal si conversamos? 😄",
+
+    // ─── EXPIRAÇÃO AUTOMÁTICA ───
+    'expiry.mute_expired': "🔊 El silenciamiento de @{user} expiró. ¡Ya puede hablar!",
+    'expiry.blacklist_expired': "🔓 El baneo temporal de @{user} expiró.",
+    'expiry.blacklist_added': "⏱️ @{user} añadido a la lista negra temporal por *{duration}*. Se eliminará automáticamente.",
+    'expiry.blacklist_removed': "✅ @{user} eliminado de la lista negra temporal.",
+    'expiry.blacklist_empty': "Ningún miembro en la lista negra temporal.",
+
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprobación:* {status}\nPrefijos permitidos: {ddis}\nAcción para extranjeros: {foreignAction}\nNotificación en el grupo: {notify}",
     'autoapprove.summary': "📋 *Solicitudes de Entrada Pendientes*\n\nTotal esperando aprobación: {total}\n• Números Nacionales (DDI 55): {brCount}\n• Números Extranjeros: {foreignCount}\n• Identificadores LIDs: {unknownCount}\n\n🛡️ *Cola Natural Anti-Ban:* Intervalo seguro de 1 a 2 minutos entre cada participante.\n\nComandos disponibles:\n• `{prefix}aprovar agora` - Iniciar aprobación natural de los {brCount} números vía cola segura\n• `{prefix}aprovar <número>` - Aprobar participante específico\n• `{prefix}aprovar on` - Habilitar auto-aprobación natural en tiempo real\n• `{prefix}aprovar off` - Deshabilitar auto-aprobación\n• `{prefix}aprovar config` - Configurar prefijos y reglas de moderación",
@@ -886,6 +930,28 @@ const dictionaries = {
     'milestone.reached': "Reached",
     'milestone.pending': "Pending",
     'milestone.cleared': "All milestones have been cleared.",
+
+    // ─── WEEKLY REPORT ───
+    'weeklyreport.on': "📊 Weekly report enabled. Will be sent every Monday.",
+    'weeklyreport.off': "📊 Weekly report disabled.",
+    'weeklyreport.header': "📊 *Weekly Summary — {group}*",
+    'weeklyreport.total_msgs': "💬 Messages this week: *{count}*",
+    'weeklyreport.total_members': "👥 Current members: *{count}*",
+    'weeklyreport.top_title': "🏆 *Top 5 most active:*",
+    'weeklyreport.warns': "⚠️ Members with active warnings: *{count}*",
+    'weeklyreport.no_data': "Not enough data for this week's report.",
+
+    // ─── INACTIVITY ALERT ───
+    'inactivityalert.on': "😴 Inactivity alert enabled.",
+    'inactivityalert.off': "😴 Inactivity alert disabled.",
+    'inactivityalert.default_message': "💬 Hey, {group}! Everything okay? How about a chat? 😄",
+
+    // ─── AUTO EXPIRY ───
+    'expiry.mute_expired': "🔊 @{user}'s mute has expired. They can speak again!",
+    'expiry.blacklist_expired': "🔓 @{user}'s temporary ban has expired.",
+    'expiry.blacklist_added': "⏱️ @{user} added to temporary blacklist for *{duration}*. Will be removed automatically.",
+    'expiry.blacklist_removed': "✅ @{user} removed from temporary blacklist.",
+    'expiry.blacklist_empty': "No members in the temporary blacklist.",
 
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Approve:* {status}\nAllowed country codes: {ddis}\nForeign action: {foreignAction}\nGroup notification: {notify}",
