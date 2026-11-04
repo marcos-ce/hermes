@@ -108,7 +108,7 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
         const effective = Math.max(requested, 180);
         updates.intervalMinutes = effective;
         if (requested < 180) {
-          specificFeedbacks.push('⚠️ *Segurança Anti-Ban:* O intervalo mínimo de comunicados é rigorosamente de *3 horas* (180 minutos). Intervalo fixado em 3h.');
+          specificFeedbacks.push('Por segurança, o intervalo mínimo entre comunicados é de 3 horas. Intervalo definido para 3h.');
         } else {
           specificFeedbacks.push(t(lang, 'protection.automsg.interval_updated', { minutes: effective }));
         }
@@ -116,7 +116,7 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     }
     if (args.useAI !== undefined) {
       updates.useAI = Boolean(args.useAI);
-      specificFeedbacks.push(updates.useAI ? '🤖 Variação de texto por IA ativada (anti-spam).' : '📝 Variação por IA desativada (texto fixo).');
+      specificFeedbacks.push(updates.useAI ? 'Variação de texto ativada.' : 'Variação de texto desativada (texto fixo).');
     }
   }
 

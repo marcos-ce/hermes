@@ -565,14 +565,14 @@ module.exports = {
       const mode = (args[1] || '').toLowerCase();
       if (['on', 'ativar', 'sim', '1'].includes(mode)) {
         configManager.updatePluginConfig(from, 'automsg', { sleepMode: true, enabled: true });
-        return reply('🌙 *Modo Silencioso Noturno ATIVADO!* Os anúncios serão pausados entre *23:00 e 08:00* para evitar denúncias.');
+        return reply('Modo silencioso ativado. Os envios serão pausados entre 23:00 e 08:00 por segurança.');
       }
       if (['off', 'desativar', 'nao', 'não', '0'].includes(mode)) {
         configManager.updatePluginConfig(from, 'automsg', { sleepMode: false, enabled: true });
-        return reply('☀️ *Modo Silencioso Noturno DESATIVADO.* Os anúncios rodarão normalmente durante a madrugada.');
+        return reply('Modo silencioso desativado.');
       }
       const currentSleep = cfg.sleepMode !== false;
-      return reply(`🌙 *Modo Silencioso Noturno:* ${currentSleep ? '*Ativado* (pausa das 23h às 08h)' : '*Desativado*'}\nUse \`/automsg silencio on\` ou \`/automsg silencio off\`.`);
+      return reply(`Modo silencioso: ${currentSleep ? 'Ativado (pausa das 23h às 08h)' : 'Desativado'}\nUse /automsg silencio on ou /automsg silencio off.`);
     }
 
     // Controle de Variação Inteligente via IA (Anti-Spam de texto repetido)
@@ -580,19 +580,19 @@ module.exports = {
       const mode = (args[1] || '').toLowerCase();
       if (['on', 'ativar', 'sim', '1'].includes(mode)) {
         configManager.updatePluginConfig(from, 'automsg', { useAI: true, enabled: true });
-        return reply('🤖 *Variação por IA ATIVADA!* O texto do anúncio será reformulado automaticamente a cada disparo para evitar spam repetitivo.');
+        return reply('Variação de texto ativada. O texto será reformulado a cada envio.');
       }
       if (['off', 'desativar', 'nao', 'não', '0'].includes(mode)) {
         configManager.updatePluginConfig(from, 'automsg', { useAI: false, enabled: true });
-        return reply('📝 *Variação por IA DESATIVADA.* O anúncio será enviado sempre com o texto fixo original.');
+        return reply('Variação de texto desativada. O comunicado será enviado com o texto fixo.');
       }
       const currentAI = cfg.useAI !== false;
-      return reply(`🤖 *Variação por IA:* ${currentAI ? '*Ativada*' : '*Desativada*'}\nUse \`/automsg ia on\` ou \`/automsg ia off\`.`);
+      return reply(`Variação de texto: ${currentAI ? 'Ativada' : 'Desativada'}\nUse /automsg ia on ou /automsg ia off.`);
     }
 
     // Bloqueio educativo de vídeos e áudios
     if (['video', 'audio', 'aud', 'gravacao', 'som'].includes(sub)) {
-      return reply('⚠️ *Envio de Vídeo/Áudio Bloqueado (Segurança Anti-Ban)*\n\nPara proteger o número contra banimentos do WhatsApp por tráfego excessivo e denúncias, o anúncio periódico aceita *apenas fotos ou banners leves* (máx. 2.5 MB).\n\n👉 *Como usar:* envie ou responda a uma foto/banner com o comando `/automsg foto [legenda]`');
+      return reply('Envio de vídeo ou áudio bloqueado por segurança. O anúncio periódico aceita apenas fotos leves (máx. 2.5 MB). Envie ou responda a uma foto com /automsg foto [legenda].');
     }
 
     // Captura de Foto/Banner para o anúncio periódico
@@ -604,7 +604,7 @@ module.exports = {
 
       // Trava Anti-Ban: Rejeita vídeos e áudios com explicação
       if (extracted.type !== 'image') {
-        return reply('⚠️ *Tipo de mídia não permitido (Anti-Ban)*\n\nO anúncio periódico aceita *apenas fotos/imagens leves* (JPG, PNG ou WebP de até 2.5 MB). Vídeos pesados geram alto tráfego contínuo e causam banimento rápido pelo WhatsApp.\n\n👉 Por favor, envie uma *foto ou banner*.');
+        return reply('Tipo de mídia não permitido. Por segurança, o anúncio aceita apenas fotos leves (JPG, PNG ou WebP de até 2.5 MB). Envie uma foto ou banner.');
       }
 
       // Trava de tamanho máximo de imagem (2.5 MB)
@@ -662,16 +662,16 @@ module.exports = {
     const parsedMinutes = durSub ? durSub.totalMinutes : parseInt(sub, 10);
     if (!isNaN(parsedMinutes)) {
       if (parsedMinutes < MIN_INTERVAL_MINUTES) {
-        return reply('⚠️ *Segurança Anti-Ban:* O intervalo mínimo para comunicados periódicos é rigorosamente de *3 horas* (180 minutos).\nUse ex: `/automsg 3h <texto>`, `/automsg 6h` ou `/automsg tempo 3h`.');
+        return reply('Por segurança, o intervalo mínimo entre comunicados é de 3 horas.\nUse /automsg 3h <texto> ou /automsg tempo 3h.');
       }
       const customText = args.slice(1).join(' ').trim();
       const formattedTime = formatHumanDuration(parsedMinutes, 'minutes', groupLang);
       if (!customText) {
         configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, enabled: true, lastSent: Date.now() });
-        return reply(`💾 *AutoMsg atualizado:* Intervalo alterado para *a cada ${formattedTime}*.`);
+        return reply(`AutoMsg atualizado: intervalo alterado para a cada ${formattedTime}.`);
       }
       configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: parsedMinutes, message: customText, enabled: true, lastSent: Date.now() });
-      return reply(`💾 *AutoMsg atualizado e ATIVADO!*\n⏱️ *Intervalo:* a cada ${formattedTime}\n💬 *Mensagem:*\n${customText}`);
+      return reply(`AutoMsg ativado.\nIntervalo: a cada ${formattedTime}\nMensagem:\n${customText}`);
     }
 
     // Configuração direta de tempo: /automsg tempo 3h ou /automsg tempo 60
@@ -680,21 +680,21 @@ module.exports = {
       const dur = parseHumanDuration(rawArg);
       const minutesArg = dur ? dur.totalMinutes : parseInt(rawArg, 10);
       if (isNaN(minutesArg) || minutesArg < MIN_INTERVAL_MINUTES) {
-        return reply('⚠️ *Segurança Anti-Ban:* O intervalo mínimo para comunicados periódicos é rigorosamente de *3 horas* (180 minutos).\nEx: `/automsg tempo 3h`, `/automsg tempo 6h` ou `/automsg tempo 12h`.');
+        return reply('Por segurança, o intervalo mínimo entre comunicados é de 3 horas.\nEx: /automsg tempo 3h, /automsg tempo 6h ou /automsg tempo 12h.');
       }
       const formattedTime = formatHumanDuration(minutesArg, 'minutes', groupLang);
       configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: minutesArg, enabled: true, lastSent: Date.now() });
-      return reply(`💾 *AutoMsg atualizado:* Intervalo definido para *a cada ${formattedTime}*.`);
+      return reply(`AutoMsg atualizado: intervalo definido para a cada ${formattedTime}.`);
     }
 
     // Configuração direta de texto: /automsg texto <texto...>
     if (['texto', 'msg', 'mensagem'].includes(sub)) {
       const customText = args.slice(1).join(' ').trim();
       if (!customText) {
-        return reply('⚠️ Digite o texto do anúncio. Ex: `/automsg texto Sejam todos bem-vindos!`');
+        return reply('Digite o texto do anúncio. Ex: /automsg texto Sejam todos bem-vindos!');
       }
       configManager.updatePluginConfig(from, 'automsg', { message: customText, enabled: true, lastSent: Date.now() });
-      return reply(`💾 *AutoMsg atualizado!*\n💬 *Novo texto:*\n${customText}`);
+      return reply(`AutoMsg atualizado.\nNovo texto:\n${customText}`);
     }
 
     // Disparo imediato de teste (preview para o administrador)
@@ -702,19 +702,32 @@ module.exports = {
       const activeCfg = configManager.getPluginConfig(from, 'automsg') || cfg;
       const hasMedia = hasMediaAttached(activeCfg);
       if (!activeCfg.message && !hasMedia) {
-        return reply('⚠️ O AutoMsg ainda não possui texto ou foto configurada para teste.');
+        return reply('O AutoMsg ainda não possui texto ou foto configurada para teste.');
       }
 
       // Reinicia lastSent para evitar disparo duplicado pelo scheduler logo em seguida
       configManager.updatePluginConfig(from, 'automsg', { lastSent: Date.now() });
 
+      // Aplica variação inteligente se ativada
+      let msgToSend = activeCfg.message || '';
+      if (msgToSend && activeCfg.useAI !== false) {
+        try {
+          const groupLangForAI = groupLang || 'pt';
+          const varied = await Promise.race([
+            generateAutomsgVariation(msgToSend, groupLangForAI),
+            new Promise(resolve => setTimeout(() => resolve(null), 8000))
+          ]);
+          if (varied) msgToSend = varied;
+        } catch (_) { /* fallback para texto original */ }
+      }
+
       if (hasMedia) {
-        const sent = await sendAutomsgMedia(sock, from, activeCfg.media, activeCfg.message || '', { quoted: msg });
-        if (!sent && activeCfg.message) {
-          await sendSafeMessage(sock, from, { text: activeCfg.message }, { quoted: msg });
+        const sent = await sendAutomsgMedia(sock, from, activeCfg.media, msgToSend, { quoted: msg });
+        if (!sent && msgToSend) {
+          await sendSafeMessage(sock, from, { text: msgToSend }, { quoted: msg });
         }
       } else {
-        await sendSafeMessage(sock, from, { text: activeCfg.message }, { quoted: msg });
+        await sendSafeMessage(sock, from, { text: msgToSend }, { quoted: msg });
       }
       return;
     }
@@ -730,22 +743,22 @@ module.exports = {
     const sleepActive = cfg.sleepMode !== false;
     const onlyActive = cfg.onlyIfActive !== false;
 
-    let help = `📢 *AutoMsg (Anúncios Periódicos Anti-Ban)*\n`;
+    let help = `*AutoMsg — Comunicados Periódicos*\n`;
     help += `• *Status:* ${statusText}\n`;
-    help += `• *Intervalo Efetivo:* a cada ${formattedInterval} (+ variação anti-ban)\n`;
-    help += `• *Modo Silencioso Noturno:* ${sleepActive ? '✅ Ativo (23h às 08h)' : '❌ Desativado'}\n`;
-    help += `• *Apenas com Movimento:* ${onlyActive ? '✅ Sim (economiza envios)' : '❌ Não'}\n`;
+    help += `• Intervalo: a cada ${formattedInterval}\n`;
+    help += `• Modo silencioso: ${sleepActive ? 'Ativo (23h às 08h)' : 'Desativado'}\n`;
+    help += `• Apenas com movimento: ${onlyActive ? 'Sim' : 'Não'}\n`;
 
     if (cfg.media?.path) {
-      help += `• *Foto Anexada:* Sim (${((cfg.media.size || 0) / 1024 / 1024).toFixed(2)} MB)\n`;
+      help += `• Foto anexada: Sim (${((cfg.media.size || 0) / 1024 / 1024).toFixed(2)} MB)\n`;
     }
-    help += `• *Mensagem/Legenda Atual:*\n${alertMsg}\n`;
+    help += `• Mensagem atual:\n${alertMsg}\n`;
 
     if (hasMedia && configuredMinutes < MIN_INTERVAL_WITH_MEDIA) {
-      help += `\n⚠️ _Nota: Intervalo fixado em 3h no agendador devido à foto anexada (anti-ban)._\n`;
+      help += `\n_Nota: Intervalo fixado em 3h por segurança._\n`;
     }
 
-    help += `\n💡 *Comandos Rápidos:*\n`;
+    help += `\n*Comandos Rápidos:*\n`;
     help += `• \`/automsg on\` ou \`/automsg off\`\n`;
     help += `• \`/automsg foto [legenda]\` (anexa foto/banner com proteção anti-ban)\n`;
     help += `• \`/automsg texto [seu texto]\` (atualiza apenas a mensagem)\n`;
