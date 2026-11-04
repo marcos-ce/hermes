@@ -155,6 +155,19 @@ const dictionaries = {
     'protection.calendar.off': "Calendário de agendamentos desativado.",
     'protection.hermes.on': "Assistente Hermes ativado no grupo.",
     'protection.hermes.off': "Assistente Hermes desativado no grupo.",
+    'protection.milestone.on': "Metas de membros ativadas.",
+    'protection.milestone.off': "Metas de membros desativadas.",
+
+    // ─── MILESTONE (METAS DE MEMBROS) ───
+    'milestone.on': "🎯 Metas de membros ativadas.",
+    'milestone.off': "🎯 Metas de membros desativadas.",
+    'milestone.target_added': "🎯 Meta de *{count}* membros configurada com sucesso!",
+    'milestone.target_removed': "🗑️ Meta de *{count}* membros removida.",
+    'milestone.list_empty': "Nenhuma meta configurada. Use `!meta add <número> <mensagem>`.",
+    'milestone.list_header': "🎯 *Metas de Membros:*",
+    'milestone.reached': "Atingida",
+    'milestone.pending': "Pendente",
+    'milestone.cleared': "Todas as metas foram removidas.",
 
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprovação:* {status}\nDDIs autorizados: {ddis}\nAção para estrangeiros: {foreignAction}\nNotificação no grupo: {notify}",
@@ -501,6 +514,19 @@ const dictionaries = {
     'protection.calendar.off': "Calendario de eventos desactivado.",
     'protection.hermes.on': "Asistente Hermes activado en el grupo.",
     'protection.hermes.off': "Asistente Hermes desactivado en el grupo.",
+    'protection.milestone.on': "Metas de miembros activadas.",
+    'protection.milestone.off': "Metas de miembros desactivadas.",
+
+    // ─── MILESTONE (METAS DE MIEMBROS) ───
+    'milestone.on': "🎯 Metas de miembros activadas.",
+    'milestone.off': "🎯 Metas de miembros desactivadas.",
+    'milestone.target_added': "🎯 ¡Meta de *{count}* miembros configurada con éxito!",
+    'milestone.target_removed': "🗑️ Meta de *{count}* miembros eliminada.",
+    'milestone.list_empty': "No hay metas configuradas. Usa `!meta add <número> <mensaje>`.",
+    'milestone.list_header': "🎯 *Metas de Miembros:*",
+    'milestone.reached': "Alcanzada",
+    'milestone.pending': "Pendiente",
+    'milestone.cleared': "Todas las metas han sido eliminadas.",
 
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Aprobación:* {status}\nPrefijos permitidos: {ddis}\nAcción para extranjeros: {foreignAction}\nNotificación en el grupo: {notify}",
@@ -847,6 +873,19 @@ const dictionaries = {
     'protection.calendar.off': "Event calendar disabled.",
     'protection.hermes.on': "Hermes Assistant enabled in this group.",
     'protection.hermes.off': "Hermes Assistant disabled in this group.",
+    'protection.milestone.on': "Member milestones enabled.",
+    'protection.milestone.off': "Member milestones disabled.",
+
+    // ─── MILESTONE (MEMBER MILESTONES) ───
+    'milestone.on': "🎯 Member milestones enabled.",
+    'milestone.off': "🎯 Member milestones disabled.",
+    'milestone.target_added': "🎯 Milestone of *{count}* members configured successfully!",
+    'milestone.target_removed': "🗑️ Milestone of *{count}* members removed.",
+    'milestone.list_empty': "No milestones configured. Use `!meta add <number> <message>`.",
+    'milestone.list_header': "🎯 *Member Milestones:*",
+    'milestone.reached': "Reached",
+    'milestone.pending': "Pending",
+    'milestone.cleared': "All milestones have been cleared.",
 
     // ─── AUTO-APROVAÇÃO (AUTOAPPROVE) ───
     'autoapprove.status': "🛡️ *Auto-Approve:* {status}\nAllowed country codes: {ddis}\nForeign action: {foreignAction}\nGroup notification: {notify}",

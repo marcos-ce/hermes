@@ -69,8 +69,8 @@ const TOOLS = [
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood'],
-            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar", "autoapprove", "antistatus" (apaga @status), "autolockflood" (fecha grupo por excesso de msgs).'
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood', 'milestone'],
+            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar", "autoapprove", "antistatus" (apaga @status), "autolockflood" (fecha grupo por excesso de msgs), "milestone" (metas de membros).'
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
           action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição para infrações: "delete" (apenas apagar), "warn" (advertir até atingir limite de warns e banir) ou "ban" (banir imediatamente no primeiro deslize).' },
@@ -414,6 +414,23 @@ const TOOLS = [
           }
         },
         required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_group_milestone',
+      description: 'Configura uma meta progressiva de quantidade de membros no grupo. Acione para: "quando chegar a 100 membros celebre", "ao bater 500 membros faça sorteio", "meta de 50 membros: abrir o grupo", "configure meta de crescimento", "ao atingir 200 pessoas diga X", "quando completar 1000 membros". Tags dinâmicas suportadas na mensagem: {user} (marca o novo membro), {count} (número da meta), {group} (nome do grupo).',
+      parameters: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer', description: 'Número de membros alvo da meta (ex: 50, 100, 500, 1000).' },
+          message: { type: 'string', description: 'Texto da mensagem ao atingir a meta. Use {user} para marcar o novo membro, {count} para o número da meta, {group} para o nome do grupo. Ex: "🎉 Chegamos a {count} membros! Bem-vindo(a), {user}!"' },
+          action: { type: 'string', enum: ['announce', 'pin', 'open_group'], description: 'Ação extra ao atingir a meta: "announce" (apenas envia a mensagem, padrão), "pin" (envia e fixa a mensagem), "open_group" (envia e abre o grupo para todos falarem).' },
+          clearAll: { type: 'boolean', description: 'Se true, remove TODAS as metas configuradas antes de adicionar a nova.' }
+        },
+        required: ['count']
       }
     }
   },

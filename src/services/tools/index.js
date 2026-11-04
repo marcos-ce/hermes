@@ -27,7 +27,8 @@ const toolHandlers = new Map([
   ['get_poll_results', require('./get_poll_results')],
   ['learn_group_fact', require('./learn_group_fact')],
   ['forget_group_fact', require('./forget_group_fact')],
-  ['manage_join_requests', require('./manage_join_requests')]
+  ['manage_join_requests', require('./manage_join_requests')],
+  ['set_group_milestone', require('./set_group_milestone')]
 ]);
 
 module.exports = toolHandlers;
