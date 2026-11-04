@@ -25,7 +25,8 @@ const { generateAutomsgVariation } = require('../../services/automsgVariationSer
 const AUTOMSG_MEDIA_DIR = path.join(process.cwd(), 'data', 'automsg');
 const MAX_IMAGE_BYTES = Math.floor(2.5 * 1024 * 1024); // 2.5 MB (limite estrito anti-ban)
 const MAX_MEDIA_BYTES = MAX_IMAGE_BYTES; // Compatibilidade com ferramentas legadas
-const MIN_INTERVAL_WITH_MEDIA = 180; // 3h: intervalo mínimo com imagem anexada (anti-ban)
+const MIN_INTERVAL_MINUTES = 180; // 3h: intervalo mínimo RIGOROSO absoluto Anti-Ban para qualquer anúncio
+const MIN_INTERVAL_WITH_MEDIA = MIN_INTERVAL_MINUTES;
 const MEDIA_MSG_TYPES = ['imageMessage', 'videoMessage', 'audioMessage'];
 
 /** Sanitiza o JID do grupo para uso como nome de arquivo seguro. */
@@ -385,9 +386,7 @@ module.exports = {
           en: 'What is the time interval between announcement messages?'
         },
         choices: [
-          { value: 60, label: { pt: '1 hora (Apenas texto)', es: '1 hora (Solo texto)', en: '1 hour (Text only)' } },
-          { value: 120, label: { pt: '2 horas (Apenas texto)', es: '2 horas (Solo texto)', en: '2 hours (Text only)' } },
-          { value: 180, label: { pt: '3 horas (Recomendado Anti-Ban)', es: '3 horas (Recomendado Anti-Ban)', en: '3 hours (Recommended Anti-Ban)' } },
+          { value: 180, label: { pt: '3 horas (Mínimo Rigoroso Anti-Ban)', es: '3 horas (Mínimo Riguroso Anti-Ban)', en: '3 hours (Strict Anti-Ban Minimum)' } },
           { value: 360, label: { pt: '6 horas', es: '6 horas', en: '6 hours' } },
           { value: 720, label: { pt: '12 horas', es: '12 horas', en: '12 hours' } },
           { value: 1440, label: { pt: '24 horas (1 dia)', es: '24 horas (1 día)', en: '24 hours (1 day)' } }
@@ -460,10 +459,9 @@ module.exports = {
       }
     }
 
-    // Blindagem Anti-Ban 2: Intervalo mínimo de 3h quando há imagem anexada
-    const baseMinutes = hasMedia
-      ? Math.max(automsgCfg.intervalMinutes || 180, MIN_INTERVAL_WITH_MEDIA)
-      : Math.max(automsgCfg.intervalMinutes || 180, 5);
+    // Blindagem Anti-Ban 2: Intervalo mínimo RIGOROSO de 3h (180 min) para qualquer anúncio
+    const configuredMinutes = automsgCfg.intervalMinutes || MIN_INTERVAL_MINUTES;
+    const baseMinutes = Math.max(configuredMinutes, MIN_INTERVAL_MINUTES);
 
     // Blindagem Anti-Ban 3: Jitter Temporal (+5 a +25 minutos) para quebrar padrão robótico
     const currentJitter = automsgCfg.nextJitterMinutes || 0;
@@ -662,9 +660,9 @@ module.exports = {
     // Configuração direta: /automsg 3h <texto...> ou /automsg 120 <texto...>
     const durSub = parseHumanDuration(sub);
     const parsedMinutes = durSub ? durSub.totalMinutes : parseInt(sub, 10);
-    if (!isNaN(parsedMinutes) && parsedMinutes >= 5) {
-      if (hasMediaAttached(cfg) && parsedMinutes < MIN_INTERVAL_WITH_MEDIA) {
-        return reply(`⚠️ Com foto anexada, o intervalo mínimo é *3 horas* (anti-ban).\nUse \`/automsg 3h\` ou mais, ou remova a foto com \`/automsg removerfoto\`.`);
+    if (!isNaN(parsedMinutes)) {
+      if (parsedMinutes < MIN_INTERVAL_MINUTES) {
+        return reply('⚠️ *Segurança Anti-Ban:* O intervalo mínimo para comunicados periódicos é rigorosamente de *3 horas* (180 minutos).\nUse ex: `/automsg 3h <texto>`, `/automsg 6h` ou `/automsg tempo 3h`.');
       }
       const customText = args.slice(1).join(' ').trim();
       const formattedTime = formatHumanDuration(parsedMinutes, 'minutes', groupLang);
@@ -681,11 +679,8 @@ module.exports = {
       const rawArg = args.slice(1).join(' ').trim();
       const dur = parseHumanDuration(rawArg);
       const minutesArg = dur ? dur.totalMinutes : parseInt(rawArg, 10);
-      if (isNaN(minutesArg) || minutesArg < 5) {
-        return reply('⚠️ Digite um intervalo válido. Ex: `/automsg tempo 3h` (3 horas) ou `/automsg tempo 30m` (30 minutos)');
-      }
-      if (hasMediaAttached(cfg) && minutesArg < MIN_INTERVAL_WITH_MEDIA) {
-        return reply(`⚠️ Com foto anexada, o intervalo mínimo é *3 horas* (anti-ban).\nUse \`/automsg tempo 3h\` ou mais, ou remova a foto com \`/automsg removerfoto\`.`);
+      if (isNaN(minutesArg) || minutesArg < MIN_INTERVAL_MINUTES) {
+        return reply('⚠️ *Segurança Anti-Ban:* O intervalo mínimo para comunicados periódicos é rigorosamente de *3 horas* (180 minutos).\nEx: `/automsg tempo 3h`, `/automsg tempo 6h` ou `/automsg tempo 12h`.');
       }
       const formattedTime = formatHumanDuration(minutesArg, 'minutes', groupLang);
       configManager.updatePluginConfig(from, 'automsg', { intervalMinutes: minutesArg, enabled: true, lastSent: Date.now() });

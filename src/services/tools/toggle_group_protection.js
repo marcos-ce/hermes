@@ -102,9 +102,17 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     if (args.autoMsgText && String(args.autoMsgText).trim().length > 0) {
       updates.message = String(args.autoMsgText).trim();
     }
-    if (args.intervalMinutes && Number(args.intervalMinutes) > 0) {
-      updates.intervalMinutes = Math.max(parseInt(args.intervalMinutes, 10), 5);
-      specificFeedbacks.push(t(lang, 'protection.automsg.interval_updated', { minutes: updates.intervalMinutes }));
+    if (args.intervalMinutes !== undefined) {
+      const requested = parseInt(args.intervalMinutes, 10);
+      if (!isNaN(requested) && requested > 0) {
+        const effective = Math.max(requested, 180);
+        updates.intervalMinutes = effective;
+        if (requested < 180) {
+          specificFeedbacks.push('⚠️ *Segurança Anti-Ban:* O intervalo mínimo de comunicados é rigorosamente de *3 horas* (180 minutos). Intervalo fixado em 3h.');
+        } else {
+          specificFeedbacks.push(t(lang, 'protection.automsg.interval_updated', { minutes: effective }));
+        }
+      }
     }
     if (args.useAI !== undefined) {
       updates.useAI = Boolean(args.useAI);
