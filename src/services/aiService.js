@@ -313,14 +313,17 @@ class AIService {
     ];
 
     const endpoint = `${this.baseUrl}/chat/completions`;
+    // Temperatura dinâmica: 0.1 em modo de ação (tool calls) para reduzir alucinações;
+    // valor do .env (padrão 0.3) para respostas de texto livre.
+    const isActionMode = Array.isArray(tools) && tools.length > 0;
     const payload = {
       model: this.model,
       messages: fullMessages,
       max_tokens: this.maxTokens,
-      temperature: this.temperature
+      temperature: isActionMode ? 0.1 : this.temperature
     };
 
-    if (Array.isArray(tools) && tools.length > 0) {
+    if (isActionMode) {
       payload.tools = tools;
       payload.tool_choice = 'auto';
     }
