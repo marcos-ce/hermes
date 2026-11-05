@@ -437,9 +437,9 @@ async function connectBot(options = {}) {
         } catch (_) {}
 
         const pending = siteOrders.claimPendingGroup(g.id, inviteCode);
-        const effectiveDays = pending ? pending.days : 30;
+        const effectiveDays = pending ? pending.days : 3;
 
-        const isTrialPending = Boolean(pending && (pending.isTrial || pending.plan === 'teste'));
+        const isTrialPending = Boolean(!pending || pending.isTrial || pending.plan === 'teste');
         const trialAlreadyUsed = configManager.hasGroupUsedTrial(g.id);
 
         // Trava anti-abuso: grupo que já consumiu os 3 dias grátis não recebe nova licença trial
@@ -480,9 +480,9 @@ async function connectBot(options = {}) {
         const { shouldSendWelcome } = configManager.ensureGroupStarterKit(g.id, g.subject || '', effectiveDays);
         configManager.markWelcomeSent(g.id, true);
 
-        if (pending) {
-          const grp = configManager.getGroup(g.id);
-          if (grp) {
+        const grp = configManager.getGroup(g.id);
+        if (grp) {
+          if (pending) {
             grp.ownerName = pending.ownerName || '';
             grp.ownerPhone = pending.ownerPhone || '';
             grp.autoLeave = true;
@@ -493,9 +493,18 @@ async function connectBot(options = {}) {
             }
             grp.lastPaymentId = String(pending.paymentId);
             configManager.setGroupExpiry(g.id, Date.now() + effectiveDays * 24 * 60 * 60 * 1000);
+          } else {
+            // Grupo entrando sem pedido pendente: ativado exclusivamente como Teste Grátis de 3 dias!
+            grp.plan = 'teste';
+            grp.isTrial = true;
+            grp.trialUsed = true;
+            grp.autoLeave = true;
+            configManager.setGroupExpiry(g.id, Date.now() + 3 * 24 * 60 * 60 * 1000);
           }
-          configManager.flushSync();
+        }
+        configManager.flushSync();
 
+        if (pending) {
           // Notifica o dono no Telegram confirmando a ativação
           try {
             const siteBridge = require('../services/siteBridge');
@@ -510,8 +519,6 @@ async function connectBot(options = {}) {
           } catch (err) {
             logger.warn({ err: err.message }, 'Falha ao notificar ativação no Telegram');
           }
-        } else {
-          configManager.flushSync();
         }
 
         // Apresentação oficial humanizada em grupos novos com delay inteligente (~1 minuto) e digitação simulada

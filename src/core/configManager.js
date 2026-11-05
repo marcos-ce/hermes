@@ -404,7 +404,7 @@ class ConfigManager {
   getOrCreateGroup(groupJid, name = '') {
     let group = this.groups.get(groupJid);
     if (!group) {
-      const defaultLicenseMs = 30 * 24 * 60 * 60 * 1000; // 30 dias (1 mês) padrão
+      const defaultLicenseMs = 3 * 24 * 60 * 60 * 1000; // 3 dias de Teste Grátis padrão
       group = {
         name: name || '',
         enabled: true,
@@ -413,6 +413,10 @@ class ConfigManager {
         lang: settings.defaultLang || 'pt',
         prefix: settings.defaultPrefix || '!',
         expiresAt: Date.now() + defaultLicenseMs,
+        plan: 'teste',
+        isTrial: true,
+        trialUsed: true,
+        autoLeave: true,
         expiryNotified: false,
         lastActivity: Date.now(),
         blacklist: [],
@@ -446,7 +450,7 @@ class ConfigManager {
   }
 
   /**
-   * Garante que o grupo esteja ativado com o Kit Padrão (Licença de 30 dias, Hermes IA, AntiLink delete + 3 warns)
+   * Garante que o grupo esteja ativado com o Kit Padrão (Licença de 3 dias teste, Hermes IA, AntiLink delete + 3 warns)
    * sem sobrescrever configurações já personalizadas pelo grupo.
    */
   ensureGroupStarterKit(groupJid, name = '', days = null) {
@@ -457,7 +461,7 @@ class ConfigManager {
     group.expiryNotified = false;
 
     if (typeof days === 'number' && days > 0) {
-      const isDefaultStarter = !group.lastPaymentId && !group.autoLeave;
+      const isDefaultStarter = !group.lastPaymentId && group.isTrial;
       if (isNewGroup || isDefaultStarter) {
         // Define a vigência EXATA especificada (ex: 3 dias de teste grátis), sem somar aos 30 dias padrão
         this.setGroupExpiry(groupJid, Date.now() + days * 24 * 60 * 60 * 1000);
@@ -467,7 +471,8 @@ class ConfigManager {
     } else if (days === 0) {
       group.expiresAt = null; // Vitalício explícito
     } else if (!group.expiresAt || Date.now() > group.expiresAt) {
-      group.expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+      const defaultDays = group.isTrial || isNewGroup ? 3 : 30;
+      group.expiresAt = Date.now() + (defaultDays * 24 * 60 * 60 * 1000);
     }
 
     group.plugins = group.plugins || {};
