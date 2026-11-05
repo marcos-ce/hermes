@@ -118,13 +118,17 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
 
 /**
  * Ação de Emergência (Zero Delay): Apagar mensagem imediatamente
- * Compatível com mensagens próprias do bot e mensagens de outros membros em grupos.
- * @param {object} sock 
- * @param {string} jid 
- * @param {object} key 
+ * Compatível com mensagens próprias do bot e mensagens de outros membros em grupos (Admin Revoke).
+ * Suporta fallbackParticipants (@lid vs @s.whatsapp.net vs raw) e sanitização de :device
+ * para garantir que a revogação seja processada pelo WhatsApp mesmo com identificadores alternativos.
+ * @param {object} sock Instância do Baileys
+ * @param {string} jid JID do destino (grupo ou chat)
+ * @param {object} key Objeto msg.key da mensagem
+ * @param {string|string[]} [fallbackParticipants=[]] Identificadores alternativos do remetente
+ * @returns {Promise<boolean>} Retorna true se a instrução de exclusão foi despachada com sucesso
  */
-async function safeDelete(sock, jid, key) {
-  if (!sock || !jid || !key) return;
+async function safeDelete(sock, jid, key, fallbackParticipants = []) {
+  if (!sock || !jid || !key) return false;
 
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const botJid = cleanJid(sock?.user?.id || '');
@@ -142,56 +146,126 @@ async function safeDelete(sock, jid, key) {
     }
   }
 
-  // Clona e normaliza a chave
-  const cleanKey = {
-    remoteJid: key.remoteJid || jid,
-    id: key.id,
-    fromMe: Boolean(isFromMe)
-  };
-
-  if (key.participant) {
-    cleanKey.participant = key.participant;
-  } else if (isGroup && cleanKey.fromMe) {
-    cleanKey.participant = botJid || botLid;
-  }
-
-  // 1. Tenta deletar normalmente com a chave preparada
-  let deleted = false;
-  try {
-    await sock.sendMessage(jid, { delete: cleanKey });
-    deleted = true;
-  } catch (_) {}
-
-  // 2. Se for em grupo e mensagem de terceiros, reforça com admin revoke caso necessário
-  if (!deleted && isGroup && !cleanKey.fromMe) {
+  // 1. Mensagem enviada pelo próprio bot
+  if (isFromMe) {
+    const cleanKey = {
+      remoteJid: key.remoteJid || jid,
+      id: key.id,
+      fromMe: true
+    };
+    if (isGroup) {
+      cleanKey.participant = botJid || botLid;
+    }
     try {
-      const adminRevokeKey = {
-        remoteJid: jid,
-        id: key.id,
-        fromMe: false,
-        participant: cleanKey.participant
-      };
-      await sock.sendMessage(jid, { delete: adminRevokeKey });
+      await sock.sendMessage(jid, { delete: cleanKey });
+      return true;
     } catch (err) {
-      logger.warn({ err, jid, key: cleanKey }, 'Falha no admin revoke de mensagem em grupo');
+      logger.warn({ err: err?.message, jid, id: key.id }, 'safeDelete: Falha ao deletar mensagem própria');
+      return false;
     }
   }
+
+  // 2. Mensagem de terceiros em grupo (Admin Revoke)
+  // Monta lista de candidatos a participant em ordem de prioridade
+  const candidates = [];
+  const addCandidate = (cand) => {
+    if (!cand || typeof cand !== 'string') return;
+    const trimmed = cand.trim();
+    if (!trimmed) return;
+    if (!candidates.includes(trimmed)) {
+      candidates.push(trimmed);
+    }
+    const clean = cleanJid(trimmed);
+    if (clean && !candidates.includes(clean)) {
+      candidates.push(clean);
+    }
+  };
+
+  addCandidate(key.participant);
+  if (Array.isArray(fallbackParticipants)) {
+    fallbackParticipants.forEach(addCandidate);
+  } else if (typeof fallbackParticipants === 'string') {
+    addCandidate(fallbackParticipants);
+  }
+
+  // Se nenhum participante foi identificado, tenta sem participant como último recurso
+  if (candidates.length === 0) {
+    candidates.push(undefined);
+  }
+
+  let deleted = false;
+  for (const participant of candidates) {
+    try {
+      const targetKey = {
+        remoteJid: key.remoteJid || jid,
+        id: key.id,
+        fromMe: false
+      };
+      if (participant) {
+        targetKey.participant = participant;
+      }
+      await sock.sendMessage(jid, { delete: targetKey });
+      deleted = true;
+      break;
+    } catch (err) {
+      logger.warn({ err: err?.message, jid, id: key.id, participant }, 'safeDelete: Tentativa de admin revoke falhou para candidato');
+    }
+  }
+
+  return deleted;
 }
 
 /**
  * Ação de Emergência (Zero Delay): Expulsar participante imediatamente
- * @param {object} sock 
- * @param {string} jid 
- * @param {string|string[]} participants 
+ * Suporta múltiplos identificadores de fallback (@lid vs @s.whatsapp.net vs raw)
+ * e valida o status 200 retornado pelo WhatsApp/Baileys.
+ * @param {object} sock Instância do Baileys
+ * @param {string} jid JID do grupo (@g.us)
+ * @param {string|string[]} participants JID(s) principais do alvo
+ * @param {string|string[]} [fallbackJids=[]] JIDs alternativos em caso de recusa (ex: @lid ou telefone)
+ * @returns {Promise<boolean>} Retorna true se a remoção foi confirmada com sucesso pelo WhatsApp
  */
-async function safeKick(sock, jid, participants) {
-  if (!sock || !jid || !participants) return;
-  const list = Array.isArray(participants) ? participants : [participants];
+async function safeKick(sock, jid, participants, fallbackJids = []) {
+  if (!sock || !jid || !participants) return false;
+
+  const primaryList = (Array.isArray(participants) ? participants : [participants]).filter(Boolean);
+  if (primaryList.length === 0) return false;
+
+  const isSuccess = (result) => {
+    if (!result) return false;
+    const list = Array.isArray(result) ? result : [result];
+    if (list.length === 0) return false;
+    return list.some(item => item && String(item.status) === '200');
+  };
+
+  // 1. Tenta com a lista de JIDs primários
   try {
-    await sock.groupParticipantsUpdate(jid, list, 'remove');
+    const res = await sock.groupParticipantsUpdate(jid, primaryList, 'remove');
+    if (isSuccess(res)) {
+      return true;
+    }
+    logger.warn({ jid, primaryList, res }, 'safeKick: Tentativa primária não retornou status 200');
   } catch (err) {
-    logger.warn({ err, jid, participants: list }, 'Falha ao remover participante no safeKick');
+    logger.warn({ err, jid, primaryList }, 'safeKick: Erro na chamada primária de groupParticipantsUpdate');
   }
+
+  // 2. Se falhou e existem JIDs alternativos (ex: @lid, telefone, rawParticipant), tenta cada um como fallback
+  const altCandidates = (Array.isArray(fallbackJids) ? fallbackJids : [fallbackJids])
+    .filter(j => Boolean(j) && !primaryList.includes(j));
+
+  for (const altJid of altCandidates) {
+    try {
+      const resAlt = await sock.groupParticipantsUpdate(jid, [altJid], 'remove');
+      if (isSuccess(resAlt)) {
+        logger.info({ jid, altJid }, 'safeKick: Participante removido com sucesso via fallback de JID');
+        return true;
+      }
+    } catch (errAlt) {
+      logger.warn({ err: errAlt, jid, altJid }, 'safeKick: Falha na tentativa de fallback');
+    }
+  }
+
+  return false;
 }
 
 /**

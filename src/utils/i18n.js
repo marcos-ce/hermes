@@ -81,6 +81,9 @@ const dictionaries = {
     'antilink.warned': ["@{user}, não é permitido enviar links aqui. Apaguei a mensagem e registrei uma advertência ({warns}/{max}).","@{user}, links são proibidos nas regras do grupo. Você recebeu uma advertência ({warns}/{max})."],
     'antilink.banned': ["Removi @{user} do grupo por insistir no envio de links proibidos.","@{user} foi removido por enviar links não permitidos no grupo."],
     'antilink.status': "🛡️ *AntiLink:* {status}\n🌐 *Domínios permitidos:* {domains}\n⚡ *Ação:* {action}",
+    'antilink.kick_failed': "⚠️ @{user} enviou um link não permitido, mas não foi possível removê-lo automaticamente do grupo. Um administrador precisa intervir.",
+    'antilink.delete_success_kick_failed': "🚫 @{user}, não é permitido enviar links neste grupo. Apaguei sua mensagem, mas não foi possível remover você do grupo automaticamente. Administradores, por favor verifiquem.",
+    'antilink.bot_not_admin': "⚠️ Detectei link não permitido de @{user}, mas preciso ser administrador do grupo para apagar a mensagem ou aplicar punição.",
 
     // ─── BOAS-VINDAS / WELCOME ───
     'welcome.default': ["Bem-vindo(a) ao *{group}*, @{user}!\nDê uma olhada na descrição do grupo para conhecer nossas regras:\n\n{desc}","Olá, @{user}! Seja muito bem-vindo(a) ao *{group}*.\nConfira abaixo a descrição e as regras do grupo:\n\n{desc}"],
@@ -89,6 +92,7 @@ const dictionaries = {
     // ─── ADVERTÊNCIAS / WARN ───
     'warn.added': ["@{user}, você recebeu uma advertência por *{reason}*.\nAgora você tem {warns} de {max} advertências.","Registrei uma advertência para @{user} por *{reason}* ({warns}/{max}). Por favor, siga as regras do grupo."],
     'warn.max_reached': ["@{user} chegou ao limite de {max} advertências e foi removido do grupo.","Como @{user} atingiu {max} advertências, fiz a remoção do grupo."],
+    'warn.max_reached_kick_failed': "⚠️ @{user} atingiu o limite de {max} advertências e sua mensagem foi apagada, mas não foi possível removê-lo do grupo automaticamente. Administradores, por favor verifiquem.",
     'warn.removed': ["Retirei uma advertência de @{user}. Agora restam {warns}/{max}.","Removi uma advertência de @{user}. Total atual: {warns}/{max}."],
     'warn.list_title': "📋 *Membros Advertidos no Grupo:*",
     'warn.list_empty': "Ninguém tem advertências neste grupo no momento.",
@@ -463,6 +467,9 @@ const dictionaries = {
     'antilink.warned': ["@{user}, los enlaces no están autorizados aquí. Has recibido una advertencia ({warns}/{max}) y el mensaje fue eliminado.","Atención, @{user}: enviar enlaces no permitidos genera advertencia. Registro actualizado a {warns}/{max}."],
     'antilink.banned': ["@{user} fue expulsado del grupo por insistir en el envío de enlaces no autorizados.","Expulsión aplicada a @{user} por incumplir la política de enlaces del grupo."],
     'antilink.status': "🛡️ *AntiLink:* {status}\n🌐 *Dominios permitidos:* {domains}\n⚡ *Acción:* {action}",
+    'antilink.kick_failed': "⚠️ @{user} envió un enlace no permitido, pero no fue posible expulsarlo automáticamente del grupo. Un administrador debe intervenir.",
+    'antilink.delete_success_kick_failed': "🚫 @{user}, no está permitido enviar enlaces en este grupo. Eliminé tu mensaje, pero no fue posible expulsarte automáticamente del grupo. Administradores, por favor verifiquen.",
+    'antilink.bot_not_admin': "⚠️ He detectado un enlace no permitido de @{user}, pero necesito ser administrador del grupo para eliminar mensajes o sancionar.",
 
     // ─── BOAS-VINDAS / WELCOME ───
     'welcome.default': ["¡Te damos la bienvenida al grupo *{group}*, @{user}!\nPor favor, consulta la descripción para conocer las normas de convivencia:\n\n{desc}","¡Hola, @{user}! Bienvenido(a) a *{group}*.\nTe recomendamos revisar la descripción del grupo para conocer nuestras directrices:\n\n{desc}"],
@@ -471,6 +478,7 @@ const dictionaries = {
     // ─── ADVERTÊNCIAS / WARN ───
     'warn.added': ["Atención, @{user}: has recibido una advertencia por *{reason}*.\nTienes {warns} de {max} advertencias en el grupo.","@{user}, advertencia aplicada por *{reason}*.\nTotal acumulado: {warns} de {max} advertencias. Por favor, colabora con las normas."],
     'warn.max_reached': ["@{user} alcanzó el límite de {max} advertencias y fue expulsado del grupo.","El límite de {max} advertencias fue alcanzado por @{user}, resultando en su expulsión del grupo."],
+    'warn.max_reached_kick_failed': "⚠️ @{user} alcanzó el límite de {max} advertencias y su mensaje fue eliminado, pero no fue posible expulsarlo del grupo automáticamente. Administradores, por favor verifiquen.",
     'warn.removed': ["Se ha retirado una advertencia de @{user}. Total actual: {warns}/{max}.","Advertencia revocada para @{user}. Conteo actual: {warns}/{max}."],
     'warn.list_title': "📋 *Miembros Advertidos en el Grupo:*",
     'warn.list_empty': "Ningún miembro tiene advertencias activas en este grupo.",
@@ -845,6 +853,9 @@ const dictionaries = {
     'antilink.warned': ["@{user}, links are not authorized here. You received a warning ({warns}/{max}) and the message was removed.","Notice, @{user}: unauthorized links result in a warning. Your total is now {warns}/{max}."],
     'antilink.banned': ["@{user} was removed from the group for repeated unauthorized link sharing.","Removal applied to @{user} for violating group link policies."],
     'antilink.status': "🛡️ *AntiLink:* {status}\n🌐 *Allowed domains:* {domains}\n⚡ *Action:* {action}",
+    'antilink.kick_failed': "⚠️ @{user} sent an unauthorized link, but could not be automatically removed from the group. An administrator must intervene.",
+    'antilink.delete_success_kick_failed': "🚫 @{user}, sending links is not allowed in this group. I deleted your message, but could not remove you automatically from the group. Admins, please check.",
+    'antilink.bot_not_admin': "⚠️ Detected an unauthorized link from @{user}, but I need to be a group administrator to delete messages or enforce punishments.",
 
     // ─── BOAS-VINDAS / WELCOME ───
     'welcome.default': ["Welcome to *{group}*, @{user}!\nPlease review the group description for community guidelines:\n\n{desc}","Hello, @{user}! Welcome to *{group}*.\nWe recommend reading the group description to familiarize yourself with our guidelines:\n\n{desc}"],
@@ -853,6 +864,7 @@ const dictionaries = {
     // ─── ADVERTÊNCIAS / WARN ───
     'warn.added': ["Notice, @{user}: you received a warning for *{reason}*.\nYou currently have {warns} of {max} warnings in this group.","@{user}, warning applied for *{reason}*.\nTotal accumulated: {warns} of {max} warnings. Please observe group rules."],
     'warn.max_reached': ["@{user} reached the limit of {max} warnings and was removed from the group.","The warning threshold of {max} was reached by @{user}, resulting in removal from the group."],
+    'warn.max_reached_kick_failed': "⚠️ @{user} reached the limit of {max} warnings and their message was deleted, but could not be removed automatically from the group. Admins, please check.",
     'warn.removed': ["One warning was removed from @{user}. Current total: {warns}/{max}.","Warning revoked for @{user}. Current count: {warns}/{max}."],
     'warn.list_title': "📋 *Warned Members in the Group:*",
     'warn.list_empty': "No members have active warnings in this group.",

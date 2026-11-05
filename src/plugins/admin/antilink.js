@@ -1,11 +1,21 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const { safeDelete, safeKick, sendSafeMessage } = require('../../utils/antiBan');
-const { checkAdminStatus, resolveParticipant } = require('../../utils/jidResolver');
+const { checkAdminStatus, resolveParticipant, cleanJid } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 const settings = require('../../config/settings');
 
-const URL_REGEX_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live|tv|co|info|biz|club|shop|store|games?|news|blog|media)[^\s]*)/gi.source;
+const URL_REGEX_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|wa\.me\/[^\s]+|youtu\.be\/[^\s]+|t\.me\/[^\s]+|pin\.it\/[^\s]+|linktr\.ee\/[^\s]+|[a-zA-Z0-9-]+\.(com|net|org|io|me|xyz|app|br|edu|gov|gg|link|site|top|online|tech|live|tv|co|info|biz|club|shop|store|games?|news|blog|media|be|it|ee)[^\s]*)/gi.source;
+
+/**
+ * Remove pontuações e caracteres de fechamento acidentais anexados ao final de URLs extraídas
+ * @param {string} url
+ * @returns {string}
+ */
+function cleanUrlCandidate(url) {
+  if (!url || typeof url !== 'string') return '';
+  return url.trim().replace(/[,.;:!?)>\]}]+$/, '');
+}
 
 /**
  * Aliases canônicos: mapeamento de domínios "alternativos" para o domínio principal.
@@ -37,7 +47,8 @@ const DOMAIN_ALIASES = {
  */
 function extractBaseDomain(url) {
   try {
-    let href = url.trim();
+    let href = cleanUrlCandidate(url);
+    if (!href) return null;
     if (!/^https?:\/\//i.test(href)) href = 'https://' + href;
     const hostname = new URL(href).hostname.toLowerCase();
     // Remove www. e subdomínios simples (www, m, mobile)
@@ -116,7 +127,7 @@ function extractAllTextForLinks(message) {
 
 module.exports = {
   name: 'antilink',
-  aliases: ['antilink', 'antlink', 'links', 'antienlace'],
+  aliases: ['antilink', 'antlink', 'link', 'links', 'antienlace'],
   description: 'Filtro inteligente de links não autorizados com whitelist',
   ownerOnly: false,
   adminOnly: true,
@@ -190,15 +201,15 @@ module.exports = {
     // Configuração direta de ação: ban, del, warn
     if (['ban', 'banir', 'expulsar'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'ban', enabled: true, configured: true });
-      return reply('AntiLink atualizado. Ação: expulsar (ban).');
+      return reply(t('protection.antilink.action_updated', { action: 'ban' }));
     }
     if (['delete', 'del', 'apagar', 'remover'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'delete', enabled: true, configured: true });
-      return reply('AntiLink atualizado. Ação: apenas apagar.');
+      return reply(t('protection.antilink.action_updated', { action: 'delete' }));
     }
     if (['warn', 'adv', 'advertir', 'aviso'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { action: 'warn', enabled: true, configured: true });
-      return reply('AntiLink atualizado. Ação: apagar e advertir.');
+      return reply(t('protection.antilink.action_updated', { action: 'warn' }));
     }
 
     // Configuração direta de Whitelist: permitir domínios
@@ -206,12 +217,12 @@ module.exports = {
       const domains = args.slice(1).map(d => d.replace(/^(https?:\/\/)?(www\.)?/, '').toLowerCase().trim()).filter(Boolean);
       configManager.updatePluginConfig(from, 'antilink', { allowedDomains: domains, enabled: true, configured: true });
       const display = domains.length ? domains.join(', ') : 'Nenhum (Bloqueia Todos)';
-      return reply(`AntiLink atualizado. Domínios permitidos: \`${display}\``);
+      return reply(t('protection.antilink.domains_updated', { domains: display }));
     }
 
     if (['bloquear', 'blockall', 'bloqueartodos'].includes(sub)) {
       configManager.updatePluginConfig(from, 'antilink', { allowedDomains: [], enabled: true, configured: true });
-      return reply('AntiLink atualizado. Bloqueando todos os links.');
+      return reply(t('protection.antilink.all_blocked'));
     }
 
     // Status
@@ -230,8 +241,12 @@ module.exports = {
 
     // Extrai TODOS os textos relevantes (incluindo link previews e legendas de mídia)
     const fullText = extractAllTextForLinks(msg.message);
-    const matches = fullText ? fullText.match(new RegExp(URL_REGEX_PATTERN, 'gi')) : null;
-    if (!matches || matches.length === 0) return false;
+    const rawMatches = fullText ? fullText.match(new RegExp(URL_REGEX_PATTERN, 'gi')) : null;
+    if (!rawMatches || rawMatches.length === 0) return false;
+
+    // Sanitiza pontuações de terminação em cada match
+    const matches = rawMatches.map(cleanUrlCandidate).filter(Boolean);
+    if (matches.length === 0) return false;
 
     // Ignora se quem enviou for Dono ou Administrador
     if (settings.isOwner(sender, sock)) return false;
@@ -254,9 +269,8 @@ module.exports = {
 
     if (isAllAllowed) return false; // Todos os links estão na whitelist
 
-    // Ação de Emergência (Zero Delay): Apagar mensagem do infrator
-    await safeDelete(sock, from, msg.key);
-
+    const rawParticipant = msg.key?.participant || msg.participant;
+    const cleanRawParticipant = rawParticipant ? cleanJid(rawParticipant) : null;
     const targetData = await resolveParticipant(sock, from, sender);
     const targetPhone = targetData?.phoneJid || sender;
     const targetGroup = targetData?.groupJid || sender;
@@ -264,24 +278,68 @@ module.exports = {
     const action = cfg.action || 'delete';
     const groupStyle = configManager.getGroupStyle(from);
 
+    // Lista abrangente de identificadores para fallback resiliente (@lid vs @s.whatsapp.net vs raw)
+    const fallbackJids = [
+      rawParticipant,
+      cleanRawParticipant,
+      sender,
+      targetGroup,
+      targetPhone
+    ].filter(Boolean);
+
+    // Mitigação Imediata de Danos (Zero Delay): O bot SEMPRE tenta apagar a mensagem primeiro.
+    // Isso garante que o link malicioso seja removido imediatamente, mesmo se a expulsão falhar
+    // ou se a checagem de metadados em cache apresentar falso negativo.
+    await safeDelete(sock, from, msg.key, fallbackJids);
+
     if (action === 'ban') {
-      await safeKick(sock, from, targetGroup);
-      await sendSafeMessage(sock, from, {
-        text: t(lang, 'antilink.banned', { user: userNum }, groupStyle),
-        mentions: [targetGroup, targetPhone]
-      });
+      const kicked = await safeKick(sock, from, targetGroup, fallbackJids);
+      if (kicked) {
+        await sendSafeMessage(sock, from, {
+          text: t(lang, 'antilink.banned', { user: userNum }, groupStyle),
+          mentions: [targetGroup, targetPhone]
+        });
+      } else {
+        // Se a expulsão falhou e o bot não tem permissão de admin
+        if (!adminCheck.isBotAdmin) {
+          await sendSafeMessage(sock, from, {
+            text: t(lang, 'antilink.bot_not_admin', { user: userNum }, groupStyle),
+            mentions: [targetGroup, targetPhone]
+          });
+        } else {
+          // O bot é admin, a mensagem foi apagada, mas o kick falhou no servidor do WhatsApp
+          await sendSafeMessage(sock, from, {
+            text: t(lang, 'antilink.delete_success_kick_failed', { user: userNum }, groupStyle),
+            mentions: [targetGroup, targetPhone]
+          });
+        }
+      }
     } else if (action === 'warn') {
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const maxWarns = warnCfg.maxWarns || 3;
       const count = configManager.addWarn(from, targetPhone, 'Envio de link não autorizado');
 
       if (count >= maxWarns) {
-        await safeKick(sock, from, targetGroup);
-        configManager.resetWarns(from, targetPhone);
-        await sendSafeMessage(sock, from, {
-          text: t(lang, 'warn.max_reached', { user: userNum, max: maxWarns }, groupStyle),
-          mentions: [targetGroup, targetPhone]
-        });
+        const kicked = await safeKick(sock, from, targetGroup, fallbackJids);
+        if (kicked) {
+          configManager.resetWarns(from, targetPhone);
+          await sendSafeMessage(sock, from, {
+            text: t(lang, 'warn.max_reached', { user: userNum, max: maxWarns }, groupStyle),
+            mentions: [targetGroup, targetPhone]
+          });
+        } else {
+          if (!adminCheck.isBotAdmin) {
+            await sendSafeMessage(sock, from, {
+              text: t(lang, 'antilink.bot_not_admin', { user: userNum }, groupStyle),
+              mentions: [targetGroup, targetPhone]
+            });
+          } else {
+            await sendSafeMessage(sock, from, {
+              text: t(lang, 'warn.max_reached_kick_failed', { user: userNum, max: maxWarns }, groupStyle),
+              mentions: [targetGroup, targetPhone]
+            });
+          }
+        }
       } else {
         await sendSafeMessage(sock, from, {
           text: t(lang, 'antilink.warned', { user: userNum, warns: count, max: maxWarns }, groupStyle),
@@ -289,11 +347,18 @@ module.exports = {
         });
       }
     } else {
-      // Apenas apagar
-      await sendSafeMessage(sock, from, {
-        text: t(lang, 'antilink.detected', { user: userNum }, groupStyle),
-        mentions: [targetGroup, targetPhone]
-      });
+      // Ação: apenas apagar
+      if (!adminCheck.isBotAdmin) {
+        await sendSafeMessage(sock, from, {
+          text: t(lang, 'antilink.bot_not_admin', { user: userNum }, groupStyle),
+          mentions: [targetGroup, targetPhone]
+        });
+      } else {
+        await sendSafeMessage(sock, from, {
+          text: t(lang, 'antilink.detected', { user: userNum }, groupStyle),
+          mentions: [targetGroup, targetPhone]
+        });
+      }
     }
 
     return true; // Interrompe o pipeline de mensagens
