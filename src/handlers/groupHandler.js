@@ -18,6 +18,68 @@ async function handleParticipantsUpdate(sock, update) {
   // Invalidação imediata do cache de metadados do grupo
   groupCache.del(groupJid);
 
+  // Trava anti-abuso imediata: verifica se o próprio bot foi adicionado a este grupo
+  if (action === 'add' && Array.isArray(participants)) {
+    const botJid = cleanJid(sock?.user?.id || '');
+    const botLid = cleanJid(sock?.user?.lid || '');
+    const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
+
+    const isBotAdded = participants.some((p) => {
+      const cleanP = cleanJid(p);
+      const num = cleanP.replace(/@.*$/, '').replace(/\D/g, '');
+      return cleanP === botJid || cleanP === botLid || (botNumber && num === botNumber);
+    });
+
+    if (isBotAdded) {
+      const siteOrders = require('../services/siteOrders');
+      let inviteCode = null;
+      try { inviteCode = await sock.groupInviteCode(groupJid); } catch (_) {}
+      const pending = siteOrders.claimPendingGroup(groupJid, inviteCode);
+      const isTrialPending = Boolean(!pending || pending.isTrial || pending.plan === 'teste');
+      const trialAlreadyUsed = configManager.hasGroupUsedTrial(groupJid);
+
+      if (isTrialPending && trialAlreadyUsed) {
+        logger.warn({ groupJid }, 'Bot re-adicionado a grupo que já consumiu o teste grátis. Saindo...');
+        try {
+          const siteBridge = require('../services/siteBridge');
+          siteBridge._notifyOwner(
+            `⚠️ *Tentativa de Reuso de Teste Grátis Bloqueada!*\n\n` +
+            `• Grupo: \`${groupJid}\`\n` +
+            `O bot foi adicionado a um grupo que já utilizou os 3 dias grátis anteriormente.\n` +
+            `Como não há pagamento mensal aprovado, o bot saiu do grupo automaticamente.`
+          );
+        } catch (_) {}
+
+        try {
+          const { t } = require('../utils/i18n');
+          const { sendSafeMessage } = require('../utils/antiBan');
+          const groupLang = configManager.getGroupLang(groupJid) || 'pt';
+          const siteUrl = process.env.PUBLIC_URL || process.env.URL_PUBLICA || 'https://hermes.hewhotries.tech';
+          let adminsMention = '';
+          try {
+            const meta = await sock.groupMetadata(groupJid);
+            const admins = (meta.participants || []).filter(p => p.admin).map(p => `@${p.id.split('@')[0]}`);
+            if (admins.length > 0) adminsMention = admins.join(' ');
+          } catch (_) {}
+
+          const text = t(groupLang, 'saas.trial_already_consumed', { admins: adminsMention, url: siteUrl });
+          try {
+            await sendSafeMessage(sock, groupJid, { text });
+            await new Promise(r => setTimeout(r, 1500));
+          } catch (_) {}
+        } catch (_) {}
+
+        try {
+          await sock.groupLeave(groupJid);
+          logger.info({ groupJid }, 'Bot saiu com sucesso do grupo re-adicionado com trial esgotado');
+        } catch (err) {
+          logger.error({ err: err.message, groupJid }, 'Falha ao executar sock.groupLeave');
+        }
+        return;
+      }
+    }
+  }
+
   // Se o grupo estiver banido ou inativo na licença SaaS, ignora 100% em silêncio
   if (configManager.isGroupBanned(groupJid) || !configManager.isGroupEnabled(groupJid)) {
     return;

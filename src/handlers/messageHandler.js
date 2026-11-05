@@ -193,9 +193,39 @@ async function processSingleMessage(sock, msg) {
       if (plugin && plugin.allowWhenInactive) {
         // Permite seguir para a execução do comando de ativação/gestão
       } else {
+        // Trava de grupo com teste grátis já encerrado: se ainda estiver dentro do grupo, sai imediatamente
+        const group = configManager.getGroup(from);
+        const isTrialEnded = Boolean(group && (group.trialUsed || group.isTrial || group.plan === 'teste') && configManager.isGroupExpired(from));
+
+        if (isTrialEnded) {
+          try {
+            const { getGroupAdmins } = require('../utils/jidResolver');
+            const { renewalUrl } = require('../services/joinService');
+            let code = null;
+            try { code = await sock.groupInviteCode(from); } catch (_) {}
+            const url = renewalUrl(code, { name: group?.ownerName, phone: group?.ownerPhone });
+            const { adminJids, mentionText } = await getGroupAdmins(sock, from);
+            let text = translate('saas.trial_already_consumed', { url, admins: mentionText });
+            if (!mentionText) {
+              text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
+            }
+            try {
+              await reply(text, { mentions: adminJids });
+              await new Promise(r => setTimeout(r, 1500));
+            } catch (_) {}
+          } catch (_) {}
+
+          try {
+            await sock.groupLeave(from);
+            logger.info({ from }, 'Bot saiu de grupo com teste expirado após mensagem detectada');
+          } catch (err) {
+            logger.warn({ err: err.message, from }, 'Erro ao sair de grupo com trial expirado');
+          }
+          return;
+        }
+
         // Licença expirada com aviso único
         if (configManager.isGroupExpired(from)) {
-          const group = configManager.getGroup(from);
           if (group && !group.expiryNotified) {
             configManager.markExpiryNotified(from, true);
             let code = null;

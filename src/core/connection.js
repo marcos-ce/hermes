@@ -468,11 +468,17 @@ async function connectBot(options = {}) {
             } catch (_) {}
 
             const text = t(groupLang, 'saas.trial_already_consumed', { admins: adminsMention, url: siteUrl });
-            await sendSafeMessage(sock, g.id, { text });
-            await new Promise(r => setTimeout(r, 2000));
+            try {
+              await sendSafeMessage(sock, g.id, { text });
+              await new Promise(r => setTimeout(r, 1500));
+            } catch (_) {}
+          } catch (_) {}
+
+          try {
             await sock.groupLeave(g.id);
+            logger.info({ groupJid: g.id }, 'Bot saiu com sucesso do grupo que já consumiu o teste');
           } catch (leaveErr) {
-            logger.warn({ err: leaveErr.message }, 'Falha ao avisar/sair de grupo com trial já utilizado');
+            logger.warn({ err: leaveErr.message, groupJid: g.id }, 'Falha ao executar sock.groupLeave');
           }
           continue;
         }
