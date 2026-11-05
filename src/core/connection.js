@@ -439,6 +439,44 @@ async function connectBot(options = {}) {
         const pending = siteOrders.claimPendingGroup(g.id, inviteCode);
         const effectiveDays = pending ? pending.days : 30;
 
+        const isTrialPending = Boolean(pending && (pending.isTrial || pending.plan === 'teste'));
+        const trialAlreadyUsed = configManager.hasGroupUsedTrial(g.id);
+
+        // Trava anti-abuso: grupo que já consumiu os 3 dias grátis não recebe nova licença trial
+        if (isTrialPending && trialAlreadyUsed) {
+          logger.warn({ groupJid: g.id, subject: g.subject }, 'Tentativa de reuso de teste grátis bloqueada');
+          try {
+            const siteBridge = require('../services/siteBridge');
+            siteBridge._notifyOwner(
+              `⚠️ *Tentativa de Reuso de Teste Grátis Bloqueada!*\n\n` +
+              `• Grupo: "${g.subject || 'Grupo'}"\n` +
+              `• JID: \`${g.id}\`\n` +
+              `• Solicitante: ${pending.ownerName || 'Não informado'}\n` +
+              `• WhatsApp: https://wa.me/${pending.ownerPhone} (${pending.ownerPhone || 'N/A'})\n\n` +
+              `O grupo já consumiu os 3 dias grátis anteriormente. O bot não concedeu a licença e saiu do grupo automaticamente.`
+            );
+          } catch (_) {}
+
+          try {
+            const groupLang = configManager.getGroupLang(g.id) || 'pt';
+            const siteUrl = process.env.PUBLIC_URL || process.env.URL_PUBLICA || 'https://hermes.hewhotries.tech';
+            let adminsMention = '';
+            try {
+              const meta = await sock.groupMetadata(g.id);
+              const admins = (meta.participants || []).filter(p => p.admin).map(p => `@${p.id.split('@')[0]}`);
+              if (admins.length > 0) adminsMention = admins.join(' ');
+            } catch (_) {}
+
+            const text = t(groupLang, 'saas.trial_already_consumed', { admins: adminsMention, url: siteUrl });
+            await sendSafeMessage(sock, g.id, { text });
+            await new Promise(r => setTimeout(r, 2000));
+            await sock.groupLeave(g.id);
+          } catch (leaveErr) {
+            logger.warn({ err: leaveErr.message }, 'Falha ao avisar/sair de grupo com trial já utilizado');
+          }
+          continue;
+        }
+
         const { shouldSendWelcome } = configManager.ensureGroupStarterKit(g.id, g.subject || '', effectiveDays);
         configManager.markWelcomeSent(g.id, true);
 
