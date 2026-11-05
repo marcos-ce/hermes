@@ -46,7 +46,7 @@ module.exports = {
 
         text += `• *ID:* \`${o.paymentId}\` | ${statusEmoji}\n`;
         text += `  Cliente: ${o.name || 'Cliente'} (${o.phone ? `+${o.phone}` : 's/ tel'})\n`;
-        text += `  Plano: *${o.plan === 'teste' ? 'Teste' : 'Mensal'}* (${days} dias) | Grupos: ${groupCount}\n`;
+        text += `  Plano: *${o.plan === 'teste' ? 'Teste Grátis' : 'Mensal'}* (${days} dias) | Grupos: ${groupCount}\n`;
         if (o.error) {
           text += `  ⚠️ Erro: ${String(o.error).slice(0, 80)}\n`;
         }
@@ -90,7 +90,7 @@ module.exports = {
         // Se ainda não existia, cria registro
         siteOrders.upsert(targetId, {
           days: newDays,
-          plan: newDays < 20 ? 'teste' : 'mensal',
+          plan: newDays <= 5 ? 'teste' : 'mensal',
           status: 'queued',
           retry: true
         });
@@ -98,7 +98,7 @@ module.exports = {
       }
 
       order.days = newDays;
-      order.plan = newDays < 20 ? 'teste' : 'mensal';
+      order.plan = newDays <= 5 ? 'teste' : 'mensal';
       delete order.error;
       if (Array.isArray(order.groups)) {
         for (const g of order.groups) {
@@ -129,7 +129,7 @@ module.exports = {
         paymentId: targetId,
         code,
         days: daysArg,
-        plan: daysArg < 20 ? 'teste' : 'mensal',
+        plan: daysArg <= 5 ? 'teste' : 'mensal',
         ownerName: 'Cliente',
         ownerPhone: ''
       };
@@ -160,7 +160,7 @@ module.exports = {
     details += `• Status: *${order.status}*\n`;
     details += `• Cliente: ${order.name || 'Cliente'}\n`;
     details += `• Telefone: ${order.phone ? `https://wa.me/${order.phone} (${order.phone})` : 'Não informado'}\n`;
-    details += `• Plano: *${order.plan === 'teste' ? 'Teste' : 'Mensal'}* (*${order.days || 30} dias*)\n`;
+    details += `• Plano: *${order.plan === 'teste' ? 'Teste Grátis' : 'Mensal'}* (*${order.days || (order.plan === 'teste' ? 3 : 30)} dias*)\n`;
     if (order.amount) details += `• Valor: R$ ${order.amount}\n`;
     if (order.error) details += `• ⚠️ Erro Registrado: \`${order.error}\`\n`;
 

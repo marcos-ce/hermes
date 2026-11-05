@@ -449,6 +449,10 @@ async function connectBot(options = {}) {
             grp.ownerPhone = pending.ownerPhone || '';
             grp.autoLeave = true;
             grp.plan = pending.plan;
+            grp.isTrial = Boolean(pending.isTrial || pending.plan === 'teste');
+            if (grp.isTrial) {
+              grp.trialUsed = true;
+            }
             grp.lastPaymentId = String(pending.paymentId);
             configManager.setGroupExpiry(g.id, Date.now() + effectiveDays * 24 * 60 * 60 * 1000);
           }
@@ -461,6 +465,7 @@ async function connectBot(options = {}) {
               groupName: g.subject || 'Grupo',
               groupJid: g.id,
               days: effectiveDays,
+              plan: pending.plan,
               ownerName: pending.ownerName,
               ownerPhone: pending.ownerPhone
             });

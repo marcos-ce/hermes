@@ -7,7 +7,8 @@ const logger = require('../utils/logger');
 
 // Preços e prazos são definidos AQUI (nunca vêm do payload): valor pago -> plano
 const PLANS = {
-  10: { plan: 'teste', days: 7 },
+  0: { plan: 'teste', days: 3 },
+  10: { plan: 'teste', days: 3 }, // retrocompatível
   32: { plan: 'mensal', days: 30 }
 };
 
@@ -18,7 +19,7 @@ const PLANS = {
  * 3. Plano explícito em metadata (plan, plano, plan_name, type)
  * 4. Título ou descrição no Mercado Pago (description, items[0].title, items[0].description)
  * 5. Valor pago (amount / transaction_amount / total_paid_amount)
- * 6. Fallback seguro: Sempre Mensal (30 dias) - nunca rebaixa cliente pagante para 7 dias
+ * 6. Fallback seguro: Sempre Mensal (30 dias) - nunca rebaixa cliente pagante para teste
  *
  * @param {object} param0
  * @returns {{ plan: string, days: number, label: string }}
@@ -42,8 +43,8 @@ function resolvePlanInfo({ payment, amount, metadata, description, title, rawPla
     if (explicitDays >= 25) {
       return { plan: 'mensal', days: explicitDays, label: `Mensal (${explicitDays} dias)` };
     }
-    if (explicitDays <= 15) {
-      return { plan: 'teste', days: explicitDays, label: `Teste (${explicitDays} dias)` };
+    if (explicitDays <= 5) {
+      return { plan: 'teste', days: explicitDays, label: `Teste Grátis (${explicitDays} dias)` };
     }
     return { plan: explicitDays >= 20 ? 'mensal' : 'teste', days: explicitDays, label: `${explicitDays} dias` };
   }
@@ -59,8 +60,8 @@ function resolvePlanInfo({ payment, amount, metadata, description, title, rawPla
   if (planStr.includes('anual') || planStr.includes('yearly') || planStr.includes('365')) {
     return { plan: 'anual', days: 365, label: 'Anual (365 dias)' };
   }
-  if (planStr.includes('teste') || planStr.includes('trial') || planStr.includes('test') || planStr === '7') {
-    return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+  if (planStr.includes('teste') || planStr.includes('trial') || planStr.includes('test') || planStr === '3' || planStr === '7') {
+    return { plan: 'teste', days: 3, label: 'Teste Grátis (3 dias)' };
   }
 
   // 3. Título e descrição do produto no Mercado Pago
@@ -70,18 +71,21 @@ function resolvePlanInfo({ payment, amount, metadata, description, title, rawPla
   if (combinedText.includes('trimestral') || combinedText.includes('90 dias')) {
     return { plan: 'trimestral', days: 90, label: 'Trimestral (90 dias)' };
   }
-  if (combinedText.includes('teste') || combinedText.includes('7 dias') || combinedText.includes('7d') || combinedText.includes('trial')) {
-    return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+  if (combinedText.includes('teste') || combinedText.includes('gratis') || combinedText.includes('grátis') || combinedText.includes('free') || combinedText.includes('3 dias') || combinedText.includes('3d') || combinedText.includes('trial') || combinedText.includes('7 dias') || combinedText.includes('7d')) {
+    return { plan: 'teste', days: 3, label: 'Teste Grátis (3 dias)' };
   }
 
   // 4. Valor financeiro
   const val = Number(amount || payment?.transaction_amount || payment?.total_paid_amount || 0);
+  if (val === 0 && (planStr.includes('teste') || planStr.includes('trial') || combinedText.includes('teste') || combinedText.includes('trial'))) {
+    return { plan: 'teste', days: 3, label: 'Teste Grátis (3 dias)' };
+  }
   if (val >= 25) {
     return { plan: 'mensal', days: 30, label: 'Mensal (30 dias)' };
   }
-  // Somente se for estritamente em torno de R$ 10 E sem nenhuma menção a mensal
+  // Retrocompatibilidade se vier transação antiga de R$ 10
   if (val >= 8 && val <= 15) {
-    return { plan: 'teste', days: 7, label: 'Teste (7 dias)' };
+    return { plan: 'teste', days: 3, label: 'Teste (3 dias)' };
   }
 
   // 5. Fallback seguro: Sempre Mensal (30 dias)
@@ -305,7 +309,9 @@ class SiteBridge {
     const ip = req.socket.remoteAddress || 'unknown';
 
     if (req.method === 'GET' && req.url === '/site/health') return this._send(res, 200, { ok: true });
-    if (req.method !== 'POST' || req.url !== '/site/activate') return this._send(res, 404, { error: 'not_found' });
+    const isActivate = req.url === '/site/activate';
+    const isTrialUrl = req.url === '/site/trial';
+    if (req.method !== 'POST' || (!isActivate && !isTrialUrl)) return this._send(res, 404, { error: 'not_found' });
 
     if (this._limited(this.fails, ip, AUTH_FAIL, false) || this._limited(this.hits, ip, RATE_LIMIT, true)) {
       return this._send(res, 429, { error: 'rate_limited' });
@@ -341,7 +347,63 @@ class SiteBridge {
       } catch (_) {
         return this._send(res, 400, { error: 'invalid_json' });
       }
-      // Do payload usamos SOMENTE o paymentId; todo o resto é lido do Mercado Pago.
+
+      const isTrial = isTrialUrl || Boolean(
+        body?.isTrial ||
+        body?.trial ||
+        String(body?.plan || '').toLowerCase() === 'teste' ||
+        String(body?.plan || '').toLowerCase() === 'trial' ||
+        (typeof body?.paymentId === 'string' && body.paymentId.startsWith('trial_'))
+      );
+
+      // FLUXO DO PLANO TESTE GRÁTIS (3 DIAS) - ZERO PAGAMENTO / ZERO MERCADO PAGO
+      if (isTrial) {
+        const rawLink = body?.inviteLink || body?.invite_link || body?.link || body?.groupLink || body?.group_link || body?.whatsapp_link || body?.code || '';
+        const code = extractInviteCode(rawLink);
+        if (!code) {
+          return this._send(res, 400, { error: 'invalid_invite_link', message: 'Link de convite do grupo inválido ou ausente.' });
+        }
+
+        const name = String(body?.name || body?.customer_name || body?.client_name || 'Cliente')
+          .replace(/[\u0000-\u001F<>]/g, '')
+          .slice(0, 80);
+        const phone = String(body?.phone || body?.customer_phone || body?.whatsapp || body?.celular || '')
+          .replace(/\D/g, '')
+          .slice(0, 15);
+
+        // Prevenção de abuso: verifica se o grupo ou telefone já utilizou o teste grátis
+        const alreadyUsed = siteOrders.hasUsedTrial({ code, phone });
+        if (alreadyUsed) {
+          return this._send(res, 403, {
+            error: 'trial_already_used',
+            message: 'Este grupo ou número já utilizou o período de teste grátis de 3 dias.'
+          });
+        }
+
+        const trialId = (typeof body?.paymentId === 'string' && body.paymentId.startsWith('trial_'))
+          ? body.paymentId
+          : `trial_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+        const existing = siteOrders.get(trialId);
+        if (existing && ['done', 'partial', 'rejected'].includes(existing.status)) {
+          return this._send(res, 200, { duplicate: true });
+        }
+
+        siteOrders.upsert(trialId, {
+          status: 'queued',
+          plan: 'teste',
+          days: 3,
+          amount: 0,
+          name,
+          phone,
+          isTrial: true,
+          trialCode: code
+        });
+        this._enqueue(trialId);
+        return this._send(res, 200, { accepted: true, trial: true, days: 3, trialId });
+      }
+
+      // FLUXO PAGO (MERCADO PAGO)
       const paymentId = String(body?.paymentId || '');
       if (!/^\d{5,20}$/.test(paymentId)) return this._send(res, 400, { error: 'invalid_payment_id' });
 
@@ -436,13 +498,52 @@ class SiteBridge {
     let payment = null;
 
     const isSpecialOrder = String(id) === '187419436876';
+    const isTrialOrder = Boolean(order?.isTrial || String(id).startsWith('trial_') || order?.plan === 'teste');
 
     if (order?.groups && order.plan && !force) {
       // retomada: dados já validados anteriormente
-      const days = isSpecialOrder ? 30 : (order.days || 30);
-      const plan = isSpecialOrder ? 'mensal' : (order.plan || 'mensal');
-      planInfo = { plan, days, label: plan === 'teste' ? 'Teste (7 dias)' : `Mensal (${days} dias)` };
+      const days = isSpecialOrder ? 30 : (order.days || (isTrialOrder ? 3 : 30));
+      const plan = isSpecialOrder ? 'mensal' : (order.plan || (isTrialOrder ? 'teste' : 'mensal'));
+      planInfo = { plan, days, label: plan === 'teste' ? 'Teste Grátis (3 dias)' : `Mensal (${days} dias)` };
       meta = { name: order.name || 'Cliente', phone: order.phone || '' };
+    } else if (isTrialOrder) {
+      // Pedido de Teste Grátis: NÃO consulta Mercado Pago (sem custo, totalmente grátis)
+      planInfo = { plan: 'teste', days: 3, label: 'Teste Grátis (3 dias)' };
+      meta = { name: order?.name || 'Cliente', phone: order?.phone || '' };
+
+      const codes = [...new Set([
+        order?.trialCode,
+        ...(Array.isArray(order?.groups) ? order.groups.map(g => g.code) : [])
+      ].map(extractInviteCode).filter(Boolean))];
+
+      if (codes.length === 0) {
+        siteOrders.upsert(id, {
+          status: 'partial',
+          plan: 'teste',
+          days: 3,
+          amount: 0,
+          ...meta,
+          groups: [],
+          reason: 'no_valid_invite'
+        });
+        await this._notifyOwner(
+          `⚠️ Pedido de Teste Grátis sem link de convite válido!\n\n` +
+          `• Cliente: ${meta.name}\n` +
+          `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+          `• ID: ${id}`
+        );
+        return;
+      }
+
+      order = siteOrders.upsert(id, {
+        status: 'processing',
+        plan: 'teste',
+        days: 3,
+        amount: 0,
+        isTrial: true,
+        ...meta,
+        groups: codes.map((code) => ({ code, status: 'pending', days: 3, plan: 'teste', isTrial: true }))
+      });
     } else {
       if (settings.siteVerifyPayment) {
         payment = await this._verify(id);
@@ -503,7 +604,7 @@ class SiteBridge {
         return;
       }
 
-      const amount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10);
+      const amount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : (planInfo.plan === 'teste' ? 0 : 10));
       order = siteOrders.upsert(id, {
         status: 'processing',
         plan: planInfo.plan,
@@ -517,7 +618,7 @@ class SiteBridge {
     const sock = await this._waitSocket();
     siteOrders.upsert(id, { status: 'processing' });
 
-    // FLUXO 100% BLINDADO ANTI-BAN: O bot NUNCA executa groupAcceptInvite.
+    // FLUXO 100% BLINDADO: O bot NUNCA executa groupAcceptInvite.
     // Ele consulta os metadados do grupo, registra a licença pendente e avisa o dono no Telegram com o link.
     // O dono clica no link pelo app oficial do WhatsApp e entra humanamente. O bot ativa os dias sozinho ao detectar a entrada!
     const configManager = require('../core/configManager');
@@ -542,6 +643,17 @@ class SiteBridge {
       const isAlreadyInGroup = Boolean(existing && !existing.leftAt);
 
       if (isAlreadyInGroup) {
+        // Se for teste grátis em grupo existente, verifica se já usou
+        if (planInfo.plan === 'teste') {
+          if (existing.trialUsed) {
+            g.status = 'rejected';
+            g.reason = 'trial_already_used';
+            await this._notifyOwner(`🚫 Teste grátis recusado para o grupo "${groupName}": este grupo já utilizou o período de avaliação.`);
+            continue;
+          }
+          existing.trialUsed = true;
+        }
+
         configManager.ensureGroupStarterKit(groupJid, groupName, planInfo.days);
         const grp = configManager.getGroup(groupJid);
         if (grp) {
@@ -549,6 +661,8 @@ class SiteBridge {
           grp.ownerPhone = meta.phone;
           grp.autoLeave = true;
           grp.plan = planInfo.plan;
+          grp.isTrial = planInfo.plan === 'teste';
+          if (grp.isTrial) grp.trialUsed = true;
           grp.lastPaymentId = String(id);
           configManager.flushSync();
         }
@@ -560,15 +674,23 @@ class SiteBridge {
         g.days = planInfo.days;
         g.plan = planInfo.plan;
 
-        const planLabel = planInfo.plan === 'teste' ? 'Teste (7 dias)' : `Mensal (${planInfo.days} dias)`;
-        const renewMsg =
-          `🔁 *Renovação Aprovada & Licença Estendida!*\n\n` +
-          `• Cliente: ${meta.name}\n` +
-          `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
-          `• Grupo: "${groupName}"\n` +
-          `• Plano: ${planLabel} (+${planInfo.days} dias adicionados)\n` +
-          `• ID Mercado Pago: ${id}\n\n` +
-          `✅ Licença estendida automaticamente no grupo existente.`;
+        const isTrial = planInfo.plan === 'teste';
+        const planLabel = isTrial ? 'Teste Grátis (3 dias)' : `Mensal (${planInfo.days} dias)`;
+        const renewMsg = isTrial
+          ? `✨ *Teste Grátis Ativado no Grupo Existente!*\n\n` +
+            `• Cliente: ${meta.name}\n` +
+            `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+            `• Grupo: "${groupName}"\n` +
+            `• Vigência: 3 dias (Totalmente Grátis)\n` +
+            `• ID: ${id}\n\n` +
+            `O bot configurou o teste de 3 dias e sairá automaticamente ao encerrar.`
+          : `🔁 *Renovação Aprovada & Licença Estendida!*\n\n` +
+            `• Cliente: ${meta.name}\n` +
+            `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+            `• Grupo: "${groupName}"\n` +
+            `• Plano: ${planLabel} (+${planInfo.days} dias adicionados)\n` +
+            `• ID Mercado Pago: ${id}\n\n` +
+            `Licença estendida automaticamente no grupo existente.`;
 
         await this._notifyOwner(renewMsg);
       } else {
@@ -580,6 +702,7 @@ class SiteBridge {
           groupName,
           days: planInfo.days,
           plan: planInfo.plan,
+          isTrial: planInfo.plan === 'teste',
           ownerName: meta.name,
           ownerPhone: meta.phone
         });
@@ -590,17 +713,26 @@ class SiteBridge {
         g.days = planInfo.days;
         g.plan = planInfo.plan;
 
-        const planLabel = planInfo.plan === 'teste' ? 'Teste (7 dias)' : `Mensal (${planInfo.days} dias)`;
-        const paymentAmount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10);
+        const isTrial = planInfo.plan === 'teste';
+        const planLabel = isTrial ? 'Teste Grátis (3 dias)' : `Mensal (${planInfo.days} dias)`;
+        const paymentAmount = payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 0);
 
-        const newOrderMsg =
-          `🛒 *Novo Pix Aprovado no Mercado Pago!*\n\n` +
-          `• Cliente: ${meta.name}\n` +
-          `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
-          `• Plano: *${planLabel}* — R$ ${paymentAmount}\n` +
-          `• Grupo: "${groupName}"\n` +
-          `• Link do Grupo: https://chat.whatsapp.com/${g.code}\n` +
-          `• ID Pagamento: ${id}`;
+        const newOrderMsg = isTrial
+          ? `🎁 *Novo Teste Grátis Solicitado (3 dias)!*\n\n` +
+            `• Cliente: ${meta.name}\n` +
+            `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone || 'não informado'})\n` +
+            `• Plano: *Teste Grátis (3 dias)* (R$ 0,00)\n` +
+            `• Grupo: "${groupName}"\n` +
+            `• Link do Grupo: https://chat.whatsapp.com/${g.code}\n` +
+            `• ID: ${id}\n\n` +
+            `👉 Clique no link acima pelo celular para colocar o bot no grupo. O bot configurará 3 dias e sairá automaticamente ao vencer.`
+          : `🛒 *Novo Pix Aprovado no Mercado Pago!*\n\n` +
+            `• Cliente: ${meta.name}\n` +
+            `• WhatsApp: https://wa.me/${meta.phone} (${meta.phone})\n` +
+            `• Plano: *${planLabel}* — R$ ${paymentAmount}\n` +
+            `• Grupo: "${groupName}"\n` +
+            `• Link do Grupo: https://chat.whatsapp.com/${g.code}\n` +
+            `• ID Pagamento: ${id}`;
 
         await this._notifyOwner(newOrderMsg);
       }
@@ -617,7 +749,7 @@ class SiteBridge {
       phone: meta.phone,
       plan: planInfo.plan,
       days: planInfo.days,
-      amount: payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : 10),
+      amount: payment?.transaction_amount || order?.amount || (planInfo.days === 30 ? 32 : (planInfo.plan === 'teste' ? 0 : 10)),
       retry: false
     });
   }
@@ -635,7 +767,7 @@ class SiteBridge {
       siteOrders.upsert(id, {
         status: 'queued',
         days: targetDays || 30,
-        plan: (targetDays && targetDays < 20) ? 'teste' : 'mensal',
+        plan: (targetDays && targetDays <= 5) ? 'teste' : 'mensal',
         retry: true
       });
       this._enqueue(id);
@@ -644,7 +776,7 @@ class SiteBridge {
 
     if (targetDays) {
       existing.days = targetDays;
-      existing.plan = targetDays < 20 ? 'teste' : 'mensal';
+      existing.plan = targetDays <= 5 ? 'teste' : 'mensal';
       if (Array.isArray(existing.groups)) {
         for (const g of existing.groups) {
           g.days = targetDays;
@@ -673,14 +805,16 @@ class SiteBridge {
   /**
    * Notifica o Dono no Telegram quando o grupo for ativado com sucesso após a entrada manual
    */
-  async notifyActivationSuccess({ groupName, groupJid, days, ownerName, ownerPhone }) {
+  async notifyActivationSuccess({ groupName, groupJid, days, plan, ownerName, ownerPhone }) {
+    const isTrial = plan === 'teste' || days <= 5;
+    const label = isTrial ? `Teste Grátis (${days} dias)` : `${days} dias`;
     const text =
-      `🎉 *Hermes Ativado com Sucesso!*\n\n` +
+      `✨ *Hermes Ativado com Sucesso!*\n\n` +
       `• Grupo: "${groupName || 'Grupo'}"\n` +
-      `• Licença Ativada: *${days} dias*\n` +
+      `• Licença Ativada: *${label}*\n` +
       `• Cliente: ${ownerName || 'Cliente'}\n` +
       `• WhatsApp: https://wa.me/${ownerPhone} (${ownerPhone})\n\n` +
-      `🛡️ O bot iniciou o monitoramento e o controle de validade com proteção Anti-Ban.`;
+      `O bot iniciou o monitoramento e o controle de validade por segurança.`;
     await this._notifyOwner(text);
   }
 

@@ -50,8 +50,11 @@ class Scheduler {
 
   /**
    * Ciclo de vida da licença (apenas grupos com autoLeave=true, ou todos se AUTO_LEAVE_ALL_EXPIRED=true):
-   *  - D-1: avisa uma única vez que a licença vence em < 24h (com link de renovação)
-   *  - Vencida + 24h de carência: envia despedida e sai do grupo (configs preservadas, enabled=false)
+   *  - D-1: avisa uma única vez que a licença/teste vence em < 24h (com link de renovação)
+   *  - Vencida:
+   *      - Teste grátis (3 dias): encerra imediatamente ao expirar (carência 0)
+   *      - Licença mensal/paga: tolerância de 24h de carência
+   *  - Sai do grupo via groupLeave preservando 100% das configs (enabled=false)
    * Renovar (addDaysToGroup/setGroupExpiry) zera warned1d e leftAt, cancelando qualquer saída.
    */
   _licenseLifecycle(groupJid, group, queue) {
@@ -61,7 +64,9 @@ class Scheduler {
     const lang = group.lang || 'pt';
     const remaining = group.expiresAt - Date.now();
     const { renewalUrl } = require('../services/joinService');
+    const isTrial = Boolean(group.plan === 'teste' || group.isTrial);
 
+    // Aviso D-1: menos de 24h restantes para expirar
     if (remaining > 0 && remaining <= LICENSE_WARN_MS && !group.warned1d && group.enabled) {
       group.warned1d = true; // marca antes de enviar: no máximo 1 aviso
       configManager.scheduleSave();
@@ -73,7 +78,8 @@ class Scheduler {
           } catch (_) {}
           const url = renewalUrl(code, { name: group.ownerName, phone: group.ownerPhone });
           const { adminJids, mentionText } = await getGroupAdmins(this.sock, groupJid);
-          let text = t(lang, 'saas.license_warn_1d', { url, admins: mentionText });
+          const warnKey = isTrial ? 'saas.trial_warn_1d' : 'saas.license_warn_1d';
+          let text = t(lang, warnKey, { url, admins: mentionText });
           if (!mentionText) {
             text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
           }
@@ -83,12 +89,16 @@ class Scheduler {
       return;
     }
 
-    if (remaining <= -LICENSE_GRACE_MS) {
+    // Saída automática:
+    // Para teste grátis: saída pontual no final dos 3 dias (graceMs = 0)
+    // Para planos pagos: carência de 24 horas (graceMs = LICENSE_GRACE_MS)
+    const graceMs = isTrial ? 0 : LICENSE_GRACE_MS;
+    if (remaining <= -graceMs) {
       queue.push({
         run: async () => {
           // Revalida no momento da execução (o cliente pode ter renovado enquanto estava na fila)
           const g = configManager.getGroup(groupJid);
-          if (!g || g.leftAt || g.expiresAt === null || Date.now() <= g.expiresAt + LICENSE_GRACE_MS) return;
+          if (!g || g.leftAt || g.expiresAt === null || Date.now() <= g.expiresAt + graceMs) return;
 
           g.leaveAttempts = (g.leaveAttempts || 0) + 1;
           let code = null;
@@ -97,7 +107,8 @@ class Scheduler {
           } catch (_) {}
           const url = renewalUrl(code, { name: g.ownerName, phone: g.ownerPhone });
           const { adminJids, mentionText } = await getGroupAdmins(this.sock, groupJid);
-          let text = t(lang, 'saas.license_leaving', { url, admins: mentionText });
+          const leavingKey = isTrial ? 'saas.trial_leaving' : 'saas.license_leaving';
+          let text = t(lang, leavingKey, { url, admins: mentionText });
           if (!mentionText) {
             text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
           }
@@ -122,7 +133,7 @@ class Scheduler {
           g.enabled = false; // Soft Disable: configurações preservadas
           groupCache.del(groupJid);
           configManager.flushSync();
-          logger.info({ groupJid }, 'Bot saiu do grupo após vencimento + carência de 24h');
+          logger.info({ groupJid, plan: g.plan }, isTrial ? 'Bot saiu do grupo após encerramento do teste grátis (3 dias)' : 'Bot saiu do grupo após vencimento + carência de 24h');
         }
       });
     }

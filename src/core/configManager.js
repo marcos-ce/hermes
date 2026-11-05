@@ -459,7 +459,7 @@ class ConfigManager {
     if (typeof days === 'number' && days > 0) {
       const isDefaultStarter = !group.lastPaymentId && !group.autoLeave;
       if (isNewGroup || isDefaultStarter) {
-        // Define a vigência EXATA especificada (ex: 7 dias de teste), sem somar aos 30 dias padrão
+        // Define a vigência EXATA especificada (ex: 3 dias de teste grátis), sem somar aos 30 dias padrão
         this.setGroupExpiry(groupJid, Date.now() + days * 24 * 60 * 60 * 1000);
       } else {
         this.addDaysToGroup(groupJid, days);
@@ -613,6 +613,20 @@ class ConfigManager {
       group.expiryNotified = Boolean(notified);
       this.scheduleSave();
     }
+  }
+
+  hasGroupUsedTrial(groupJid) {
+    const group = this.groups.get(groupJid);
+    return Boolean(group && (group.trialUsed || group.isTrial));
+  }
+
+  setGroupTrialUsed(groupJid, used = true) {
+    const group = this.getOrCreateGroup(groupJid);
+    group.trialUsed = Boolean(used);
+    if (used) {
+      group.isTrial = true;
+    }
+    this.scheduleSave();
   }
 
   getAllGroups() {

@@ -94,14 +94,58 @@ class SiteOrders {
 
 
   /**
+   * Verifica se um grupo (código de convite ou JID) ou telefone já usou o teste grátis.
+   * Evita abuso de solicitações repetidas de teste grátis para o mesmo grupo.
+   * @param {object} param0 
+   * @returns {boolean}
+   */
+  hasUsedTrial({ code, jid, phone } = {}) {
+    this.load();
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    const cleanJid = jid ? (jid.endsWith('@g.us') ? jid : `${jid}@g.us`) : '';
+
+    for (const order of this.orders.values()) {
+      const isTrial = order.plan === 'teste' || order.isTrial;
+      if (!isTrial) continue;
+      if (order.status === 'rejected') continue;
+
+      if (cleanPhone && order.phone && String(order.phone).replace(/\D/g, '') === cleanPhone) {
+        return true;
+      }
+
+      if (code && order.trialCode === code) return true;
+
+      if (Array.isArray(order.groups)) {
+        for (const g of order.groups) {
+          if (code && g.code === code) return true;
+          if (cleanJid && g.jid && (g.jid === cleanJid || cleanJid.includes(g.jid.replace(/@.*$/, '')))) return true;
+        }
+      }
+    }
+
+    if (cleanJid) {
+      try {
+        const configManager = require('../core/configManager');
+        if (configManager.hasGroupUsedTrial(cleanJid)) return true;
+      } catch (_) {}
+    }
+
+    return false;
+  }
+
+  /**
    * Registra um grupo aguardando o dono entrar manualmente pelo app oficial do WhatsApp.
    * Elimina completamente o groupAcceptInvite do bot (Zero Risco de Ban).
    * @param {object} pendingData 
    */
   registerPendingGroup(pendingData) {
-    const { paymentId, code, groupJid, groupName, days, plan, ownerName, ownerPhone } = pendingData;
+    const { paymentId, code, groupJid, groupName, days, plan, ownerName, ownerPhone, isTrial } = pendingData;
     const id = String(paymentId);
     const existing = this.orders.get(id) || { paymentId: id, createdAt: Date.now() };
+
+    const resolvedPlan = plan || 'mensal';
+    const resolvedDays = days || (resolvedPlan === 'teste' ? 3 : 30);
+    const resolvedIsTrial = Boolean(isTrial || resolvedPlan === 'teste');
 
     const groups = existing.groups || [];
     const gIdx = groups.findIndex(g => g.code === code || (groupJid && g.jid === groupJid));
@@ -109,8 +153,9 @@ class SiteOrders {
       code,
       jid: groupJid || null,
       groupName: groupName || 'Grupo',
-      days: days || 30,
-      plan: plan || 'mensal',
+      days: resolvedDays,
+      plan: resolvedPlan,
+      isTrial: resolvedIsTrial,
       status: 'waiting_owner_join',
       registeredAt: Date.now()
     };
@@ -124,8 +169,9 @@ class SiteOrders {
     const next = {
       ...existing,
       status: 'waiting_owner_join',
-      plan: plan || 'mensal',
-      days: days || 30,
+      plan: resolvedPlan,
+      days: resolvedDays,
+      isTrial: resolvedIsTrial,
       name: ownerName || 'Cliente',
       phone: ownerPhone || '',
       groups,
@@ -171,8 +217,9 @@ class SiteOrders {
 
           return {
             paymentId: order.paymentId,
-            days: g.days || order.days || 30,
+            days: g.days || order.days || (g.plan === 'teste' || order.plan === 'teste' ? 3 : 30),
             plan: g.plan || order.plan || 'mensal',
+            isTrial: Boolean(g.isTrial || order.isTrial || g.plan === 'teste' || order.plan === 'teste'),
             ownerName: order.name,
             ownerPhone: order.phone,
             groupName: g.groupName
@@ -201,8 +248,9 @@ class SiteOrders {
 
           return {
             paymentId: order.paymentId,
-            days: g.days || order.days || 30,
+            days: g.days || order.days || (g.plan === 'teste' || order.plan === 'teste' ? 3 : 30),
             plan: g.plan || order.plan || 'mensal',
+            isTrial: Boolean(g.isTrial || order.isTrial || g.plan === 'teste' || order.plan === 'teste'),
             ownerName: order.name,
             ownerPhone: order.phone,
             groupName: g.groupName
