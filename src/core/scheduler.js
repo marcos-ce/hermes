@@ -1,7 +1,7 @@
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
 const settings = require('../config/settings');
-const { sendSafeMessage, randomDelay } = require('../utils/antiBan');
+const { sendSafeMessage, randomDelay, safeGroupLeave } = require('../utils/antiBan');
 const { getGroupAdmins } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const logger = require('../utils/logger');
@@ -118,22 +118,21 @@ class Scheduler {
           } catch (_) {}
 
           try {
-            await this.sock.groupLeave(groupJid);
+            await safeGroupLeave(this.sock, groupJid, isTrial ? 'trial_expired_3d' : 'license_expired_with_grace');
           } catch (err) {
             const msg = String(err?.message || err);
             const gone = /not.?in|forbidden|item-not-found|not-authorized|403|404/i.test(msg);
             if (!gone && g.leaveAttempts < MAX_LEAVE_ATTEMPTS) {
               configManager.scheduleSave();
-              throw err; // tenta de novo no próximo tick
+              throw err;
             }
-            logger.warn({ err: msg, groupJid }, 'groupLeave falhou/indisponível; encerrando ciclo da licença');
+            logger.warn({ err: msg, groupJid }, 'safeGroupLeave falhou/indisponível; encerrando ciclo da licença');
           }
 
           g.leftAt = Date.now();
-          g.enabled = false; // Soft Disable: configurações preservadas
+          g.enabled = false;
           groupCache.del(groupJid);
           configManager.flushSync();
-          logger.info({ groupJid, plan: g.plan }, isTrial ? 'Bot saiu do grupo após encerramento do teste grátis (3 dias)' : 'Bot saiu do grupo após vencimento + carência de 24h');
         }
       });
     }

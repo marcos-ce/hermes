@@ -1,4 +1,4 @@
-const { cooldownCache } = require('./cache');
+const { cooldownCache, groupCache } = require('./cache');
 const { cleanJid } = require('./jidResolver');
 const logger = require('./logger');
 const settings = require('../config/settings');
@@ -286,6 +286,119 @@ function checkCooldown(sender, cooldownMs = 2000) {
   return false; // Permitido
 }
 
+/**
+ * Fila global sequencial para saídas de grupos (Anti-Ban & Movimento Humano)
+ * Impede saídas em lote/simultâneas que acionam gatilhos de automação na Meta.
+ */
+class LeaveQueue {
+  constructor() {
+    this.queue = [];
+    this.running = false;
+    this.pendingJids = new Set();
+  }
+
+  enqueue(sock, groupJid, reason = '') {
+    if (!sock || !groupJid || !groupJid.endsWith('@g.us')) return Promise.resolve(false);
+    if (this.pendingJids.has(groupJid)) {
+      logger.debug({ groupJid }, 'safeGroupLeave: Saída já agendada na fila para este grupo');
+      return Promise.resolve(true);
+    }
+    this.pendingJids.add(groupJid);
+
+    return new Promise((resolve) => {
+      this.queue.push({ sock, groupJid, reason, resolve });
+      this._process();
+    });
+  }
+
+  async _process() {
+    if (this.running) return;
+    this.running = true;
+
+    try {
+      while (this.queue.length > 0) {
+        const item = this.queue.shift();
+        const { sock, groupJid, reason, resolve } = item;
+
+        try {
+          // 1. Simula comportamento humano pré-saída:
+          // Aguarda de 2500ms a 5000ms (tempo de um humano abrir o chat, acessar dados do grupo e clicar em sair)
+          await randomDelay(2500, 5000);
+
+          try {
+            await sock.sendPresenceUpdate('unavailable');
+          } catch (_) {}
+
+          // 2. Executa a saída oficial do grupo
+          await sock.groupLeave(groupJid);
+          logger.info({ groupJid, reason }, 'safeGroupLeave: Bot saiu do grupo com sucesso (movimento humano simulado)');
+
+          // 3. Atualiza o estado em configManager e invalida cache
+          try {
+            const configManager = require('../core/configManager');
+            const grp = configManager.getGroup(groupJid);
+            if (grp) {
+              grp.leftAt = Date.now();
+              grp.enabled = false;
+              configManager.flushSync();
+            }
+            groupCache.del(groupJid);
+          } catch (_) {}
+
+          resolve(true);
+        } catch (err) {
+          const msg = String(err?.message || err);
+          const isAlreadyGone = /not.?in|forbidden|item-not-found|not-authorized|403|404/i.test(msg);
+          if (isAlreadyGone) {
+            logger.info({ groupJid, msg }, 'safeGroupLeave: Bot já não estava no grupo ou grupo foi removido');
+            try {
+              const configManager = require('../core/configManager');
+              const grp = configManager.getGroup(groupJid);
+              if (grp) {
+                grp.leftAt = Date.now();
+                grp.enabled = false;
+                configManager.flushSync();
+              }
+              groupCache.del(groupJid);
+            } catch (_) {}
+            resolve(true);
+          } else {
+            logger.warn({ err: msg, groupJid }, 'safeGroupLeave: Falha ao sair do grupo');
+            resolve(false);
+          }
+        } finally {
+          this.pendingJids.delete(groupJid);
+          try {
+            await sock.sendPresenceUpdate('unavailable');
+          } catch (_) {}
+        }
+
+        // 4. Jitter humano de intervalo entre saídas (Anti-Burst):
+        // Se ainda houver outros grupos na fila de saída, aguarda de 4000ms a 8000ms entre uma saída e outra
+        if (this.queue.length > 0) {
+          await randomDelay(4000, 8000);
+        }
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+}
+
+const leaveQueueInstance = new LeaveQueue();
+
+/**
+ * Saída Segura de Grupos com Blindagem Anti-Ban e Movimento Humano.
+ * Roteia a saída através de uma fila sequencial única com Jitter delay e intervalo entre saídas.
+ * @param {object} sock Instância do Baileys
+ * @param {string} groupJid JID do grupo (@g.us)
+ * @param {string} [reason=''] Motivo do log
+ * @returns {Promise<boolean>}
+ */
+function safeGroupLeave(sock, groupJid, reason = '') {
+  return leaveQueueInstance.enqueue(sock, groupJid, reason);
+}
+
 module.exports = {
   sleep,
   randomInt,
@@ -293,5 +406,6 @@ module.exports = {
   sendSafeMessage,
   safeDelete,
   safeKick,
+  safeGroupLeave,
   checkCooldown
 };

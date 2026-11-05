@@ -70,10 +70,10 @@ async function handleParticipantsUpdate(sock, update) {
         } catch (_) {}
 
         try {
-          await sock.groupLeave(groupJid);
-          logger.info({ groupJid }, 'Bot saiu com sucesso do grupo re-adicionado com trial esgotado');
+          const { safeGroupLeave } = require('../utils/antiBan');
+          await safeGroupLeave(sock, groupJid, 'trial_already_consumed_on_add');
         } catch (err) {
-          logger.error({ err: err.message, groupJid }, 'Falha ao executar sock.groupLeave');
+          logger.error({ err: err.message, groupJid }, 'Falha ao executar safeGroupLeave');
         }
         return;
       }

@@ -19,7 +19,7 @@ const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate, handleJoinRequest } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
 const configManager = require('./configManager');
-const { sendSafeMessage } = require('../utils/antiBan');
+const { sendSafeMessage, safeGroupLeave } = require('../utils/antiBan');
 const { t } = require('../utils/i18n');
 
 /**
@@ -475,10 +475,9 @@ async function connectBot(options = {}) {
           } catch (_) {}
 
           try {
-            await sock.groupLeave(g.id);
-            logger.info({ groupJid: g.id }, 'Bot saiu com sucesso do grupo que já consumiu o teste');
+            await safeGroupLeave(sock, g.id, 'trial_already_consumed');
           } catch (leaveErr) {
-            logger.warn({ err: leaveErr.message, groupJid: g.id }, 'Falha ao executar sock.groupLeave');
+            logger.warn({ err: leaveErr.message, groupJid: g.id }, 'Falha ao executar safeGroupLeave');
           }
           continue;
         }

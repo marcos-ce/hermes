@@ -216,8 +216,8 @@ async function processSingleMessage(sock, msg) {
           } catch (_) {}
 
           try {
-            await sock.groupLeave(from);
-            logger.info({ from }, 'Bot saiu de grupo com teste expirado após mensagem detectada');
+            const { safeGroupLeave } = require('../utils/antiBan');
+            await safeGroupLeave(sock, from, 'trial_expired_on_message');
           } catch (err) {
             logger.warn({ err: err.message, from }, 'Erro ao sair de grupo com trial expirado');
           }
