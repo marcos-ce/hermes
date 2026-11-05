@@ -147,12 +147,7 @@ const dictionaries = {
     'protection.welcome.on': "Mensagens de boas-vindas ativadas.",
     'protection.welcome.off': "Mensagens de boas-vindas desativadas.",
     'protection.welcome.message_updated': "Mensagem de boas-vindas atualizada.",
-    'protection.welcome.autodelete_updated': "Mensagem de boas-vindas configurada para auto-exclusão após {seconds} segundos.",
-    'protection.automsg.on': "Mensagens periódicas automáticas ativadas.",
-    'protection.automsg.off': "Mensagens periódicas automáticas desativadas.",
-    'protection.automsg.interval_updated': "Intervalo dos comunicados periódicos configurado para cada {minutes} minutos.",
-    'protection.automsg.message_updated': "Texto dos comunicados periódicos atualizado.",
-    'protection.warn.on': "Sistema de advertências ativado.",
+    'protection.welcome.autodelete_updated': "Mensagem de boas-vindas configurada para auto-exclusão após {seconds} segundos.",    'protection.warn.on': "Sistema de advertências ativado.",
     'protection.warn.off': "Sistema de advertências desativado.",
     'protection.warn.limit_updated': "Limite de advertências atualizado para {limit} avisos antes do banimento.",
     'protection.schedule.on': "Horários automáticos diários ativados.",
@@ -224,9 +219,6 @@ const dictionaries = {
     'schedule.closed': ["Deu o horário programado: fechei o grupo por agora. Mais tarde abrimos novamente!","Grupo fechado automaticamente pelo horário programado."],
     'schedule.opened': ["Grupo aberto! Já podem mandar mensagens normalmente.","Abri o grupo conforme o horário programado. Bom dia de conversa a todos!"],
     'schedule.status': "⏰ *Horários Automáticos:* {status}\n🔒 Fechar: *{close}* | 🔓 Abrir: *{open}*",
-
-    // ─── MENSAGENS PERIÓDICAS (AUTOMSG) ───
-    'automsg.status': "📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* a cada {interval}\n💬 *Mensagem:* {msg}",
 
     // ─── BAN / EXPULSÃO ───
     'ban.cannot_ban_admin': "Não posso remover um administrador do grupo.",
@@ -536,12 +528,7 @@ const dictionaries = {
     'protection.welcome.on': "Mensajes de bienvenida activados.",
     'protection.welcome.off': "Mensajes de bienvenida desactivados.",
     'protection.welcome.message_updated': "Mensaje de bienvenida actualizado.",
-    'protection.welcome.autodelete_updated': "Mensaje de bienvenida configurado para auto-eliminarse tras {seconds} segundos.",
-    'protection.automsg.on': "Mensajes periódicos automáticos activados.",
-    'protection.automsg.off': "Mensajes periódicos automáticos desactivados.",
-    'protection.automsg.interval_updated': "Intervalo de anuncios periódicos configurado para cada {minutes} minutos.",
-    'protection.automsg.message_updated': "Texto de los anuncios periódicos actualizado.",
-    'protection.warn.on': "Sistema de advertencias activado.",
+    'protection.welcome.autodelete_updated': "Mensaje de bienvenida configurado para auto-eliminarse tras {seconds} segundos.",    'protection.warn.on': "Sistema de advertencias activado.",
     'protection.warn.off': "Sistema de advertencias desactivado.",
     'protection.warn.limit_updated': "Límite de advertencias actualizado a {limit} avisos antes de la expulsión.",
     'protection.schedule.on': "Horarios automáticos activados.",
@@ -613,9 +600,6 @@ const dictionaries = {
     'schedule.closed': ["El grupo fue cerrado automáticamente según el horario programado.","Horario de cierre alcanzado: el grupo ha sido pausado para envío de mensajes."],
     'schedule.opened': ["El grupo fue abierto automáticamente según el horario programado. ¡Buen diálogo a todos!","Horario de apertura: envío de mensajes habilitado para todos los miembros."],
     'schedule.status': "⏰ *Horarios Automáticos:* {status}\n🔒 Cerrar: *{close}* | 🔓 Abrir: *{open}*",
-
-    // ─── MENSAGENS PERIÓDICAS (AUTOMSG) ───
-    'automsg.status': "📢 *AutoMsg:* {status}\n⏱️ *Intervalo:* cada {interval}\n💬 *Mensaje:* {msg}",
 
     // ─── BAN / EXPULSÃO ───
     'ban.cannot_ban_admin': "Los administradores del grupo no pueden ser expulsados por el bot.",
@@ -925,12 +909,7 @@ const dictionaries = {
     'protection.welcome.on': "Welcome messages enabled.",
     'protection.welcome.off': "Welcome messages disabled.",
     'protection.welcome.message_updated': "Welcome message updated.",
-    'protection.welcome.autodelete_updated': "Welcome message set to auto-delete after {seconds} seconds.",
-    'protection.automsg.on': "Periodic announcement messages enabled.",
-    'protection.automsg.off': "Periodic announcement messages disabled.",
-    'protection.automsg.interval_updated': "Periodic announcement interval set to every {minutes} minutes.",
-    'protection.automsg.message_updated': "Periodic announcement message updated.",
-    'protection.warn.on': "Warning system enabled.",
+    'protection.welcome.autodelete_updated': "Welcome message set to auto-delete after {seconds} seconds.",    'protection.warn.on': "Warning system enabled.",
     'protection.warn.off': "Warning system disabled.",
     'protection.warn.limit_updated': "Warning limit updated to {limit} warnings before ban.",
     'protection.schedule.on': "Daily automatic schedule enabled.",
@@ -1002,9 +981,6 @@ const dictionaries = {
     'schedule.closed': ["The group was closed automatically according to the scheduled time.","Scheduled closing reached: the group is now paused for message sending."],
     'schedule.opened': ["The group was opened automatically according to the scheduled time. Enjoy the conversation!","Scheduled opening reached: message sending enabled for all members."],
     'schedule.status': "⏰ *Automated Schedule:* {status}\n🔒 Close: *{close}* | 🔓 Open: *{open}*",
-
-    // ─── MENSAGENS PERIÓDICAS (AUTOMSG) ───
-    'automsg.status': "📢 *AutoMsg:* {status}\n⏱️ *Interval:* every {interval}\n💬 *Message:* {msg}",
 
     // ─── BAN / EXPULSÃO ───
     'ban.cannot_ban_admin': "Group administrators cannot be removed by the bot.",

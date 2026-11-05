@@ -27,7 +27,7 @@ const processedMsgIds = new Set();        // evita processar 2x a mesma mensagem
 const inflightRequests = new Set();       // 1 pedido por vez por admin/grupo (evita spam durante os 15s da API)
 const hourlyQuota = new Map();            // limite de chamadas à API por grupo/hora
 // Só envia o "[Estado do grupo]" ao modelo quando o pedido trata de configuração (economia de tokens)
-const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|tranc|m[oó]dulo|link|links|antilink|antiflood|flood|spam|trava|antifake|ddi|warn|advert|avis[ao]r?|lembr[ae]|lembrete|agend[ae]r?|situa[cç][aã]o|resum[io]|geral|clima|movimento|relat[oó]rio|an[aá]lise|ban|banir|banimento|kick|expuls|mut|silenci|desmut|puni|prote[cç][aã]o|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|boas-?vindas|aprova|licen[cç]a|assinatura|validade|vencimento|vence|automsg|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|como|usar|uso|funciona|ajuda|help|menu|comando|comandos|fun[cç][oõ]es|explica|tutorial|adm|admin|\d{1,2}[:h]\d{0,2}/i;
+const STATE_KEYWORDS = /hor[aá]rio|abr[ei]|fech|tranc|m[oó]dulo|link|links|antilink|antiflood|flood|spam|trava|antifake|ddi|warn|advert|avis[ao]r?|lembr[ae]|lembrete|agend[ae]r?|situa[cç][aã]o|resum[io]|geral|clima|movimento|relat[oó]rio|an[aá]lise|ban|banir|banimento|kick|expuls|mut|silenci|desmut|puni|prote[cç][aã]o|config|prefix|idioma|lig[ao]|desliga|ativ|status|blacklist|bem-?vind|boas-?vindas|aprova|licen[cç]a|assinatura|validade|vencimento|vence|agenda|calend[aá]rio|calendar|evento|tarefa|compromisso|estado|regra|descr|bio|desfa[zç]|desfazer|cancela|reverte|aprende|anota|esquece|apelido|cultura|enquete|poll|vota[cç][aã]o|decid|resultado|ganh|venc|apur|escolh|faça|execute|placar|voto|votos|venceu|disputa|parcial|frente|sortei|sorteio|desfix|despin|como|usar|uso|funciona|ajuda|help|menu|comando|comandos|fun[cç][oõ]es|explica|tutorial|adm|admin|\d{1,2}[:h]\d{0,2}/i;
 
 // Ações reversíveis registradas para o mecanismo de "desfazer" (Ideia 4)
 const REVERSIBLE_TOOLS = new Set([
@@ -670,7 +670,7 @@ module.exports = {
     userPromptParts.push(`[Contexto do Grupo: "${groupName || 'sem nome'}" | Prefixo (P): "${groupPrefix}"]`);
 
     // Detecta mídia anexada na mensagem ATUAL do admin (foto/vídeo/áudio) para o modelo saber
-    // que pode usá-la (ex: anexar como anúncio periódico via set_automsg_media).
+    // que pode usá-la (ex: foto de perfil do grupo).
     const realMsgCurrent = msg?.message?.ephemeralMessage?.message ||
                            msg?.message?.viewOnceMessage?.message ||
                            msg?.message?.viewOnceMessageV2?.message ||
@@ -967,7 +967,7 @@ module.exports = {
       const antifakeCfg = configManager.getPluginConfig(from, 'antifake') || {};
       const warnCfg = configManager.getPluginConfig(from, 'warn') || {};
       const groupData = configManager.getGroup(from) || {};
-      const activeMods = ['antilink', 'antiflood', 'antifake', 'autoapprove', 'welcome', 'automsg', 'schedule', 'calendar']
+      const activeMods = ['antilink', 'antiflood', 'antifake', 'autoapprove', 'welcome', 'schedule', 'calendar']
         .filter(m => configManager.isPluginEnabled(from, m));
 
       const calCfg = configManager.getPluginConfig(from, 'calendar') || {};

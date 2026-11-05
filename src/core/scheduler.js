@@ -17,7 +17,6 @@ class Scheduler {
     this.intervalId = null;
     this.isTicking = false; // Trava de reentrância contra concorrência de ticks (P0.4)
     this.lastExecutedSchedule = new Map(); // Map<execKey, timestamp> para limpeza seletiva sem perda de estado
-    this.lastAutoMsgTimes = new Map();
   }
 
   /**
@@ -207,8 +206,7 @@ class Scheduler {
               lang,
               style,
               queueTask: (task) => executionQueue.push(task),
-              lastExecuted: this.lastExecutedSchedule,
-              lastAutoMsgTimes: this.lastAutoMsgTimes
+              lastExecuted: this.lastExecutedSchedule
             });
           } catch (err) {
             logger.error({ err, pluginName: plugin.name }, 'Erro no hook onSchedule do plugin');

@@ -4,7 +4,7 @@ const { t } = require('../../utils/i18n');
 module.exports = async function toggleGroupProtection({ from, lang, args }) {
   const rawMod = String(args.module || '').toLowerCase();
   const mod = rawMod === 'agenda' ? 'calendar' : rawMod;
-  const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood', 'milestone'];
+  const validModules = ['antilink', 'antiflood', 'antifake', 'welcome', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood', 'milestone'];
   if (!validModules.includes(mod)) {
     return { success: false, error: `Módulo "${mod}" inválido.` };
   }
@@ -24,8 +24,6 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     args.allowedDdis !== undefined ||
     args.welcomeMessage !== undefined ||
     args.autoDeleteSeconds !== undefined ||
-    args.autoMsgText !== undefined ||
-    args.intervalMinutes !== undefined ||
     args.groupMsgLimit !== undefined ||
     args.windowSeconds !== undefined ||
     args.lockMinutes !== undefined
@@ -98,29 +96,6 @@ module.exports = async function toggleGroupProtection({ from, lang, args }) {
     if (args.autoDeleteSeconds !== undefined && Number(args.autoDeleteSeconds) >= 0) {
       updates.autoDeleteSeconds = parseInt(args.autoDeleteSeconds, 10);
       specificFeedbacks.push(t(lang, 'protection.welcome.autodelete_updated', { seconds: updates.autoDeleteSeconds }));
-    }
-  }
-
-  if (mod === 'automsg') {
-    if (args.autoMsgText && String(args.autoMsgText).trim().length > 0) {
-      updates.message = String(args.autoMsgText).trim();
-      specificFeedbacks.push(t(lang, 'protection.automsg.message_updated') || 'Texto dos comunicados periódicos atualizado.');
-    }
-    if (args.intervalMinutes !== undefined) {
-      const requested = parseInt(args.intervalMinutes, 10);
-      if (!isNaN(requested) && requested > 0) {
-        const effective = Math.max(requested, 180);
-        updates.intervalMinutes = effective;
-        if (requested < 180) {
-          specificFeedbacks.push('Por segurança, o intervalo mínimo entre comunicados é de 3 horas. Intervalo definido para 3h.');
-        } else {
-          specificFeedbacks.push(t(lang, 'protection.automsg.interval_updated', { minutes: effective }));
-        }
-      }
-    }
-    if (args.useAI !== undefined) {
-      updates.useAI = Boolean(args.useAI);
-      specificFeedbacks.push(updates.useAI ? 'Variação de texto ativada.' : 'Variação de texto desativada (texto fixo).');
     }
   }
 

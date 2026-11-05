@@ -282,7 +282,7 @@ async function processSingleMessage(sock, msg) {
     }
   }
 
-  // Registra atividade recente do grupo para o AutoMsg (após hooks, só se a msg passou pelos filtros)
+  // Registra atividade recente do grupo (após hooks, só se a msg passou pelos filtros)
   if (isGroup) {
     configManager.touchGroupActivity(from);
   }

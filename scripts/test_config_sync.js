@@ -62,11 +62,11 @@ async function runTests() {
     // ------------------------------------------------------------------
     console.log('\n▶️ Teste 3: Usuário edita data/groups.json no painel da Discloud e envia /reload');
     const diskToEdit = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    diskToEdit[testGroupJid].plugins.automsg = {
+    diskToEdit[testGroupJid].plugins.welcome = {
       enabled: true,
       configured: true,
-      message: 'Vídeo manual da Discloud',
-      intervalMinutes: 180
+      message: 'Mensagem manual da Discloud',
+      autoDeleteSeconds: 60
     };
     fs.writeFileSync(filePath, JSON.stringify(diskToEdit, null, 2), 'utf-8');
 
@@ -76,8 +76,8 @@ async function runTests() {
       throw new Error(`Falha no reloadFromDisk: ${reloadResult.error}`);
     }
 
-    const cfgInRam = configManager.getPluginConfig(testGroupJid, 'automsg');
-    if (!cfgInRam || cfgInRam.message !== 'Vídeo manual da Discloud') {
+    const cfgInRam = configManager.getPluginConfig(testGroupJid, 'welcome');
+    if (!cfgInRam || cfgInRam.message !== 'Mensagem manual da Discloud') {
       throw new Error('Falha: reloadFromDisk não atualizou a memória RAM com o arquivo da Discloud');
     }
     console.log('  ✅ [PASS] reloadFromDisk() sincronizou perfeitamente a edição da Discloud com a RAM');
@@ -113,7 +113,7 @@ async function runTests() {
     }
 
     // A memória RAM NÃO pode ter sido apagada ou corrompida
-    const safeCheck = configManager.getPluginConfig(testGroupJid, 'automsg');
+    const safeCheck = configManager.getPluginConfig(testGroupJid, 'welcome');
     if (!safeCheck) {
       throw new Error('Falha: RAM foi corrompida mesmo após falha de parse no reloadFromDisk');
     }

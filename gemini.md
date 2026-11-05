@@ -29,7 +29,7 @@ whatsapp-admin-bot/
 │   │   ├── setupWizard.js     # Wizard interativo de CLI (1º boot: configura .env sem editar arquivos)
 │   │   ├── configManager.js   # Motor em RAM + Escrita Atômica (.tmp -> .json) + Merge Não-Destrutivo
 │   │   ├── wizardEngine.js    # Máquina de estados exclusiva por Admin (${from}:${sender}) + Painel !config
-│   │   ├── scheduler.js       # Motor leve de tarefas agendadas (Horários abrir/fechar, AutoMsg e Vencimentos)
+│   │   ├── scheduler.js       # Motor leve de tarefas agendadas (Horários abrir/fechar e Vencimentos)
 │   │   ├── connection.js      # Motor do Baileys (Socket Furtivo, Auth Híbrida, Cache de Grupo, Reconexão)
 │   │   └── pluginLoader.js    # Carregador dinâmico dos comandos, aliases e schemas de configuração
 │   ├── handlers/
@@ -45,7 +45,6 @@ whatsapp-admin-bot/
 │   │   │   ├── antiflood.js   # Anti-Spam de mensagens seguidas e Anti-Trava (caracteres excessivos)
 │   │   │   ├── antifake.js    # Bloqueio automático de números estrangeiros (Filtro de DDI)
 │   │   │   ├── schedule.js    # Agendamento automático para abrir e fechar o grupo por horário
-│   │   │   ├── automsg.js     # Mensagens/Anúncios periódicos inteligentes (só envia se houver movimento)
 │   │   │   ├── ban.js         # Remoção imediata + config de mensagem/delete
 │   │   │   ├── mute.js        # Fechar e abrir grupo imediatamente
 │   │   │   ├── promote.js     # Promover membro a Admin
@@ -249,7 +248,7 @@ Em grupos, se !configManager.isGroupEnabled(from): só deixar passar se for coma
 
 Se a licença do grupo expirou (expiresAt !== null && Date.now() > expiresAt): se ainda não notificou (!expiryNotified), enviar 1 aviso de licença expirada (em PT/ES/EN) marcando expiryNotified = true e dar return.
 
-Atualizar Atividade do Grupo: configManager.touchGroupActivity(from) (usado pelo automsg).
+Atualizar Atividade do Grupo: configManager.touchGroupActivity(from).
 
 Hooks Passivos de Proteção (onMessage):
 
@@ -380,18 +379,6 @@ closeTime (string, default: '23:00'): Horário diário para fechar o grupo no fo
 openTime (string, default: '07:00'): Horário diário para abrir o grupo no formato HH:MM (ou 0 para não abrir).
 
 Execução (scheduler.js): Verifica a cada 60 segundos (unref()) o horário atual (HH:MM) e executa groupSettingUpdate(jid, 'announcement' | 'not_announcement') com fila escalonada Anti-Ban (1.5s a 3.5s entre grupos), salvando a última execução do dia para não repetir no mesmo minuto.
-
-automsg.js (!automsg)
-
-Aliases: ['automsg', 'anuncio', 'lembrete', 'recordatorio', 'autoannounce', 'timermsg']
-
-Wizard (configSchema):
-
-message (string): Texto do comunicado periódico.
-
-intervalMinutes (number, default: 180): Intervalo em minutos entre cada envio (ex: 180 = a cada 3 horas).
-
-onlyIfActive (boolean, default: true): Só enviar se tiver havido mensagens de membros no grupo desde o último anúncio (evita flood em grupo parado).
 
 🧹 Tópico 3: Utilitários de Gestão Rápida (src/plugins/admin/ & general/)
 ban.js (!ban)

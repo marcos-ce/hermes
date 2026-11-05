@@ -8,7 +8,6 @@ const COMMAND_NUMBER_MAP = {
   '1': 'antifake',
   '2': 'antiflood',
   '3': 'antilink',
-  '4': 'automsg',
   '5': 'ban',
   '6': 'schedule',
   '7': 'warn',

@@ -84,7 +84,6 @@ Todas as 26 ferramentas declaradas em `src/services/toolRegistry.js` possuem val
 | 24 | `manage_blacklist` | `action`, `number` | Gerencia lista negra de participantes | Admin |
 | 25 | `set_group_settings` | `lang`, `prefix`, `action` | Configura idioma, prefixo, painel ou limpa memória do grupo | Admin |
 | 26 | `manage_join_requests` | `action`, `filter` | Gerencia fila de aprovação de entrada no grupo | Admin |
-| 27 | `set_automsg_media` | `action` | Anexa ou remove imagem do anúncio periódico automsg | Admin |
 
 ---
 

@@ -625,8 +625,8 @@ async function runTests() {
     assert.strictEqual(resB.targetData.phoneJid, '5511988887777@s.whatsapp.net');
   });
 
-  // 17. Teste de Não-Interferência entre AutoApprove e AutoMsg no Wizard/Config Panel
-  it('Ordem do painel !config mantém automsg na posição 4 e autoapprove na posição 10 sem interferência', async () => {
+  // 17. Teste de Não-Interferência no Wizard/Config Panel
+  it('Ordem do painel !config mantém autoapprove na posição 9 sem interferência', async () => {
     const wizardEngine = require('../src/core/wizardEngine');
     const { wizardCache } = require('../src/utils/cache');
     const fakeSock = {
@@ -643,17 +643,13 @@ async function runTests() {
     assert.strictEqual(session.type, 'config_menu');
     assert(Array.isArray(session.modules), 'Modules deve ser array');
 
-    // Posição 4 (índice 3) DEVE ser automsg
-    assert.strictEqual(session.modules[3].name, 'automsg', 'Opção [4] do menu deve ser automsg');
-    // autoapprove deve estar na posição 10 (índice 9)
-    assert.strictEqual(session.modules[9].name, 'autoapprove', 'Opção [10] do menu deve ser autoapprove');
+    // autoapprove deve estar na posição 9 (índice 8)
+    assert.strictEqual(session.modules[8].name, 'autoapprove', 'Opção [9] do menu deve ser autoapprove');
 
-    // Testa seleção via handleInput: enviar "4 on" deve ligar automsg sem afetar autoapprove
-    configManager.setPluginEnabled(fakeGroup, 'automsg', false);
+    // Testa seleção via handleInput: enviar "9 on" deve ligar autoapprove
     configManager.setPluginEnabled(fakeGroup, 'autoapprove', false);
-    await wizardEngine.handleInput(fakeSock, { key: { id: 'reply4' } }, fakeGroup, fakeAdmin, '4 on');
-    assert.strictEqual(configManager.isPluginEnabled(fakeGroup, 'automsg'), true, 'Opção "4 on" deve ativar automsg');
-    assert.strictEqual(configManager.isPluginEnabled(fakeGroup, 'autoapprove'), false, 'Opção "4 on" NÃO deve alterar autoapprove');
+    await wizardEngine.handleInput(fakeSock, { key: { id: 'reply9' } }, fakeGroup, fakeAdmin, '9 on');
+    assert.strictEqual(configManager.isPluginEnabled(fakeGroup, 'autoapprove'), true, 'Opção "9 on" deve ativar autoapprove');
   });
 
   // 18. Regressão: política (wildcard) x resolução (telefone/DDI) para LIDs

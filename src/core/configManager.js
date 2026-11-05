@@ -121,6 +121,11 @@ class ConfigManager {
     if ('style' in group) {
       delete group.style;
     }
+
+    // 4. Remove configurações legadas de automsg (descontinuado)
+    if (group.plugins && 'automsg' in group.plugins) {
+      delete group.plugins.automsg;
+    }
   }
 
   /**

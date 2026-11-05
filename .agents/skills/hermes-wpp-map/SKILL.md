@@ -44,7 +44,7 @@ hermes.wpp/
 │   │   ├── connection.js                 # Socket Baileys, modo furtivo, reconexão e cache de grupo
 │   │   ├── configManager.js              # Motor em RAM + Escrita Atômica (.tmp -> .json) + Merge Seguro
 │   │   ├── wizardEngine.js               # Máquina de estados exclusiva por Admin (${from}:${sender})
-│   │   ├── scheduler.js                  # Agendador de tarefas leves (horários, automsg, vencimentos)
+│   │   ├── scheduler.js                  # Agendador de tarefas leves (horários de abrir/fechar, vencimentos)
 │   │   ├── pluginLoader.js               # Carregador dinâmico de comandos (34), aliases (242) e schemas
 │   │   └── setupWizard.js                # Wizard interativo de terminal CLI (1º boot)
 │   ├── handlers/
@@ -60,7 +60,6 @@ hermes.wpp/
 │   │   │   ├── antiflood.js              # Anti-spam de mensagens seguidas e anti-trava
 │   │   │   ├── antifake.js               # Bloqueio de números estrangeiros por DDI
 │   │   │   ├── schedule.js               # Agendamento diário de abrir/fechar grupo
-│   │   │   ├── automsg.js                # Mensagens periódicas inteligentes (só envia se ativo)
 │   │   │   ├── ban.js                    # Remoção imediata de participante
 │   │   │   ├── mute.js                   # Fechar e abrir grupo imediatamente
 │   │   │   ├── promote.js                # Promover membro a administrador

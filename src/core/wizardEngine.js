@@ -238,7 +238,7 @@ class WizardEngine {
     }
 
     // Lista plugins que possuem schema ou são configuráveis
-    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'automsg', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'autoapprove', 'hermes'];
+    const preferredOrder = ['antifake', 'antiflood', 'antilink', 'ban', 'calendar', 'schedule', 'warn', 'welcome', 'autoapprove', 'hermes'];
     const modules = [];
     for (const [name, schema] of pluginLoader.schemas.entries()) {
       const isEnabled = configManager.isPluginEnabled(from, name);
@@ -264,7 +264,6 @@ class WizardEngine {
         antifake: 'ANTIFAKE',
         antiflood: 'ANTIFLOOD',
         antilink: 'ANTILINK',
-        automsg: 'AUTOMSG',
         ban: 'BAN',
         calendar: 'CALENDÁRIO',
         schedule: 'HORÁRIOS',
@@ -277,7 +276,6 @@ class WizardEngine {
         antifake: 'ANTIFAKE',
         antiflood: 'ANTIFLOOD',
         antilink: 'ANTILINK',
-        automsg: 'AUTOMSG',
         ban: 'BAN',
         calendar: 'CALENDARIO',
         schedule: 'HORARIOS',
@@ -290,7 +288,6 @@ class WizardEngine {
         antifake: 'ANTIFAKE',
         antiflood: 'ANTIFLOOD',
         antilink: 'ANTILINK',
-        automsg: 'AUTOMSG',
         ban: 'BAN',
         calendar: 'CALENDAR',
         schedule: 'SCHEDULE',

@@ -63,14 +63,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'toggle_group_protection',
-      description: 'Ativa, desativa ou configura plugins de proteção e moderação do grupo (antilink, antiflood, antifake, warn, welcome, automsg, etc.). Use para regras como "banimento em quem manda dois links", "bloqueia links", "limite de 3 advertências", "anti-flood com 5 mensagens".',
+      description: 'Ativa, desativa ou configura plugins de proteção e moderação do grupo (antilink, antiflood, antifake, warn, welcome, etc.). Use para regras como "banimento em quem manda dois links", "bloqueia links", "limite de 3 advertências", "anti-flood com 5 mensagens".',
       parameters: {
         type: 'object',
         properties: {
           module: {
             type: 'string',
-            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'automsg', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood', 'milestone'],
-            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "automsg", "schedule", "ban", "hermes", "calendar", "autoapprove", "antistatus" (apaga @status), "autolockflood" (fecha grupo por excesso de msgs), "milestone" (metas de membros).'
+            enum: ['antilink', 'antiflood', 'antifake', 'welcome', 'schedule', 'warn', 'ban', 'hermes', 'calendar', 'mutemember', 'autoapprove', 'antistatus', 'autolockflood', 'milestone'],
+            description: 'Nome do plugin: "antilink", "antiflood", "antifake", "warn", "welcome", "schedule", "ban", "hermes", "calendar", "autoapprove", "antistatus" (apaga @status), "autolockflood" (fecha grupo por excesso de msgs), "milestone" (metas de membros).'
           },
           enabled: { type: 'boolean', description: 'Ativar (true) ou desativar (false).' },
           action: { type: 'string', enum: ['delete', 'warn', 'ban'], description: 'Punição para infrações: "delete" (apenas apagar), "warn" (advertir até atingir limite de warns e banir) ou "ban" (banir imediatamente no primeiro deslize).' },
@@ -80,9 +80,6 @@ const TOOLS = [
           allowedDdis: { type: 'string', description: 'DDIs liberados no antifake ou no autoapprove (ex: "55, 351" ou "351" ou "todos").' },
           welcomeMessage: { type: 'string', description: 'Texto de boas-vindas ({user}, {group}, {desc}).' },
           autoDeleteSeconds: { type: 'integer', description: 'Segundos para apagar boas-vindas (0 desativa).' },
-          autoMsgText: { type: 'string', description: 'Texto do comunicado periódico.' },
-          intervalMinutes: { type: 'integer', description: 'Intervalo em minutos do comunicado.' },
-          useAI: { type: 'boolean', description: 'automsg: se true, ativa variação inteligente do texto via IA a cada envio para evitar spam repetitivo; se false, usa texto fixo.' },
           maxWarns: { type: 'integer', description: 'Contagem/limite de advertências antes do ban automático (ex: 2 para banir no 2º link/aviso, 3 para banir no 3º). Pode ser passado diretamente com module "antilink", "antiflood" ou "warn".' },
           customBanMessage: { type: 'string', description: 'Mensagem personalizada de ban ({user}).' },
           personality: { type: 'string', enum: ['descontraido', 'formal'], description: 'Tom do Hermes IA: "descontraido" ou "formal".' },
@@ -445,21 +442,6 @@ const TOOLS = [
           clearAll: { type: 'boolean', description: 'Se true, remove TODAS as metas configuradas antes de adicionar a nova.' }
         },
         required: ['count']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'set_automsg_media',
-      description: 'Anexa a foto/imagem que o admin ENVIOU nesta mensagem ou CITOU (respondeu/encaminhou) como o anúncio periódico automático do grupo (automsg). Por segurança Anti-Ban, apenas fotos leves (máx 2.5 MB) são aceitas; vídeos e áudios são bloqueados. Acione quando o admin pedir algo como: "bota essa foto no anúncio", "usa essa imagem no anúncio automático", "coloca esse banner no comunicado", "essa foto é o anúncio". A imagem é extraída automaticamente da mensagem atual do admin.',
-      parameters: {
-        type: 'object',
-        properties: {
-          action: { type: 'string', enum: ['attach', 'remove'], description: '"attach" para anexar a mídia enviada/citada ao anúncio; "remove" para remover a mídia atual do anúncio periódico.' },
-          caption: { type: 'string', description: 'Legenda/texto que acompanha a mídia quando ela for enviada no anúncio periódico (ex: "Assista agora!", "Confira o link na bio"). Opcional.' }
-        },
-        required: []
       }
     }
   }
