@@ -130,6 +130,14 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
 async function safeDelete(sock, jid, key, fallbackParticipants = []) {
   if (!sock || !jid || !key) return false;
 
+  // Revoga do mini-store imediatamente para evitar qualquer loop de reenvio pós-exclusão
+  if (key.id) {
+    try {
+      const { revokeMsgFromStore } = require('../core/connection');
+      revokeMsgFromStore(key.id);
+    } catch (_) {}
+  }
+
   const isGroup = typeof jid === 'string' && jid.endsWith('@g.us');
   const botJid = cleanJid(sock?.user?.id || '');
   const botLid = cleanJid(sock?.user?.lid || '');

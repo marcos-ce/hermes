@@ -92,12 +92,39 @@ function cancelPendingPresentation(groupJid) {
 const msgStore = new Map();
 const MSG_STORE_MAX = 1500;
 
+// Cache de IDs de mensagens revogadas/apagadas (evita que retentativas do Baileys reenviem mensagens excluídas)
+const revokedMsgCache = new NodeCache({ stdTTL: 3600, checkperiod: 300, useClones: false });
+
+/**
+ * Registra uma mensagem como revogada/apagada.
+ * Remove do msgStore imediatamente e impede que getMessage a retorne para o Baileys em retentativas.
+ * @param {string} msgId 
+ */
+function revokeMsgFromStore(msgId) {
+  if (!msgId) return;
+  revokedMsgCache.set(msgId, true);
+  if (msgStore.has(msgId)) {
+    msgStore.delete(msgId);
+  }
+}
+
+/**
+ * Verifica se um ID de mensagem foi revogado/apagado
+ * @param {string} msgId 
+ * @returns {boolean}
+ */
+function isMessageRevoked(msgId) {
+  if (!msgId) return false;
+  return Boolean(revokedMsgCache.get(msgId));
+}
+
 /**
  * Registra uma mensagem no mini-store para suporte a re-decriptografia do Baileys.
  * Deve ser chamado após o pipeline processar cada mensagem com sucesso.
  * @param {object} msg 
  */
 function storeMsgForRetry(msg) {
+  if (msg?.key?.id && isMessageRevoked(msg.key.id)) return;
   if (!msg?.key?.id || !msg.message) return;
   if (!msgStore.has(msg.key.id) && msgStore.size >= MSG_STORE_MAX) {
     const oldest = msgStore.keys().next().value;
@@ -175,7 +202,7 @@ async function connectBot(options = {}) {
     msgRetryCounterCache, // Evita tempestades de retentativas de decriptografia
     getMessage: async (key) => {
       const id = key?.id;
-      if (!id) return undefined;
+      if (!id || isMessageRevoked(id)) return undefined;
       if (msgStore.has(id)) return msgStore.get(id);
       const poll = pollTracker.getPoll(id);
       if (poll?.message) return poll.message;
@@ -352,6 +379,14 @@ async function connectBot(options = {}) {
                             msg?.message?.documentWithCaptionMessage?.message ||
                             msg?.message;
 
+            const protoMsg = realMsg?.protocolMessage || msg?.message?.protocolMessage;
+            if (protoMsg?.type === 0 && protoMsg?.key?.id) {
+              revokeMsgFromStore(protoMsg.key.id);
+            }
+            if (msg?.messageStubType === 68 && msg?.key?.id) {
+              revokeMsgFromStore(msg.key.id);
+            }
+
             if (realMsg?.pinInChatMessage) {
               pinTracker.handlePinMessage(from, realMsg.pinInChatMessage);
             }
@@ -404,6 +439,18 @@ async function connectBot(options = {}) {
       if (Array.isArray(updates)) {
         const meId = sock?.user?.id;
         for (const u of updates) {
+          // Detecta revogação de mensagem (Admin Revoke ou Sender Revoke) e remove do store
+          const isRevoke = u.update?.messageStubType === 68 ||
+                           u.update?.message === null ||
+                           u.update?.protocolMessage?.type === 0;
+
+          if (isRevoke) {
+            const targetId = u.key?.id || u.update?.key?.id;
+            if (targetId) {
+              revokeMsgFromStore(targetId);
+            }
+          }
+
           if (u.update?.pollUpdates) {
             pollTracker.handlePollUpdate(u.key, u.update.pollUpdates, meId);
           }
@@ -598,5 +645,7 @@ module.exports = {
   connectBot,
   getSocket,
   storeMsgForRetry,
-  cancelPendingPresentation
+  cancelPendingPresentation,
+  revokeMsgFromStore,
+  isMessageRevoked
 };

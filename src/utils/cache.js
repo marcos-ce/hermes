@@ -28,9 +28,17 @@ const cooldownCache = new NodeCache({
   useClones: false
 });
 
+// Cache anti-duplicação de mensagens recebidas (evita reprocessamento de comandos em retentativas/reconexão) - TTL 5 minutos
+const processedMsgCache = new NodeCache({
+  stdTTL: 300,
+  checkperiod: 60,
+  useClones: false
+});
+
 module.exports = {
   groupCache,
   wizardCache,
   floodCache,
-  cooldownCache
+  cooldownCache,
+  processedMsgCache
 };

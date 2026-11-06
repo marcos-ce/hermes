@@ -1,4 +1,4 @@
-const { wizardCache } = require('../utils/cache');
+const { wizardCache, processedMsgCache } = require('../utils/cache');
 const { sendSafeMessage, checkCooldown } = require('../utils/antiBan');
 const { extractSender, resolveSender, checkAdminStatus, cleanJid, getBr, getBotIdentity, detectBotMention } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
@@ -55,7 +55,34 @@ async function processSingleMessage(sock, msg) {
   if (!msg || !msg.message) return;
 
   // Ignora mensagens internas de protocolo do WhatsApp (status de entrega, exclusão remota, etc.)
-  if (msg.message.protocolMessage) return;
+  const realMsg = msg.message?.ephemeralMessage?.message ||
+                  msg.message?.viewOnceMessage?.message ||
+                  msg.message?.viewOnceMessageV2?.message ||
+                  msg.message?.documentWithCaptionMessage?.message ||
+                  msg.message?.editedMessage?.message?.protocolMessage ||
+                  msg.message;
+
+  // Intercepta mensagens de revogação/exclusão remota (Admin Revoke ou Sender Revoke)
+  const protocolMsg = realMsg?.protocolMessage || msg.message?.protocolMessage;
+  if (protocolMsg) {
+    if (protocolMsg.type === 0 && protocolMsg.key?.id) {
+      try {
+        const { revokeMsgFromStore } = require('../core/connection');
+        revokeMsgFromStore(protocolMsg.key.id);
+      } catch (_) {}
+    }
+    return;
+  }
+
+  if (msg.messageStubType === 68 /* WAMessageStubType.REVOKE */) {
+    if (msg.key?.id) {
+      try {
+        const { revokeMsgFromStore } = require('../core/connection');
+        revokeMsgFromStore(msg.key.id);
+      } catch (_) {}
+    }
+    return;
+  }
 
   // Ignora mensagens enviadas pelo próprio bot ou broadcasts de status
   if (msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
@@ -63,6 +90,14 @@ async function processSingleMessage(sock, msg) {
   // Ignora mensagens recebidas antes do boot do bot (com margem de 10s)
   const msgTime = Number(msg.messageTimestamp) || 0;
   if (msgTime < (bootTimestamp - 10)) return;
+
+  // Deduplicação anti-loop: evita reprocessar a mesma mensagem em retentativas/reentregas do Baileys
+  if (msg.key?.id) {
+    if (processedMsgCache.get(msg.key.id)) {
+      return;
+    }
+    processedMsgCache.set(msg.key.id, true);
+  }
 
   const from = msg.key.remoteJid || '';
   const rawSender = extractSender(msg);
