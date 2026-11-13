@@ -1,4 +1,5 @@
 const logger = require('./logger');
+const { safeGroupAction, randomDelay } = require('./antiBan');
 
 /**
  * Rastreador em memória de mensagens fixadas em grupos
@@ -122,7 +123,7 @@ class PinTracker {
     if (!entry) return false;
     const key = entry.key || entry;
     try {
-      await sock.sendMessage(groupJid, { pin: key, type: 2 });
+      await safeGroupAction(sock, groupJid, (s, gid) => s.sendMessage(gid, { pin: key, type: 2 }));
       groupPins.delete(stanzaId);
       return true;
     } catch (err) {
@@ -143,11 +144,14 @@ class PinTracker {
     if (!pinnedList || pinnedList.length === 0) return 0;
 
     let count = 0;
-    for (const key of pinnedList) {
+    for (let i = 0; i < pinnedList.length; i++) {
+      const key = pinnedList[i];
+      if (i > 0) {
+        await randomDelay(700, 1200);
+      }
       try {
-        await sock.sendMessage(groupJid, { pin: key, type: 2 });
+        await safeGroupAction(sock, groupJid, (s, gid) => s.sendMessage(gid, { pin: key, type: 2 }));
         count++;
-        await new Promise(r => setTimeout(r, 400));
       } catch (err) {
         logger.debug({ err, groupJid, keyId: key?.id }, 'Erro ao desafixar mensagem individual');
       }

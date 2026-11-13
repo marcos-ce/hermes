@@ -1,4 +1,4 @@
-const { groupCache } = require('./cache');
+const { groupCache, metadataRefreshCache } = require('./cache');
 const settings = require('../config/settings');
 const { getBr } = settings;
 
@@ -566,7 +566,13 @@ function extractAllTargets(msg, textArgs = '') {
 async function getGroupMetadata(sock, groupJid, { refresh = false } = {}) {
   if (!groupJid || !groupJid.endsWith('@g.us')) return null;
 
-  if (refresh) groupCache.del(groupJid);
+  const previousCached = groupCache.get(groupJid);
+  if (refresh) {
+    if (!metadataRefreshCache.get(groupJid)) {
+      metadataRefreshCache.set(groupJid, true);
+      groupCache.del(groupJid);
+    }
+  }
 
   const cached = groupCache.get(groupJid);
   if (cached) {
@@ -577,6 +583,8 @@ async function getGroupMetadata(sock, groupJid, { refresh = false } = {}) {
     }
     return cached;
   }
+
+  if (typeof sock?.groupMetadata !== 'function') return previousCached || null;
 
   let timer = null;
   try {
@@ -595,11 +603,14 @@ async function getGroupMetadata(sock, groupJid, { refresh = false } = {}) {
           registerParticipantLid(p);
         }
       }
+      return metadata;
     }
-    return metadata;
+    if (previousCached) groupCache.set(groupJid, previousCached);
+    return previousCached || null;
   } catch (_err) {
     if (timer) clearTimeout(timer);
-    return null;
+    if (previousCached) groupCache.set(groupJid, previousCached);
+    return previousCached || null;
   }
 }
 

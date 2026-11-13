@@ -1,6 +1,7 @@
 const configManager = require('../../core/configManager');
 const { parseRelativeTime } = require('../timeParser');
 const { scheduleTimedGroupAction } = require('../../plugins/admin/calendar');
+const { safeGroupAction } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
 
 module.exports = async function setGroupMute({ sock, from, sender, isBotAdmin, lang, args }) {
@@ -14,7 +15,7 @@ module.exports = async function setGroupMute({ sock, from, sender, isBotAdmin, l
   if (args.action === 'close' && durationCandidate) {
     const durRel = parseRelativeTime(durationCandidate);
     if (durRel.success && durRel.delayMinutes > 0) {
-      await sock.groupSettingUpdate(from, 'announcement');
+      await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
 
       await scheduleTimedGroupAction(sock, from, {
         action: 'open_group',
@@ -86,7 +87,7 @@ module.exports = async function setGroupMute({ sock, from, sender, isBotAdmin, l
   }
 
   const action = args.action === 'close' ? 'announcement' : 'not_announcement';
-  await sock.groupSettingUpdate(from, action);
+  await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, action));
 
   return {
     success: true,

@@ -59,12 +59,13 @@ module.exports = {
 
       const hasValidDdi = allowedDdis.some(ddi => participantNumber.startsWith(ddi.replace(/\D/g, '')));
       if (!hasValidDdi) {
-        // Número estrangeiro não permitido -> Ban imediato
+        // Número estrangeiro não permitido -> Ban imediato com suporte a fallback @lid/@s.whatsapp.net
         const groupStyle = style || configManager.getGroupStyle(groupJid);
-        await safeKick(sock, groupJid, targetGroupJid);
+        const kickTargets = Array.from(new Set([targetGroupJid, targetPhoneJid].filter(Boolean)));
+        await safeKick(sock, groupJid, targetGroupJid, kickTargets);
         await sendSafeMessage(sock, groupJid, {
           text: t(lang, 'antifake.detected', { user: participantNumber }, groupStyle),
-          mentions: [targetGroupJid, targetPhoneJid]
+          mentions: kickTargets
         });
         return { stop: true }; // Interrompe próximos plugins (como welcome)
       }

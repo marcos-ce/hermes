@@ -182,6 +182,16 @@ class SiteOrders {
     return next;
   }
 
+  hasPendingOrders() {
+    for (const order of this.orders.values()) {
+      if (!order.groups || order.status === 'done') continue;
+      if (order.groups.some(g => g.status === 'waiting_owner_join')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Busca e consome uma licença pendente quando o dono entra no grupo pelo app oficial.
    * Suporta correspondência por groupJid ou por inviteCode do grupo.

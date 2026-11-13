@@ -1,6 +1,6 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
-const { sendSafeMessage } = require('../../utils/antiBan');
+const { sendSafeMessage, safeGroupAction } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
 
 module.exports = {
@@ -67,7 +67,7 @@ module.exports = {
           groupJid,
           run: async () => {
             try {
-              await sock.groupSettingUpdate(groupJid, 'announcement');
+              await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
               await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.closed', {}, groupStyle) });
             } catch (err) {
               lastExecuted.delete(execKey); // Libera para retentativa em caso de erro de conexão
@@ -91,7 +91,7 @@ module.exports = {
           groupJid,
           run: async () => {
             try {
-              await sock.groupSettingUpdate(groupJid, 'not_announcement');
+              await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
               await sendSafeMessage(sock, groupJid, { text: t(lang, 'schedule.opened', {}, groupStyle) });
             } catch (err) {
               lastExecuted.delete(execKey); // Libera para retentativa em caso de erro de conexão

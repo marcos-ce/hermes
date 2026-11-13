@@ -1,6 +1,7 @@
 const { groupCache } = require('../../utils/cache');
 const { checkAdminStatus, checkGroupUpdateResult } = require('../../utils/jidResolver');
 const { getExplicitMentionTargets, hasExplicitMentionSyntax } = require('../../services/targetResolver');
+const { safeGroupAction } = require('../../utils/antiBan');
 const logger = require('../../utils/logger');
 
 module.exports = {
@@ -43,7 +44,7 @@ module.exports = {
     }
 
     try {
-      const result = await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
+      const result = await safeGroupAction(sock, from, (s, gid) => s.groupParticipantsUpdate(gid, [targetData.groupJid], 'promote'));
       const { ok, failures } = checkGroupUpdateResult(result);
       groupCache.del(from); // Invalida o cache
 

@@ -1,10 +1,22 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
+const { profilePicCache } = require('../../utils/cache');
 const { getGroupMetadata } = require('../../utils/jidResolver');
 const { sendSafeMessage, safeDelete } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
 const logger = require('../../utils/logger');
 const { parseHumanDuration, formatHumanDuration } = wizardEngine;
+
+const welcomeBurstMap = new Map(); // groupJid -> number[] timestamps
+
+function isWelcomeBurst(groupJid) {
+  const now = Date.now();
+  const windowMs = 25 * 1000;
+  const history = (welcomeBurstMap.get(groupJid) || []).filter(ts => now - ts < windowMs);
+  history.push(now);
+  welcomeBurstMap.set(groupJid, history);
+  return history.length > 3;
+}
 
 module.exports = {
   name: 'welcome',
@@ -78,19 +90,31 @@ module.exports = {
         .replace(/\{group\}/g, groupName)
         .replace(/\{desc\}/g, groupDesc);
 
-      // Tenta obter a foto do perfil do grupo com timeout de 3s para não bloquear o pipeline
+      // Evita rajada de downloads/uploads de imagem durante entradas em massa
+      const inBurst = isWelcomeBurst(groupJid);
+
+      // Tenta obter a foto do perfil do grupo com cache de 30m e timeout de 3s
       let ppUrl = null;
-      try {
-        ppUrl = await Promise.race([
-          sock.profilePictureUrl(groupJid, 'image'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-        ]);
-      } catch (_) {
-        ppUrl = null;
+      if (!inBurst) {
+        const cachedPp = profilePicCache.get(groupJid);
+        if (cachedPp !== undefined) {
+          ppUrl = cachedPp || null;
+        } else {
+          try {
+            ppUrl = await Promise.race([
+              sock.profilePictureUrl(groupJid, 'image'),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+            ]);
+          } catch (_) {
+            ppUrl = null;
+          }
+          profilePicCache.set(groupJid, ppUrl || '');
+        }
       }
 
+      const mentions = Array.from(new Set([targetGroupJid, targetPhoneJid].filter(Boolean)));
       const messagePayload = {
-        mentions: [targetGroupJid, targetPhoneJid]
+        mentions
       };
 
       if (ppUrl) {

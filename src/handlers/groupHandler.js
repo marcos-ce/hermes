@@ -1,8 +1,58 @@
-const { groupCache } = require('../utils/cache');
+const { groupCache, entryGuardCache } = require('../utils/cache');
 const { cleanJid, resolveParticipant } = require('../utils/jidResolver');
+const { sendSafeMessage, safeGroupLeave, isGroupLeaving, clearGroupLeavingState, randomDelay } = require('../utils/antiBan');
 const configManager = require('../core/configManager');
 const pluginLoader = require('../core/pluginLoader');
 const logger = require('../utils/logger');
+
+/**
+ * Atualiza incrementalmente a lista de participantes em cache sem invalidar todo o metadata.
+ * @param {string} groupJid
+ * @param {string[]} participants
+ * @param {string} action
+ */
+function patchCachedParticipants(groupJid, participants, action) {
+  if (!groupJid || !Array.isArray(participants) || participants.length === 0) return;
+  const cached = groupCache.get(groupJid);
+  if (!cached || !Array.isArray(cached.participants)) return;
+
+  const normalizeNum = (id) => cleanJid(id).replace(/@.*$/, '').split(':')[0];
+  const targetNums = new Set(participants.map(p => normalizeNum(typeof p === 'string' ? p : p?.id)).filter(Boolean));
+  if (targetNums.size === 0) return;
+
+  if (action === 'remove' || action === 'leave') {
+    cached.participants = cached.participants.filter((p) => {
+      const pIds = [p.id, p.jid, p.lid].filter(Boolean).map(normalizeNum);
+      return !pIds.some(n => targetNums.has(n));
+    });
+    cached.size = cached.participants.length;
+    groupCache.set(groupJid, cached);
+  } else if (action === 'promote' || action === 'demote') {
+    const newRole = action === 'promote' ? 'admin' : null;
+    for (const p of cached.participants) {
+      const pIds = [p.id, p.jid, p.lid].filter(Boolean).map(normalizeNum);
+      if (pIds.some(n => targetNums.has(n))) {
+        p.admin = newRole;
+      }
+    }
+    groupCache.set(groupJid, cached);
+  } else if (action === 'add') {
+    for (const raw of participants) {
+      const rawId = typeof raw === 'string' ? raw : raw?.id;
+      if (!rawId) continue;
+      const rawNum = normalizeNum(rawId);
+      const exists = cached.participants.some((p) => {
+        const pIds = [p.id, p.jid, p.lid].filter(Boolean).map(normalizeNum);
+        return pIds.includes(rawNum);
+      });
+      if (!exists) {
+        cached.participants.push({ id: rawId, admin: null });
+      }
+    }
+    cached.size = cached.participants.length;
+    groupCache.set(groupJid, cached);
+  }
+}
 
 /**
  * Manipulador desacoplado do evento group-participants.update do Baileys
@@ -15,8 +65,8 @@ async function handleParticipantsUpdate(sock, update) {
 
   const { id: groupJid, participants, action } = update;
 
-  // Invalidação imediata do cache de metadados do grupo
-  groupCache.del(groupJid);
+  // Atualiza cache de metadados incrementalmente evitando re-fetch completo no WhatsApp
+  patchCachedParticipants(groupJid, participants, action);
 
   // Trava anti-abuso imediata: verifica se o próprio bot foi adicionado a este grupo
   if (action === 'add' && Array.isArray(participants)) {
@@ -31,14 +81,29 @@ async function handleParticipantsUpdate(sock, update) {
     });
 
     if (isBotAdded) {
+      if (entryGuardCache.get(`bot_trial_exit:${groupJid}`) || isGroupLeaving(groupJid)) {
+        return;
+      }
+
       const siteOrders = require('../services/siteOrders');
-      let inviteCode = null;
-      try { inviteCode = await sock.groupInviteCode(groupJid); } catch (_) {}
-      const pending = siteOrders.claimPendingGroup(groupJid, inviteCode);
+      let pending = entryGuardCache.get(`pending_claim:${groupJid}`) || null;
+      if (!pending && siteOrders.hasPendingOrders()) {
+        let inviteCode = null;
+        try { inviteCode = await sock.groupInviteCode(groupJid); } catch (_) {}
+        pending = siteOrders.claimPendingGroup(groupJid, inviteCode);
+        if (pending) {
+          entryGuardCache.set(`pending_claim:${groupJid}`, pending);
+        }
+      }
+
       const isTrialPending = Boolean(!pending || pending.isTrial || pending.plan === 'teste');
       const trialAlreadyUsed = configManager.hasGroupUsedTrial(groupJid);
 
       if (isTrialPending && trialAlreadyUsed) {
+        if (entryGuardCache.get(`bot_trial_exit:${groupJid}`) || isGroupLeaving(groupJid)) {
+          return;
+        }
+        entryGuardCache.set(`bot_trial_exit:${groupJid}`, true);
         logger.warn({ groupJid }, 'Bot re-adicionado a grupo que já consumiu o teste grátis. Saindo...');
         try {
           const siteBridge = require('../services/siteBridge');
@@ -52,31 +117,20 @@ async function handleParticipantsUpdate(sock, update) {
 
         try {
           const { t } = require('../utils/i18n');
-          const { sendSafeMessage } = require('../utils/antiBan');
           const groupLang = configManager.getGroupLang(groupJid) || 'pt';
-          const siteUrl = process.env.PUBLIC_URL || process.env.URL_PUBLICA || 'https://hermes.hewhotries.tech';
-          let adminsMention = '';
-          try {
-            const meta = await sock.groupMetadata(groupJid);
-            const admins = (meta.participants || []).filter(p => p.admin).map(p => `@${p.id.split('@')[0]}`);
-            if (admins.length > 0) adminsMention = admins.join(' ');
-          } catch (_) {}
-
-          const text = t(groupLang, 'saas.trial_already_consumed', { admins: adminsMention, url: siteUrl });
-          try {
-            await sendSafeMessage(sock, groupJid, { text });
-            await new Promise(r => setTimeout(r, 1500));
-          } catch (_) {}
+          const text = t(groupLang, 'saas.trial_already_consumed');
+          await sendSafeMessage(sock, groupJid, { text });
         } catch (_) {}
 
         try {
-          const { safeGroupLeave } = require('../utils/antiBan');
           await safeGroupLeave(sock, groupJid, 'trial_already_consumed_on_add');
         } catch (err) {
           logger.error({ err: err.message, groupJid }, 'Falha ao executar safeGroupLeave');
         }
         return;
       }
+
+      clearGroupLeavingState(groupJid);
     }
   }
 
@@ -93,17 +147,21 @@ async function handleParticipantsUpdate(sock, update) {
     const botLid = cleanJid(sock?.user?.lid || '');
     const botNumber = botJid.replace(/@.*$/, '').split(':')[0].replace(/\D/g, '');
 
-    for (const rawParticipant of participants) {
+    for (let idx = 0; idx < participants.length; idx++) {
+      const rawParticipant = participants[idx];
+      if (idx > 0) {
+        await randomDelay(250, 550);
+      }
       let resolved = await resolveParticipant(sock, groupJid, rawParticipant);
       let targetPhoneJid = resolved?.phoneJid || cleanJid(rawParticipant);
       let targetGroupJid = resolved?.groupJid || cleanJid(rawParticipant);
 
       // BAN-3: Se após a primeira resolução o phoneJid ainda for @lid (mapa não populado),
-      // força reload dos metadados e tenta resolver novamente.
+      // força reload dos metadados (com cooldown por grupo) e tenta resolver novamente.
       // Evita falso positivo do antifake expulsando brasileiro legítimo por DDI não reconhecido.
       if (targetPhoneJid.endsWith('@lid')) {
         const { getGroupMetadata } = require('../utils/jidResolver');
-        await getGroupMetadata(sock, groupJid); // popula o mapa LID→Phone via cache
+        await getGroupMetadata(sock, groupJid, { refresh: true }); // popula o mapa LID→Phone com cooldown
         const reResolved = await resolveParticipant(sock, groupJid, rawParticipant);
         if (reResolved?.phoneJid && !reResolved.phoneJid.endsWith('@lid')) {
           targetPhoneJid = reResolved.phoneJid;
@@ -173,9 +231,6 @@ async function handleJoinRequest(sock, request) {
   if (!sock || !request || !request.id) return;
 
   const { id: groupJid, participant, action, method, author } = request;
-
-  // Invalidação preventiva do cache de metadados do grupo
-  groupCache.del(groupJid);
 
   // Se o grupo estiver banido ou inativo na licença SaaS, ignora 100% em silêncio
   if (configManager.isGroupBanned(groupJid) || !configManager.isGroupEnabled(groupJid)) {

@@ -11,7 +11,7 @@ const NodeCache = require('node-cache');
 const qrcode = require('qrcode-terminal');
 const settings = require('../config/settings');
 const logger = require('../utils/logger');
-const { groupCache } = require('../utils/cache');
+const { groupCache, entryGuardCache } = require('../utils/cache');
 const { registerParticipantLid } = require('../utils/jidResolver');
 const pollTracker = require('../utils/pollTracker');
 const pinTracker = require('../utils/pinTracker');
@@ -19,26 +19,42 @@ const { handleMessage } = require('../handlers/messageHandler');
 const { handleParticipantsUpdate, handleJoinRequest } = require('../handlers/groupHandler');
 const scheduler = require('./scheduler');
 const configManager = require('./configManager');
-const { sendSafeMessage, safeGroupLeave } = require('../utils/antiBan');
+const { sendSafeMessage, safeGroupLeave, isGroupLeaving, clearGroupLeavingState } = require('../utils/antiBan');
 const { t } = require('../utils/i18n');
 
+const sessionHealCooldownCache = new NodeCache({ stdTTL: 60, checkperiod: 30, useClones: false });
+
 /**
- * Auto-cura de sessões de criptografia corrompidas (Over 2000 messages into the future / No matching sessions).
- * Exclui exclusivamente os arquivos de sessão afetados preservando creds.json intacto, forçando o Baileys
- * a solicitar novas PreKeys limpas ao WhatsApp sem deslogar a conta.
+ * Auto-cura cirúrgica de sessões de criptografia corrompidas (Over 2000 messages into the future / No matching sessions).
+ * Exclui exclusivamente a sessão/sender-key do remetente afetado (jamais todas as sender-keys do grupo inteiro),
+ * aplicando cooldown de 60s por remetente e preservando creds.json intacto.
  * @param {object} msg Mensagem de stub com erro de decriptografia
  */
-async function healBrokenSession(msg) {
+async function healBrokenSession(msg, customAuthDir = null) {
   try {
-    const authDir = path.resolve(process.cwd(), 'src', 'auth');
-    if (!fs.existsSync(authDir)) return;
+    const authDir = customAuthDir || path.resolve(process.cwd(), 'src', 'auth');
+    if (!fs.existsSync(authDir)) return 0;
 
-    const jid = msg?.key?.remoteJid || '';
+    const remoteJid = msg?.key?.remoteJid || '';
     const participant = msg?.key?.participant || msg?.participant || '';
-    const candidates = [
-      jid.replace(/@.*$/, ''),
-      participant.replace(/@.*$/, '')
-    ].filter(Boolean);
+    const isGroup = remoteJid.endsWith('@g.us');
+
+    const groupBase = remoteJid.replace(/@.*$/, '').split(':')[0];
+    const participantBase = participant.replace(/@.*$/, '').split(':')[0];
+
+    // Em grupo sem participante identificável, nunca apagar todas as sender-keys do grupo inteiro
+    if (isGroup && !participantBase) {
+      return 0;
+    }
+
+    const targetBase = participantBase || (!isGroup ? groupBase : '');
+    if (!targetBase) return 0;
+
+    const cooldownKey = `${remoteJid}:${targetBase}`;
+    if (sessionHealCooldownCache.get(cooldownKey)) {
+      return 0;
+    }
+    sessionHealCooldownCache.set(cooldownKey, true);
 
     const files = await fs.promises.readdir(authDir);
     let removedCount = 0;
@@ -46,28 +62,46 @@ async function healBrokenSession(msg) {
     for (const file of files) {
       if (file === 'creds.json') continue; // JAMAIS toca no creds.json
 
-      if (file.startsWith('session-') || file.startsWith('sender-key-')) {
-        const matchesCandidate = candidates.some(c => c && file.includes(c));
-        if (matchesCandidate) {
-          try {
-            await fs.promises.unlink(path.join(authDir, file));
-            removedCount++;
-          } catch (_) {}
-        }
+      const isTargetSession =
+        file.startsWith(`session-${targetBase}.`) ||
+        file.startsWith(`session-${targetBase}_`);
+
+      const isTargetSenderKey =
+        isGroup &&
+        groupBase &&
+        participantBase &&
+        file.startsWith(`sender-key-${groupBase}--${participantBase}`);
+
+      if (isTargetSession || isTargetSenderKey) {
+        try {
+          await fs.promises.unlink(path.join(authDir, file));
+          removedCount++;
+        } catch (_) {}
       }
     }
 
     if (removedCount > 0) {
-      logger.warn({ removedCount, candidates }, 'Auto-Healing Baileys: Sessões corrompidas removidas para forçar renegociação de chaves');
+      logger.warn(
+        { removedCount, remoteJid, targetBase },
+        'Auto-Healing Baileys: Sessão específica corrompida removida para renegociação pontual'
+      );
     }
+    return removedCount;
   } catch (err) {
     logger.error({ err }, 'Erro no auto-healing de sessões');
+    return 0;
   }
 }
 
 let currentSock = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
+let openStableTimer = null;
+let pairingCodeRequested = false;
+let lastGroupSyncAt = 0;
+const recentLogoutTimestamps = [];
+const MAX_RECONNECT_ATTEMPTS = 15;
+const GROUP_SYNC_TTL_MS = 6 * 60 * 60 * 1000;
 const pendingPresentationTimers = new Map(); // groupJid -> timer
 
 /**
@@ -88,16 +122,18 @@ function cancelPendingPresentation(groupJid) {
   return false;
 }
 // Mini-store de mensagens recentes para re-decriptografia pós-reconexão (substitui makeInMemoryStore)
-// Guarda as últimas 1500 mensagens em RAM com eviction FIFO. Sem TTL = sem vazamento de memória.
+// Separa mensagens enviadas pelo próprio bot (2000) das recebidas (1500) para nunca perder retries de saída.
 const msgStore = new Map();
+const sentMsgStore = new Map();
 const MSG_STORE_MAX = 1500;
+const SENT_MSG_STORE_MAX = 2000;
 
 // Cache de IDs de mensagens revogadas/apagadas (evita que retentativas do Baileys reenviem mensagens excluídas)
 const revokedMsgCache = new NodeCache({ stdTTL: 3600, checkperiod: 300, useClones: false });
 
 /**
  * Registra uma mensagem como revogada/apagada.
- * Remove do msgStore imediatamente e impede que getMessage a retorne para o Baileys em retentativas.
+ * Remove dos stores imediatamente e impede que getMessage a retorne para o Baileys em retentativas.
  * @param {string} msgId 
  */
 function revokeMsgFromStore(msgId) {
@@ -105,6 +141,9 @@ function revokeMsgFromStore(msgId) {
   revokedMsgCache.set(msgId, true);
   if (msgStore.has(msgId)) {
     msgStore.delete(msgId);
+  }
+  if (sentMsgStore.has(msgId)) {
+    sentMsgStore.delete(msgId);
   }
 }
 
@@ -120,17 +159,73 @@ function isMessageRevoked(msgId) {
 
 /**
  * Registra uma mensagem no mini-store para suporte a re-decriptografia do Baileys.
- * Deve ser chamado após o pipeline processar cada mensagem com sucesso.
+ * Prioriza fila dedicada para mensagens enviadas pelo bot (fromMe).
  * @param {object} msg 
  */
 function storeMsgForRetry(msg) {
   if (msg?.key?.id && isMessageRevoked(msg.key.id)) return;
   if (!msg?.key?.id || !msg.message) return;
-  if (!msgStore.has(msg.key.id) && msgStore.size >= MSG_STORE_MAX) {
-    const oldest = msgStore.keys().next().value;
-    msgStore.delete(oldest);
+  const targetStore = msg.key.fromMe ? sentMsgStore : msgStore;
+  const maxSize = msg.key.fromMe ? SENT_MSG_STORE_MAX : MSG_STORE_MAX;
+
+  if (!targetStore.has(msg.key.id) && targetStore.size >= maxSize) {
+    const oldest = targetStore.keys().next().value;
+    targetStore.delete(oldest);
   }
-  msgStore.set(msg.key.id, msg.message);
+  targetStore.set(msg.key.id, msg.message);
+}
+
+/**
+ * Avalia a política segura de reconexão em caso de desconexão, evitando loops de ban.
+ * @param {object} params
+ * @returns {{ action: 'stop'|'reset_and_reconnect'|'reconnect', reason: string, delayMs?: number, clearAuth?: boolean, notifyOwner?: boolean }}
+ */
+function evaluateDisconnectPolicy({
+  statusCode,
+  isPairingCode = false,
+  attempts = 0,
+  recentLogouts = [],
+  autoResetOn401 = false,
+  now = Date.now(),
+  jitterMs = null
+} = {}) {
+  if (statusCode === DisconnectReason.connectionReplaced || statusCode === 440) {
+    return { action: 'stop', reason: 'connection_replaced', notifyOwner: true };
+  }
+
+  if (statusCode === 403 || (DisconnectReason.forbidden && statusCode === DisconnectReason.forbidden)) {
+    return { action: 'stop', reason: 'forbidden_or_banned', notifyOwner: true };
+  }
+
+  if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+    const activeWindow = (recentLogouts || []).filter(ts => now - ts < 15 * 60 * 1000);
+    if ((isPairingCode && !autoResetOn401) || activeWindow.length >= 2) {
+      return {
+        action: 'stop',
+        reason: isPairingCode ? 'logged_out_pairing_mode' : 'logged_out_loop_guard',
+        clearAuth: false,
+        notifyOwner: true
+      };
+    }
+    return {
+      action: 'reset_and_reconnect',
+      reason: 'logged_out',
+      clearAuth: true,
+      delayMs: 5000
+    };
+  }
+
+  if (attempts >= MAX_RECONNECT_ATTEMPTS) {
+    return { action: 'stop', reason: 'max_reconnect_attempts', notifyOwner: true };
+  }
+
+  const jitter = Number.isFinite(jitterMs) ? jitterMs : (500 + Math.floor(Math.random() * 2500));
+  if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
+    return { action: 'reconnect', reason: 'restart_required', delayMs: 1500 + Math.floor(jitter / 3) };
+  }
+
+  const baseDelay = Math.min(3000 * Math.pow(1.6, attempts), 5 * 60 * 1000);
+  return { action: 'reconnect', reason: 'network_retry', delayMs: baseDelay + jitter };
 }
 
 // Cache anti-loop de retentativas de decriptografia (Baileys Best Practice)
@@ -145,6 +240,10 @@ async function connectBot(options = {}) {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
+  }
+  if (openStableTimer) {
+    clearTimeout(openStableTimer);
+    openStableTimer = null;
   }
 
   // Encerra e limpa listeners da conexão anterior para prevenir vazamento de memória
@@ -203,6 +302,7 @@ async function connectBot(options = {}) {
     getMessage: async (key) => {
       const id = key?.id;
       if (!id || isMessageRevoked(id)) return undefined;
+      if (sentMsgStore.has(id)) return sentMsgStore.get(id);
       if (msgStore.has(id)) return msgStore.get(id);
       const poll = pollTracker.getPoll(id);
       if (poll?.message) return poll.message;
@@ -219,7 +319,7 @@ async function connectBot(options = {}) {
   // ==========================================
   // Fluxo de Autenticação: Pairing Code
   // ==========================================
-  if (isPairingCode && !state.creds.registered) {
+  if (isPairingCode && !state.creds.registered && !pairingCodeRequested) {
     const rawNumber = options.phoneNumber || settings.botNumber;
     const cleanNumber = (rawNumber || '').replace(/\D/g, '');
 
@@ -227,7 +327,9 @@ async function connectBot(options = {}) {
       console.log('\n❌ [ERRO] Número do Bot não configurado no .env para Pairing Code!');
       console.log('Adicione BOT_NUMBER=5511... no seu .env ou rode node index.js --setup\n');
     } else {
+      pairingCodeRequested = true;
       setTimeout(async () => {
+        if (sock !== currentSock || state.creds.registered) return;
         try {
           const code = await sock.requestPairingCode(cleanNumber);
           const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
@@ -266,16 +368,49 @@ async function connectBot(options = {}) {
     }
 
     if (connection === 'close') {
+      if (openStableTimer) {
+        clearTimeout(openStableTimer);
+        openStableTimer = null;
+      }
+
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      const now = Date.now();
+      while (recentLogoutTimestamps.length > 0 && now - recentLogoutTimestamps[0] >= 15 * 60 * 1000) {
+        recentLogoutTimestamps.shift();
+      }
 
-      logger.warn(`Conexão encerrada. Motivo: ${statusCode || 'Desconhecido'}. Desconectado por Logout: ${isLoggedOut}`);
+      const decision = evaluateDisconnectPolicy({
+        statusCode,
+        isPairingCode,
+        attempts: reconnectAttempts,
+        recentLogouts: recentLogoutTimestamps,
+        autoResetOn401: process.env.AUTO_RESET_ON_401 === 'true',
+        now
+      });
 
-      if (isLoggedOut) {
+      logger.warn({ statusCode, decision }, `Conexão encerrada. Motivo: ${statusCode || 'Desconhecido'} | Ação: ${decision.action}`);
+
+      if (decision.action === 'stop') {
+        logger.error({ statusCode, reason: decision.reason }, '🛑 Reconexão automática interrompida por segurança anti-ban');
+        if (decision.notifyOwner) {
+          try {
+            const siteBridge = require('../services/siteBridge');
+            siteBridge._notifyOwner(
+              `🛑 *Conexão WhatsApp Encerrada (${statusCode || 'N/A'})*\n\n` +
+              `Motivo de segurança: \`${decision.reason}\`\n` +
+              `Reconexão automática pausada para proteger a conta contra bloqueios.`
+            );
+          } catch (_) {}
+        }
+        return;
+      }
+
+      if (decision.action === 'reset_and_reconnect') {
+        recentLogoutTimestamps.push(now);
+        pairingCodeRequested = false;
         console.log('\n====================================================');
         console.log('🛑 [LOGOUT DETECTADO] Sessão desconectada pelo WhatsApp (Código 401).');
-        console.log('🧹 Limpando src/auth automaticamente e mantendo bot ONLINE...');
-        console.log('🔄 Gerando novo QR Code / Pairing Code em 3 segundos...');
+        console.log('🧹 Limpando src/auth com segurança e aguardando reconexão...');
         console.log('====================================================\n');
 
         try {
@@ -289,23 +424,27 @@ async function connectBot(options = {}) {
         reconnectAttempts = 0;
         reconnectTimer = setTimeout(() => {
           connectBot(options).catch(err => {
-            logger.error({ err }, 'Falha ao reconectar. Reagendando em 5s...');
-            reconnectTimer = setTimeout(() => connectBot(options).catch(() => {}), 5000);
+            logger.error({ err }, 'Falha ao reconectar pós-logout');
           });
-        }, 3000);
+        }, decision.delayMs || 5000);
       } else {
-        const delay = Math.min(3000 * Math.pow(1.3, reconnectAttempts), 30000);
         reconnectAttempts++;
-        console.log(`🔄 Reconectando ao WhatsApp em ${(delay / 1000).toFixed(1)} segundos (tentativa ${reconnectAttempts})...`);
+        const delay = decision.delayMs || 5000;
+        console.log(`🔄 Reconectando ao WhatsApp em ${(delay / 1000).toFixed(1)} segundos (tentativa ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
         reconnectTimer = setTimeout(() => {
           connectBot(options).catch(err => {
-            logger.error({ err }, 'Falha ao reconectar. Reagendando em 5s...');
-            reconnectTimer = setTimeout(() => connectBot(options).catch(() => {}), 5000);
+            logger.error({ err }, 'Falha ao reconectar na tentativa agendada');
           });
         }, delay);
       }
     } else if (connection === 'open') {
-      reconnectAttempts = 0;
+      pairingCodeRequested = false;
+      if (openStableTimer) clearTimeout(openStableTimer);
+      openStableTimer = setTimeout(() => {
+        reconnectAttempts = 0;
+      }, 60000);
+      if (typeof openStableTimer.unref === 'function') openStableTimer.unref();
+
       console.log('\n====================================================');
       console.log('🚀 BOT CONECTADO COM SUCESSO AO WHATSAPP!');
       console.log(`🏷️  ID: ${sock.user?.id || 'Desconhecido'}`);
@@ -328,33 +467,41 @@ async function connectBot(options = {}) {
         });
       }
 
-      // Carrega e mapeia todos os grupos participantes e seus LIDs antecipadamente
-      try {
-        const groups = await sock.groupFetchAllParticipating();
-        const groupCount = Object.keys(groups || {}).length;
-        console.log(`👥 Grupos sincronizados na inicialização: ${groupCount}`);
-        for (const [gid, meta] of Object.entries(groups || {})) {
-          groupCache.set(gid, meta);
-          if (!configManager.isGroupBanned(gid)) {
-            if (!configManager.getGroup(gid)) {
-              configManager.ensureGroupStarterKit(gid, meta.subject || '');
-            }
-            configManager.markWelcomeSent(gid, true);
-          }
-          if (Array.isArray(meta.participants)) {
-            for (const p of meta.participants) {
-              registerParticipantLid(p);
-            }
-          }
-        }
-      } catch (err) {
-        logger.warn({ err }, 'Erro ao sincronizar grupos na inicialização');
-      }
-
       // Garante presença invisível/unavailable ao conectar
       try {
         await sock.sendPresenceUpdate('unavailable');
       } catch (_) {}
+
+      // Carrega grupos somente quando cache está frio ou após TTL de 6h, com jitter humano
+      const shouldSyncGroups = Date.now() - lastGroupSyncAt >= GROUP_SYNC_TTL_MS || groupCache.keys().length === 0;
+      if (shouldSyncGroups) {
+        try {
+          await new Promise(r => setTimeout(r, 3000 + Math.floor(Math.random() * 2000)));
+          if (sock !== currentSock) return;
+          const groups = await sock.groupFetchAllParticipating();
+          lastGroupSyncAt = Date.now();
+          const groupCount = Object.keys(groups || {}).length;
+          console.log(`👥 Grupos sincronizados na inicialização: ${groupCount}`);
+          for (const [gid, meta] of Object.entries(groups || {})) {
+            groupCache.set(gid, meta);
+            if (!configManager.isGroupBanned(gid)) {
+              if (!configManager.getGroup(gid)) {
+                configManager.ensureGroupStarterKit(gid, meta.subject || '');
+              }
+              configManager.markWelcomeSent(gid, true);
+            }
+            if (Array.isArray(meta.participants)) {
+              for (const p of meta.participants) {
+                registerParticipantLid(p);
+              }
+            }
+          }
+        } catch (err) {
+          logger.warn({ err }, 'Erro ao sincronizar grupos na inicialização');
+        }
+      } else {
+        logger.debug('[Anti-Ban] Sincronização completa de grupos ignorada (cache quente pós-reconexão recente)');
+      }
     }
   });
 
@@ -478,12 +625,14 @@ async function connectBot(options = {}) {
 
         // Verifica se há licença pendente desta compra registrada pelo siteBridge
         const siteOrders = require('../services/siteOrders');
-        let inviteCode = null;
-        try {
-          inviteCode = await sock.groupInviteCode(g.id);
-        } catch (_) {}
-
-        const pending = siteOrders.claimPendingGroup(g.id, inviteCode);
+        let pending = entryGuardCache.take(`pending_claim:${g.id}`) || null;
+        if (!pending && siteOrders.hasPendingOrders()) {
+          let inviteCode = null;
+          try {
+            inviteCode = await sock.groupInviteCode(g.id);
+          } catch (_) {}
+          pending = siteOrders.claimPendingGroup(g.id, inviteCode);
+        }
         const effectiveDays = pending ? pending.days : 3;
 
         const isTrialPending = Boolean(!pending || pending.isTrial || pending.plan === 'teste');
@@ -491,6 +640,10 @@ async function connectBot(options = {}) {
 
         // Trava anti-abuso: grupo que já consumiu os 3 dias grátis não recebe nova licença trial
         if (isTrialPending && trialAlreadyUsed) {
+          if (entryGuardCache.get(`bot_trial_exit:${g.id}`) || isGroupLeaving(g.id)) {
+            continue;
+          }
+          entryGuardCache.set(`bot_trial_exit:${g.id}`, true);
           logger.warn({ groupJid: g.id, subject: g.subject }, 'Tentativa de reuso de teste grátis bloqueada');
           try {
             const siteBridge = require('../services/siteBridge');
@@ -498,27 +651,16 @@ async function connectBot(options = {}) {
               `⚠️ *Tentativa de Reuso de Teste Grátis Bloqueada!*\n\n` +
               `• Grupo: "${g.subject || 'Grupo'}"\n` +
               `• JID: \`${g.id}\`\n` +
-              `• Solicitante: ${pending.ownerName || 'Não informado'}\n` +
-              `• WhatsApp: https://wa.me/${pending.ownerPhone} (${pending.ownerPhone || 'N/A'})\n\n` +
+              `• Solicitante: ${pending?.ownerName || 'Não informado'}\n` +
+              `• WhatsApp: ${pending?.ownerPhone ? `https://wa.me/${pending.ownerPhone} (${pending.ownerPhone})` : 'N/A'}\n\n` +
               `O grupo já consumiu os 3 dias grátis anteriormente. O bot não concedeu a licença e saiu do grupo automaticamente.`
             );
           } catch (_) {}
 
           try {
             const groupLang = configManager.getGroupLang(g.id) || 'pt';
-            const siteUrl = process.env.PUBLIC_URL || process.env.URL_PUBLICA || 'https://hermes.hewhotries.tech';
-            let adminsMention = '';
-            try {
-              const meta = await sock.groupMetadata(g.id);
-              const admins = (meta.participants || []).filter(p => p.admin).map(p => `@${p.id.split('@')[0]}`);
-              if (admins.length > 0) adminsMention = admins.join(' ');
-            } catch (_) {}
-
-            const text = t(groupLang, 'saas.trial_already_consumed', { admins: adminsMention, url: siteUrl });
-            try {
-              await sendSafeMessage(sock, g.id, { text });
-              await new Promise(r => setTimeout(r, 1500));
-            } catch (_) {}
+            const text = t(groupLang, 'saas.trial_already_consumed');
+            await sendSafeMessage(sock, g.id, { text });
           } catch (_) {}
 
           try {
@@ -528,6 +670,8 @@ async function connectBot(options = {}) {
           }
           continue;
         }
+
+        clearGroupLeavingState(g.id);
 
         const { shouldSendWelcome } = configManager.ensureGroupStarterKit(g.id, g.subject || '', effectiveDays);
         configManager.markWelcomeSent(g.id, true);
@@ -581,40 +725,25 @@ async function connectBot(options = {}) {
 
           // ANTI-BAN HUMANIZADO REFINADO:
           // 1. Jitter aleatório entre 45s e 75s (média ~60s) para quebrar detecção de padrão temporal
-          // 2. Simulação de "Digitando..." ativa nos últimos 4 a 6 segundos antes do envio
+          // 2. Envio serializado via sendSafeMessage (que já realiza simulação de digitação humana única)
           // 3. Cancelamento automático caso o administrador envie qualquer comando antes do timer disparar
           const organicDelayMs = Math.floor(Math.random() * (75000 - 45000 + 1)) + 45000;
-          const typingDurationMs = Math.floor(Math.random() * (6000 - 3500 + 1)) + 3500;
-          const waitBeforeTypingMs = Math.max(organicDelayMs - typingDurationMs, 20000);
 
           const timer = setTimeout(async () => {
             try {
               pendingPresentationTimers.delete(g.id);
-              if (configManager.isGroupBanned(g.id) || !configManager.isGroupEnabled(g.id)) return;
+              if (configManager.isGroupBanned(g.id) || !configManager.isGroupEnabled(g.id) || isGroupLeaving(g.id)) return;
 
-              // Simula presença "Digitando..." no grupo durante alguns segundos
-              try {
-                await sock.sendPresenceUpdate('composing', g.id);
-              } catch (_) {}
-
-              await new Promise((r) => setTimeout(r, typingDurationMs));
-
-              try {
-                await sock.sendPresenceUpdate('paused', g.id);
-              } catch (_) {}
-
-              await sock.groupMetadata(g.id).catch(() => {});
               await sendSafeMessage(sock, g.id, { text: presentationText });
-              await sock.sendPresenceUpdate('unavailable', g.id).catch(() => {});
 
               logger.info(
-                { groupJid: g.id, delayMs: organicDelayMs, typingMs: typingDurationMs },
-                '[Anti-Ban] Apresentação oficial enviada com sucesso após delay e digitação simulada.'
+                { groupJid: g.id, delayMs: organicDelayMs },
+                '[Anti-Ban] Apresentação oficial enviada com sucesso após delay humanizado.'
               );
             } catch (err) {
               logger.error({ err, groupJid: g.id }, 'Erro ao enviar apresentação no novo grupo após delay humanizado');
             }
-          }, waitBeforeTypingMs);
+          }, organicDelayMs);
 
           pendingPresentationTimers.set(g.id, timer);
         }
@@ -627,8 +756,22 @@ async function connectBot(options = {}) {
   sock.ev.on('groups.update', (updates) => {
     if (Array.isArray(updates)) {
       for (const update of updates) {
-        if (update.id) {
-          groupCache.del(update.id);
+        if (!update?.id) continue;
+        const cached = groupCache.get(update.id);
+        if (cached && typeof cached === 'object') {
+          const patchKeys = ['subject', 'desc', 'announce', 'restrict', 'ephemeralDuration', 'memberAddMode', 'joinApprovalMode'];
+          let patched = false;
+          for (const k of patchKeys) {
+            if (update[k] !== undefined) {
+              cached[k] = update[k];
+              patched = true;
+            }
+          }
+          if (patched) {
+            groupCache.set(update.id, cached);
+          } else {
+            groupCache.del(update.id);
+          }
         }
       }
     }
@@ -647,5 +790,9 @@ module.exports = {
   storeMsgForRetry,
   cancelPendingPresentation,
   revokeMsgFromStore,
-  isMessageRevoked
+  isMessageRevoked,
+  healBrokenSession,
+  evaluateDisconnectPolicy,
+  sentMsgStore,
+  msgStore
 };

@@ -1,5 +1,6 @@
 const { groupCache } = require('../../utils/cache');
 const { resolveTarget, checkAdminStatus } = require('../../utils/jidResolver');
+const { safeGroupAction } = require('../../utils/antiBan');
 const settings = require('../../config/settings');
 
 module.exports = {
@@ -29,11 +30,12 @@ module.exports = {
     }
 
     try {
-      await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'demote');
+      await safeGroupAction(sock, from, (s, gid) => s.groupParticipantsUpdate(gid, [targetData.groupJid], 'demote'));
       groupCache.del(from); // Invalida o cache
 
+      const mentions = Array.from(new Set([targetData.groupJid, targetData.phoneJid].filter(Boolean)));
       return reply(t('demote.success', { user: targetData.displayUser || targetData.displayNum }), {
-        mentions: [targetData.groupJid, targetData.phoneJid]
+        mentions
       });
     } catch (_err) {
       return reply(t('common.error'));

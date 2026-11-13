@@ -1,4 +1,5 @@
 const wizardEngine = require('../../core/wizardEngine');
+const { safeGroupAction } = require('../../utils/antiBan');
 
 module.exports = {
   name: 'mute',
@@ -25,13 +26,13 @@ module.exports = {
 
     // Fechamento: comando direto ou !mute on / !mute 1 / !mute fechar / !12 fechar
     if (isExplicitClose || (isCmdOrAlias && ['on', 'fechar', 'cerrar', 'lock', '1'].includes(arg))) {
-      await sock.groupSettingUpdate(from, 'announcement');
+      await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
       return reply(t('mute.closed'));
     }
 
     // Abertura: comando direto ou !mute off / !mute 2 / !mute abrir / !12 abrir
     if (isExplicitOpen || (isCmdOrAlias && ['off', 'abrir', 'unlock', 'open', '2'].includes(arg))) {
-      await sock.groupSettingUpdate(from, 'not_announcement');
+      await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
       return reply(t('mute.opened'));
     }
 
@@ -41,10 +42,10 @@ module.exports = {
       const meta = await getGroupMetadata(sock, from);
       const isClosed = meta?.announce === true || meta?.announce === 'true';
       if (isClosed) {
-        await sock.groupSettingUpdate(from, 'not_announcement');
+        await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
         return reply(t('mute.opened'));
       } else {
-        await sock.groupSettingUpdate(from, 'announcement');
+        await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
         return reply(t('mute.closed'));
       }
     }

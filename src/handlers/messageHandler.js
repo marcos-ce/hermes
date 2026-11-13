@@ -233,28 +233,21 @@ async function processSingleMessage(sock, msg) {
         const isTrialEnded = Boolean(group && (group.trialUsed || group.isTrial || group.plan === 'teste') && configManager.isGroupExpired(from));
 
         if (isTrialEnded) {
-          try {
-            const { getGroupAdmins } = require('../utils/jidResolver');
-            const { renewalUrl } = require('../services/joinService');
-            let code = null;
-            try { code = await sock.groupInviteCode(from); } catch (_) {}
-            const url = renewalUrl(code, { name: group?.ownerName, phone: group?.ownerPhone });
-            const { adminJids, mentionText } = await getGroupAdmins(sock, from);
-            let text = translate('saas.trial_already_consumed', { url, admins: mentionText });
-            if (!mentionText) {
-              text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
-            }
+          const { sendSafeMessage, safeGroupLeave, isGroupLeaving } = require('../utils/antiBan');
+          if (!group.expiryNotified && !isGroupLeaving(from)) {
+            configManager.markExpiryNotified(from, true);
             try {
-              await reply(text, { mentions: adminJids });
-              await new Promise(r => setTimeout(r, 1500));
+              const text = translate('saas.trial_leaving');
+              await sendSafeMessage(sock, from, { text });
             } catch (_) {}
-          } catch (_) {}
+          }
 
-          try {
-            const { safeGroupLeave } = require('../utils/antiBan');
-            await safeGroupLeave(sock, from, 'trial_expired_on_message');
-          } catch (err) {
-            logger.warn({ err: err.message, from }, 'Erro ao sair de grupo com trial expirado');
+          if (!isGroupLeaving(from)) {
+            try {
+              await safeGroupLeave(sock, from, 'trial_expired_on_message');
+            } catch (err) {
+              logger.warn({ err: err.message, from }, 'Erro ao sair de grupo com trial expirado');
+            }
           }
           return;
         }

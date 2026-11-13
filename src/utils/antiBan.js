@@ -1,7 +1,71 @@
+const { AsyncLocalStorage } = require('async_hooks');
 const { cooldownCache, groupCache } = require('./cache');
 const { cleanJid } = require('./jidResolver');
 const logger = require('./logger');
 const settings = require('../config/settings');
+
+const outboundQueueAls = new AsyncLocalStorage();
+
+/**
+ * Fila global sequencial com prioridade para serializar escritas de saída
+ * (mensagens e ações de grupo), evitando rajadas simultâneas no WebSocket.
+ */
+class OutboundQueue {
+  constructor() {
+    this.highQueue = [];
+    this.normalQueue = [];
+    this.running = false;
+    this.lastCompletedAt = 0;
+  }
+
+  enqueue(fn, { priority = 'normal', urgent = false } = {}) {
+    if (outboundQueueAls.getStore()) {
+      return Promise.resolve().then(fn);
+    }
+
+    return new Promise((resolve, reject) => {
+      const task = { fn, urgent: urgent || priority === 'high', resolve, reject };
+      if (priority === 'high') {
+        this.highQueue.push(task);
+      } else {
+        this.normalQueue.push(task);
+      }
+      this._process();
+    });
+  }
+
+  async _process() {
+    if (this.running) return;
+    this.running = true;
+
+    try {
+      while (this.highQueue.length > 0 || this.normalQueue.length > 0) {
+        const task = this.highQueue.shift() || this.normalQueue.shift();
+
+        if (this.lastCompletedAt > 0) {
+          const minGap = task.urgent ? randomInt(150, 350) : randomInt(700, 1300);
+          const elapsed = Date.now() - this.lastCompletedAt;
+          if (elapsed < minGap) {
+            await sleep(minGap - elapsed);
+          }
+        }
+
+        try {
+          const result = await outboundQueueAls.run(true, task.fn);
+          task.resolve(result);
+        } catch (err) {
+          task.reject(err);
+        } finally {
+          this.lastCompletedAt = Date.now();
+        }
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+}
+
+const outboundQueue = new OutboundQueue();
 
 /**
  * Aguarda um período em milissegundos
@@ -69,51 +133,55 @@ async function sendSafeMessage(sock, jid, content, options = {}) {
     payload.mentions = options.mentions;
   }
 
-  // 1. Atraso inicial de leitura humana (300ms a 700ms)
-  await randomDelay(300, 700);
+  const priority = options.priority === 'high' ? 'high' : 'normal';
+  const urgent = Boolean(options.urgent || priority === 'high');
 
-  // 1b. Confirmação de Leitura Cirúrgica Anti-Ban:
-  // Marca como lida exclusivamente a mensagem a que o bot está respondendo (evita flood no grupo e simula humano abrindo o chat)
-  if (settings.markReadOnReply && options.markAsRead !== false) {
-    const targetKey = options.quoted?.key || (options.key?.id ? options.key : null);
-    if (targetKey?.id && !targetKey.fromMe && typeof sock.readMessages === 'function') {
-      sock.readMessages([targetKey]).catch(() => {});
+  return outboundQueue.enqueue(async () => {
+    // 1. Atraso inicial de leitura humana (300ms a 700ms, ou menor em mensagens urgentes fast=true)
+    if (options.fast) {
+      await randomDelay(100, 250);
+    } else {
+      await randomDelay(300, 700);
     }
-  }
 
-  // 2. Simulação de "Digitando..." proporcional ao tamanho do texto
-  if (rawText.length > 0) {
-    try {
-      await sock.sendPresenceUpdate('composing', jid);
-    } catch (_) {}
+    // 1b. Confirmação de Leitura Cirúrgica Anti-Ban:
+    // Marca como lida exclusivamente a mensagem a que o bot está respondendo (evita flood no grupo e simula humano abrindo o chat)
+    if (settings.markReadOnReply && options.markAsRead !== false) {
+      const targetKey = options.quoted?.key || (options.key?.id ? options.key : null);
+      if (targetKey?.id && !targetKey.fromMe && typeof sock.readMessages === 'function') {
+        sock.readMessages([targetKey]).catch(() => {});
+      }
+    }
 
-    const typingDuration = Math.min(Math.max(rawText.length * 12, 600), 2200) + randomInt(100, 400);
-    await sleep(typingDuration);
-
-    try {
-      await sock.sendPresenceUpdate('paused', jid);
-    } catch (_) {}
-  }
-
-  // 3. Disparo da mensagem com garantia de restauração da presença
-  try {
-    const sent = await sock.sendMessage(jid, payload, options);
-    if (sent?.key?.id && sent?.message) {
+    // 2. Simulação de "Digitando..." proporcional ao tamanho do texto
+    if (rawText.length > 0) {
       try {
-        const { storeMsgForRetry } = require('../core/connection');
-        storeMsgForRetry(sent);
+        await sock.sendPresenceUpdate('composing', jid);
+      } catch (_) {}
+
+      const typingDuration = Math.min(Math.max(rawText.length * 12, 600), 2200) + randomInt(100, 400);
+      await sleep(typingDuration);
+
+      try {
+        await sock.sendPresenceUpdate('paused', jid);
       } catch (_) {}
     }
-    try {
-      await sock.sendPresenceUpdate('unavailable');
-    } catch (_) {}
+
+    // 3. Disparo serializado da mensagem e armazenamento para retry (getMessage)
+    const sent = await sock.sendMessage(jid, payload, options);
+    if (sent?.key?.id) {
+      try {
+        const { storeMsgForRetry } = require('../core/connection');
+        const retryMsg = sent.message
+          ? sent
+          : (payload.text
+              ? { ...sent, message: { conversation: payload.text } }
+              : (payload.caption ? { ...sent, message: { conversation: payload.caption } } : null));
+        if (retryMsg) storeMsgForRetry(retryMsg);
+      } catch (_) {}
+    }
     return sent;
-  } catch (err) {
-    try {
-      await sock.sendPresenceUpdate('unavailable');
-    } catch (_) {}
-    throw err;
-  }
+  }, { priority, urgent });
 }
 
 /**
@@ -202,7 +270,11 @@ async function safeDelete(sock, jid, key, fallbackParticipants = []) {
   }
 
   let deleted = false;
-  for (const participant of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const participant = candidates[i];
+    if (i > 0) {
+      await randomDelay(150, 350);
+    }
     try {
       const targetKey = {
         remoteJid: key.remoteJid || jid,
@@ -262,6 +334,7 @@ async function safeKick(sock, jid, participants, fallbackJids = []) {
     .filter(j => Boolean(j) && !primaryList.includes(j));
 
   for (const altJid of altCandidates) {
+    await randomDelay(250, 500);
     try {
       const resAlt = await sock.groupParticipantsUpdate(jid, [altJid], 'remove');
       if (isSuccess(resAlt)) {
@@ -303,6 +376,22 @@ class LeaveQueue {
     this.queue = [];
     this.running = false;
     this.pendingJids = new Set();
+    this.recentlyLeft = new Map();
+  }
+
+  isLeaving(groupJid) {
+    if (!groupJid) return false;
+    if (this.pendingJids.has(groupJid)) return true;
+    const expiresAt = this.recentlyLeft.get(groupJid);
+    if (!expiresAt) return false;
+    if (expiresAt > Date.now()) return true;
+    this.recentlyLeft.delete(groupJid);
+    return false;
+  }
+
+  clearLeftState(groupJid) {
+    if (!groupJid) return;
+    this.recentlyLeft.delete(groupJid);
   }
 
   enqueue(sock, groupJid, reason = '') {
@@ -333,12 +422,9 @@ class LeaveQueue {
           // Aguarda de 2500ms a 5000ms (tempo de um humano abrir o chat, acessar dados do grupo e clicar em sair)
           await randomDelay(2500, 5000);
 
-          try {
-            await sock.sendPresenceUpdate('unavailable');
-          } catch (_) {}
-
           // 2. Executa a saída oficial do grupo
           await sock.groupLeave(groupJid);
+          this.recentlyLeft.set(groupJid, Date.now() + 60_000);
           logger.info({ groupJid, reason }, 'safeGroupLeave: Bot saiu do grupo com sucesso (movimento humano simulado)');
 
           // 3. Atualiza o estado em configManager e invalida cache
@@ -358,6 +444,7 @@ class LeaveQueue {
           const msg = String(err?.message || err);
           const isAlreadyGone = /not.?in|forbidden|item-not-found|not-authorized|403|404/i.test(msg);
           if (isAlreadyGone) {
+            this.recentlyLeft.set(groupJid, Date.now() + 60_000);
             logger.info({ groupJid, msg }, 'safeGroupLeave: Bot já não estava no grupo ou grupo foi removido');
             try {
               const configManager = require('../core/configManager');
@@ -376,9 +463,6 @@ class LeaveQueue {
           }
         } finally {
           this.pendingJids.delete(groupJid);
-          try {
-            await sock.sendPresenceUpdate('unavailable');
-          } catch (_) {}
         }
 
         // 4. Jitter humano de intervalo entre saídas (Anti-Burst):
@@ -407,6 +491,48 @@ function safeGroupLeave(sock, groupJid, reason = '') {
   return leaveQueueInstance.enqueue(sock, groupJid, reason);
 }
 
+/**
+ * Verifica se há uma saída agendada ou recém-executada para o grupo.
+ * @param {string} groupJid
+ * @returns {boolean}
+ */
+function isGroupLeaving(groupJid) {
+  return leaveQueueInstance.isLeaving(groupJid);
+}
+
+/**
+ * Limpa estado recente de saída quando o bot retorna ao grupo.
+ * @param {string} groupJid
+ */
+function clearGroupLeavingState(groupJid) {
+  leaveQueueInstance.clearLeftState(groupJid);
+}
+
+/**
+ * Serializa ações de alteração de grupo (fechar/abrir, promover/rebaixar, fixar/desafixar)
+ * na fila global com jitter humano para evitar rajadas concorrentes no WebSocket.
+ * @param {object} sock Instância do Baileys
+ * @param {string} groupJid JID do grupo
+ * @param {(sock: object, groupJid: string) => Promise<any>} actionFn Operação a executar
+ * @param {object} [options]
+ * @returns {Promise<any>}
+ */
+async function safeGroupAction(sock, groupJid, actionFn, options = {}) {
+  if (!sock || !groupJid || typeof actionFn !== 'function') return null;
+
+  const priority = options.priority === 'high' ? 'high' : 'normal';
+  const urgent = Boolean(options.urgent || priority === 'high');
+  const minDelayMs = Number.isFinite(options.minDelayMs) ? options.minDelayMs : 250;
+  const maxDelayMs = Number.isFinite(options.maxDelayMs) ? options.maxDelayMs : 600;
+
+  return outboundQueue.enqueue(async () => {
+    if (maxDelayMs > 0) {
+      await randomDelay(minDelayMs, Math.max(minDelayMs, maxDelayMs));
+    }
+    return await actionFn(sock, groupJid);
+  }, { priority, urgent });
+}
+
 module.exports = {
   sleep,
   randomInt,
@@ -415,5 +541,8 @@ module.exports = {
   safeDelete,
   safeKick,
   safeGroupLeave,
+  safeGroupAction,
+  isGroupLeaving,
+  clearGroupLeavingState,
   checkCooldown
 };

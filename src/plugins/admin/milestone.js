@@ -1,6 +1,6 @@
 const configManager = require('../../core/configManager');
 const { getGroupMetadata } = require('../../utils/jidResolver');
-const { sendSafeMessage } = require('../../utils/antiBan');
+const { sendSafeMessage, safeGroupAction } = require('../../utils/antiBan');
 const { t } = require('../../utils/i18n');
 const logger = require('../../utils/logger');
 
@@ -65,9 +65,10 @@ module.exports = {
         .replace(/\{total\}/g, totalMembers);
 
       try {
+        const mentions = Array.from(new Set([targetGroupJid || `${participantNumber}@s.whatsapp.net`, targetPhoneJid].filter(Boolean)));
         const payload = {
           text,
-          mentions: [targetGroupJid || `${participantNumber}@s.whatsapp.net`, targetPhoneJid].filter(Boolean)
+          mentions
         };
 
         const sentMsg = await sendSafeMessage(sock, groupJid, payload);
@@ -77,7 +78,9 @@ module.exports = {
 
         if (extraAction === 'pin' && sentMsg?.key) {
           try {
-            await sock.sendMessage(groupJid, { pin: { type: 1, time: 86400 } }, { quoted: { key: sentMsg.key, message: { conversation: text } } });
+            await safeGroupAction(sock, groupJid, (s, gid) =>
+              s.sendMessage(gid, { pin: { type: 1, time: 86400 } }, { quoted: { key: sentMsg.key, message: { conversation: text } } })
+            );
           } catch (pinErr) {
             logger.warn({ pinErr }, '[milestone] Falha ao fixar mensagem de meta');
           }
@@ -85,7 +88,7 @@ module.exports = {
 
         if (extraAction === 'open_group') {
           try {
-            await sock.groupSettingUpdate(groupJid, 'not_announcement');
+            await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
           } catch (openErr) {
             logger.warn({ openErr }, '[milestone] Falha ao abrir grupo na meta');
           }

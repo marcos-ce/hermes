@@ -124,7 +124,8 @@ module.exports = {
 
     // Ação de segurança — zero delay (não passa pelo sendSafeMessage)
     try {
-      await safeDelete(sock, msg);
+      const deleted = await safeDelete(sock, from, msg.key, [sender]);
+      if (!deleted) return false;
       logger.info({ from, sender }, '[antistatus] Menção a @status apagada');
     } catch (err) {
       logger.warn({ err, from }, '[antistatus] Falha ao apagar menção a @status');

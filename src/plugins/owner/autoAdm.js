@@ -1,6 +1,6 @@
 const { getGroupMetadata, cleanJid, getBr, getBotIdentity } = require('../../utils/jidResolver');
 const { groupCache } = require('../../utils/cache');
-const { randomDelay } = require('../../utils/antiBan');
+const { randomDelay, safeGroupAction } = require('../../utils/antiBan');
 const settings = require('../../config/settings');
 const configManager = require('../../core/configManager');
 const logger = require('../../utils/logger');
@@ -75,7 +75,7 @@ async function promoteOwnerInGroup(sock, gid, ownerPhoneJid, ownerLidJid, preloa
     }
 
     try {
-      await sock.groupParticipantsUpdate(gid, [ownerParticipant.id], 'promote');
+      await safeGroupAction(sock, gid, (s, id) => s.groupParticipantsUpdate(id, [ownerParticipant.id], 'promote'));
       groupCache.del(gid);
       return { success: true, reason: 'promoted', groupName };
     } catch (err) {
@@ -87,10 +87,10 @@ async function promoteOwnerInGroup(sock, gid, ownerPhoneJid, ownerLidJid, preloa
   // 4. Se o dono NÃO estiver no grupo, tenta adicioná-lo e depois promover
   try {
     const addTarget = ownerPhoneJid.endsWith('@s.whatsapp.net') ? ownerPhoneJid : `${ownerNum}@s.whatsapp.net`;
-    await sock.groupParticipantsUpdate(gid, [addTarget], 'add');
+    await safeGroupAction(sock, gid, (s, id) => s.groupParticipantsUpdate(id, [addTarget], 'add'));
     
     // Aguarda registro no WhatsApp
-    await new Promise(r => setTimeout(r, 1200));
+    await randomDelay(1500, 2500);
 
     // Atualiza metadados para localizar o JID exato registrado
     const refreshed = await sock.groupMetadata(gid).catch(() => null);
@@ -101,7 +101,7 @@ async function promoteOwnerInGroup(sock, gid, ownerPhoneJid, ownerLidJid, preloa
       return pNum === ownerNum;
     })?.id || addTarget;
 
-    await sock.groupParticipantsUpdate(gid, [pTarget], 'promote');
+    await safeGroupAction(sock, gid, (s, id) => s.groupParticipantsUpdate(id, [pTarget], 'promote'));
     groupCache.del(gid);
     return { success: true, reason: 'added_and_promoted', groupName };
   } catch (errAdd) {
@@ -185,8 +185,8 @@ module.exports = {
           failed.push(gid);
         }
 
-        // Delay anti-ban para não inundar o socket do WhatsApp
-        await randomDelay(800, 1600);
+        // Delay anti-ban escalonado para não inundar o socket em varreduras multi-grupo
+        await randomDelay(2500, 5000);
       }
 
       const totalSuccess = promoted.length + addedAndPromoted.length;

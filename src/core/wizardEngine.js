@@ -1,5 +1,5 @@
 const { wizardCache } = require('../utils/cache');
-const { sendSafeMessage, safeDelete } = require('../utils/antiBan');
+const { sendSafeMessage, safeDelete, safeGroupAction, randomDelay } = require('../utils/antiBan');
 const { cleanJid, getGroupMetadata } = require('../utils/jidResolver');
 const { t, resolveSchemaText } = require('../utils/i18n');
 const configManager = require('./configManager');
@@ -636,7 +636,7 @@ class WizardEngine {
     const lower = text.toLowerCase().trim().replace(/^\[|\]$/g, '').trim();
 
     if (['1', 'fechar', 'cerrar', 'lock', 'on'].includes(lower)) {
-      await sock.groupSettingUpdate(from, 'announcement');
+      await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
       wizardCache.del(sessionKey);
       if (session.menuMsgKey) {
         try {
@@ -648,7 +648,7 @@ class WizardEngine {
     }
 
     if (['2', 'abrir', 'open', 'unlock', 'off'].includes(lower)) {
-      await sock.groupSettingUpdate(from, 'not_announcement');
+      await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
       wizardCache.del(sessionKey);
       if (session.menuMsgKey) {
         try {
@@ -1143,11 +1143,12 @@ wizardCache.on('expired', async (key, session) => {
     const sock = getSocket();
     if (!sock) return;
 
-    // Apaga prompts órfãos antes de encerrar (limpeza do chat)
+    // Apaga prompts órfãos antes de encerrar com espaçamento seguro (limpeza do chat)
     if (Array.isArray(session.promptKeys)) {
       for (const pk of session.promptKeys) {
         try {
           await safeDelete(sock, session.groupJid, pk);
+          await randomDelay(500, 900);
         } catch (_) {}
       }
     }

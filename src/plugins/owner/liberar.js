@@ -1,5 +1,6 @@
 const configManager = require('../../core/configManager');
 const { getGroupMetadata } = require('../../utils/jidResolver');
+const { inviteInfoCache } = require('../../utils/cache');
 const { sendSafeMessage } = require('../../utils/antiBan');
 const logger = require('../../utils/logger');
 
@@ -80,15 +81,27 @@ module.exports = {
       targetJid = from;
     }
 
-    // Se temos um código de convite, consulta metadados do grupo (sem forçar entrada automática por link)
+    // Se temos um código de convite, consulta metadados do grupo (com cache de 10m)
     if (inviteCode) {
-      try {
-        inviteInfo = await sock.groupGetInviteInfo(inviteCode);
-        if (inviteInfo?.id) {
-          targetJid = inviteInfo.id.endsWith('@g.us') ? inviteInfo.id : `${inviteInfo.id}@g.us`;
+      const cachedInvite = inviteInfoCache.get(inviteCode);
+      if (cachedInvite !== undefined) {
+        if (!cachedInvite.unavailable && cachedInvite.id) {
+          inviteInfo = cachedInvite;
+          targetJid = cachedInvite.id;
         }
-      } catch (err) {
-        logger.warn({ err: err.message }, 'Falha ao consultar info do convite');
+      } else {
+        try {
+          inviteInfo = await sock.groupGetInviteInfo(inviteCode);
+          if (inviteInfo?.id) {
+            targetJid = inviteInfo.id.endsWith('@g.us') ? inviteInfo.id : `${inviteInfo.id}@g.us`;
+            inviteInfoCache.set(inviteCode, { id: targetJid, subject: inviteInfo.subject || 'Grupo', unavailable: false });
+          } else {
+            inviteInfoCache.set(inviteCode, { id: null, subject: 'Grupo', unavailable: true }, 60);
+          }
+        } catch (err) {
+          inviteInfoCache.set(inviteCode, { id: null, subject: 'Grupo', unavailable: true }, 60);
+          logger.warn({ err: err.message }, 'Falha ao consultar info do convite');
+        }
       }
 
       if (!targetJid) {

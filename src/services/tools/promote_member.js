@@ -1,5 +1,6 @@
 const { checkAdminStatus, checkGroupUpdateResult } = require('../../utils/jidResolver');
 const { groupCache } = require('../../utils/cache');
+const { safeGroupAction } = require('../../utils/antiBan');
 const { resolveActionTarget } = require('../targetResolver');
 const { formatUserDisplay } = require('../toolHelpers');
 const { t } = require('../../utils/i18n');
@@ -28,7 +29,7 @@ module.exports = async function promoteMember({ sock, msg, from, isBotAdmin, lan
   }
 
   try {
-    const result = await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'promote');
+    const result = await safeGroupAction(sock, from, (s, gid) => s.groupParticipantsUpdate(gid, [targetData.groupJid], 'promote'));
     const { ok, failures } = checkGroupUpdateResult(result);
     groupCache.del(from);
 

@@ -1,7 +1,7 @@
 const configManager = require('./configManager');
 const pluginLoader = require('./pluginLoader');
 const settings = require('../config/settings');
-const { sendSafeMessage, randomDelay, safeGroupLeave } = require('../utils/antiBan');
+const { sendSafeMessage, randomDelay, safeGroupLeave, isGroupLeaving } = require('../utils/antiBan');
 const { getGroupAdmins } = require('../utils/jidResolver');
 const { t } = require('../utils/i18n');
 const logger = require('../utils/logger');
@@ -58,7 +58,7 @@ class Scheduler {
    */
   _licenseLifecycle(groupJid, group, queue) {
     if (!group.autoLeave && !settings.autoLeaveAllExpired) return;
-    if (group.expiresAt === null || group.expiresAt === undefined || group.leftAt) return;
+    if (group.expiresAt === null || group.expiresAt === undefined || group.leftAt || isGroupLeaving(groupJid)) return;
 
     const lang = group.lang || 'pt';
     const remaining = group.expiresAt - Date.now();
@@ -89,7 +89,7 @@ class Scheduler {
     }
 
     // Saída automática:
-    // Para teste grátis: saída pontual no final dos 3 dias (graceMs = 0)
+    // Para teste grátis: saída pontual no final dos 3 dias (graceMs = 0), apenas texto limpo sem link
     // Para planos pagos: carência de 24 horas (graceMs = LICENSE_GRACE_MS)
     const graceMs = isTrial ? 0 : LICENSE_GRACE_MS;
     if (remaining <= -graceMs) {
@@ -97,24 +97,35 @@ class Scheduler {
         run: async () => {
           // Revalida no momento da execução (o cliente pode ter renovado enquanto estava na fila)
           const g = configManager.getGroup(groupJid);
-          if (!g || g.leftAt || g.expiresAt === null || Date.now() <= g.expiresAt + graceMs) return;
+          if (!g || g.leftAt || g.expiresAt === null || Date.now() <= g.expiresAt + graceMs || isGroupLeaving(groupJid)) return;
 
           g.leaveAttempts = (g.leaveAttempts || 0) + 1;
-          let code = null;
-          try {
-            code = await this.sock.groupInviteCode(groupJid);
-          } catch (_) {}
-          const url = renewalUrl(code, { name: g.ownerName, phone: g.ownerPhone });
-          const { adminJids, mentionText } = await getGroupAdmins(this.sock, groupJid);
-          const leavingKey = isTrial ? 'saas.trial_leaving' : 'saas.license_leaving';
-          let text = t(lang, leavingKey, { url, admins: mentionText });
-          if (!mentionText) {
-            text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
-          }
 
-          try {
-            await sendSafeMessage(this.sock, groupJid, { text, mentions: adminJids });
-          } catch (_) {}
+          if (isTrial) {
+            if (!g.expiryNotified) {
+              g.expiryNotified = true;
+              configManager.flushSync();
+              try {
+                const text = t(lang, 'saas.trial_leaving');
+                await sendSafeMessage(this.sock, groupJid, { text });
+              } catch (_) {}
+            }
+          } else if (g.leaveAttempts === 1) {
+            let code = null;
+            try {
+              code = await this.sock.groupInviteCode(groupJid);
+            } catch (_) {}
+            const url = renewalUrl(code, { name: g.ownerName, phone: g.ownerPhone });
+            const { adminJids, mentionText } = await getGroupAdmins(this.sock, groupJid);
+            let text = t(lang, 'saas.license_leaving', { url, admins: mentionText });
+            if (!mentionText) {
+              text = text.replace(/^[^\n]*\*(Aviso aos Administradores|Aviso a los Administradores|Notice to Administrators):\*\n+/i, '');
+            }
+
+            try {
+              await sendSafeMessage(this.sock, groupJid, { text, mentions: adminJids });
+            } catch (_) {}
+          }
 
           try {
             await safeGroupLeave(this.sock, groupJid, isTrial ? 'trial_expired_3d' : 'license_expired_with_grace');
@@ -216,10 +227,11 @@ class Scheduler {
 
       // ========================================================
       // Fila Escalonada Anti-Ban: Execução Sequencial com Jitter
-      // Intervalo de 1500ms a 3500ms entre ações em grupos
+      // Intervalo de 4000ms a 9000ms entre ações em grupos distintos
       // ========================================================
       for (const item of executionQueue) {
-        await randomDelay(1500, 3500);
+        if (!this.sock) break;
+        await randomDelay(4000, 9000);
 
         try {
           if (typeof item.run === 'function') {

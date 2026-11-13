@@ -1,7 +1,7 @@
 const configManager = require('../../core/configManager');
 const wizardEngine = require('../../core/wizardEngine');
 const settings = require('../../config/settings');
-const { sendSafeMessage } = require('../../utils/antiBan');
+const { sendSafeMessage, safeGroupAction } = require('../../utils/antiBan');
 const { getGroupMetadata, resolveParticipant, cleanJid, getBotIdentity } = require('../../utils/jidResolver');
 const { t } = require('../../utils/i18n');
 const pollTracker = require('../../utils/pollTracker');
@@ -109,10 +109,10 @@ async function executeAgentPollAction(sock, groupJid, matchedAction, lang) {
 
   switch (normAction) {
     case 'close_group':
-      await sock.groupSettingUpdate(groupJid, 'announcement');
+      await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
       break;
     case 'open_group':
-      await sock.groupSettingUpdate(groupJid, 'not_announcement');
+      await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
       break;
     case 'announce':
       if (params.message) {
@@ -245,7 +245,7 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
   // 2. Trancar grupo
   if (actionType === 'close_group') {
     try {
-      await sock.groupSettingUpdate(groupJid, 'announcement');
+      await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'announcement'));
       await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.closed') });
       try {
         intentStore.record(groupJid, event.creatorJid || groupJid, event.creatorDisplay || 'Agendamento', 'set_group_mute', { action: 'close' }, true, 'Grupo fechado por agendamento');
@@ -257,7 +257,7 @@ async function executeCalendarAction({ sock, groupJid, event, lang = 'pt', confi
   // 3. Abrir grupo
   if (actionType === 'open_group') {
     try {
-      await sock.groupSettingUpdate(groupJid, 'not_announcement');
+      await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
       await sendSafeMessage(sock, groupJid, { text: t(lang, 'mute.opened') });
       try {
         intentStore.record(groupJid, event.creatorJid || groupJid, event.creatorDisplay || 'Agendamento', 'set_group_mute', { action: 'open' }, true, 'Grupo aberto por agendamento');
@@ -399,7 +399,7 @@ async function scheduleTimedGroupAction(sock, groupJid, { action, rel, text, sen
           configManager.updatePluginConfig(groupJid, 'calendar', { events: cleaned });
 
           const waAction = isClose ? 'announcement' : 'not_announcement';
-          await sock.groupSettingUpdate(groupJid, waAction);
+          await safeGroupAction(sock, groupJid, (s, gid) => s.groupSettingUpdate(gid, waAction));
           const msgKey = isClose ? 'mute.closed' : 'mute.opened';
           await sendSafeMessage(sock, groupJid, { text: t(lang, msgKey) });
         }

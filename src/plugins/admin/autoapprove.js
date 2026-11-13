@@ -383,11 +383,6 @@ class AntiBanApprovalQueue {
     this.consecutiveErrors = 0;
     this._recordApproval(groupJid);
 
-    // Restauração de presença invisível
-    try {
-      await sock.sendPresenceUpdate('unavailable');
-    } catch (_) {}
-
     // 6. Notificação amigável no grupo se ativada
     if (action === 'approve' && notifyGroup) {
       const cleanUser = cleanJid(participantJid);

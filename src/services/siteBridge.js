@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const settings = require('../config/settings');
 const siteOrders = require('./siteOrders');
 const { extractInviteCode } = require('./joinService');
+const { inviteInfoCache } = require('../utils/cache');
 const logger = require('../utils/logger');
 
 // Preços e prazos são definidos AQUI (nunca vêm do payload): valor pago -> plano
@@ -627,15 +628,27 @@ class SiteBridge {
       let groupJid = null;
       let groupName = 'Grupo';
 
-      // Consulta informações do convite sem forçar entrada (leitura pública oficial)
-      try {
-        const inviteInfo = await sock.groupGetInviteInfo(g.code);
-        if (inviteInfo?.id) {
-          groupJid = inviteInfo.id.endsWith('@g.us') ? inviteInfo.id : `${inviteInfo.id}@g.us`;
-          groupName = inviteInfo.subject || 'Grupo';
+      // Consulta informações do convite sem forçar entrada (com cache de 10m para evitar spam de query)
+      const cachedInvite = inviteInfoCache.get(g.code);
+      if (cachedInvite !== undefined) {
+        if (!cachedInvite.unavailable && cachedInvite.id) {
+          groupJid = cachedInvite.id;
+          groupName = cachedInvite.subject || 'Grupo';
         }
-      } catch (err) {
-        logger.warn({ err: err.message, code: g.code }, 'siteBridge: link de convite indisponível para consulta prévia');
+      } else {
+        try {
+          const inviteInfo = await sock.groupGetInviteInfo(g.code);
+          if (inviteInfo?.id) {
+            groupJid = inviteInfo.id.endsWith('@g.us') ? inviteInfo.id : `${inviteInfo.id}@g.us`;
+            groupName = inviteInfo.subject || 'Grupo';
+            inviteInfoCache.set(g.code, { id: groupJid, subject: groupName, unavailable: false });
+          } else {
+            inviteInfoCache.set(g.code, { id: null, subject: 'Grupo', unavailable: true }, 60);
+          }
+        } catch (err) {
+          inviteInfoCache.set(g.code, { id: null, subject: 'Grupo', unavailable: true }, 60);
+          logger.warn({ err: err.message, code: g.code }, 'siteBridge: link de convite indisponível para consulta prévia');
+        }
       }
 
       // Se o bot já está dentro do grupo: RENOVAÇÃO AUTOMÁTICA IMEDIATA!

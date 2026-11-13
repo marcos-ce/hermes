@@ -3,7 +3,7 @@
 const configManager    = require('../../core/configManager');
 const wizardEngine     = require('../../core/wizardEngine');
 const { floodCache }   = require('../../utils/cache');
-const { sendSafeMessage } = require('../../utils/antiBan');
+const { sendSafeMessage, safeGroupAction } = require('../../utils/antiBan');
 const { checkAdminStatus } = require('../../utils/jidResolver');
 const { t }            = require('../../utils/i18n');
 const logger           = require('../../utils/logger');
@@ -190,7 +190,12 @@ module.exports = {
     logger.info({ from, count: next, limit: groupMsgLimit }, '[autolockflood] Limite de mensagens do grupo atingido — fechando');
 
     try {
-      await sock.groupSettingUpdate(from, 'announcement');
+      await safeGroupAction(
+        sock,
+        from,
+        (s, gid) => s.groupSettingUpdate(gid, 'announcement'),
+        { priority: 'high', urgent: true, minDelayMs: 50, maxDelayMs: 150 }
+      );
     } catch (err) {
       logger.error({ err, from }, '[autolockflood] Falha ao fechar o grupo');
       return false;
@@ -219,7 +224,7 @@ module.exports = {
         try {
           // Verifica se o grupo ainda está ativo antes de reabrir
           if (!configManager.isGroupEnabled(from)) return;
-          await sock.groupSettingUpdate(from, 'not_announcement');
+          await safeGroupAction(sock, from, (s, gid) => s.groupSettingUpdate(gid, 'not_announcement'));
           await sendSafeMessage(sock, from, {
             text: t(lang, 'autolockflood.reopened', {
               fallback: '🔓 Grupo reaberto automaticamente. Mantenham o respeito! 🙏'

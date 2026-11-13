@@ -1,6 +1,7 @@
 const settings = require('../../config/settings');
 const { checkAdminStatus } = require('../../utils/jidResolver');
 const { groupCache } = require('../../utils/cache');
+const { safeGroupAction } = require('../../utils/antiBan');
 const { resolveActionTarget } = require('../targetResolver');
 const { formatUserDisplay } = require('../toolHelpers');
 const { t } = require('../../utils/i18n');
@@ -25,7 +26,7 @@ module.exports = async function demoteMember({ sock, msg, from, isBotAdmin, lang
     return { success: false, error: t(lang, 'demote.already_member') };
   }
 
-  await sock.groupParticipantsUpdate(from, [targetData.groupJid], 'demote');
+  await safeGroupAction(sock, from, (s, gid) => s.groupParticipantsUpdate(gid, [targetData.groupJid], 'demote'));
   groupCache.del(from);
 
   return {
